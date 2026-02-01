@@ -19,6 +19,7 @@ const AddUnit = () => {
         project_id: preSelectedProjectId,
         unit_number: '',
         floor_number: '',
+        block_tower: '', // Added
         super_area: '',
         carpet_area: '',
         covered_area: '',
@@ -51,7 +52,19 @@ const AddUnit = () => {
     const [errors, setErrors] = useState({});
 
     useEffect(() => {
-        const area = parseFloat(formData.super_area) || 0;
+        // Find selected project to get calculation basis
+        const selectedProject = projects.find(p => p.id === parseInt(formData.project_id));
+        const calcType = selectedProject?.calculation_type || 'Super Area';
+
+        let area = 0;
+        if (calcType === 'Covered Area') {
+            area = parseFloat(formData.covered_area) || 0;
+        } else if (calcType === 'Carpet Area') {
+            area = parseFloat(formData.carpet_area) || 0;
+        } else {
+            area = parseFloat(formData.super_area) || 0;
+        }
+
         const rate = parseFloat(rentPerSqft) || 0;
         const total = area * rate;
 
@@ -59,7 +72,7 @@ const AddUnit = () => {
             ...prev,
             projected_rent: total > 0 ? total.toString() : ''
         }));
-    }, [formData.super_area, rentPerSqft]);
+    }, [formData.super_area, formData.covered_area, formData.carpet_area, formData.project_id, rentPerSqft, projects]);
 
     // Validation Effect
     useEffect(() => {
@@ -83,22 +96,17 @@ const AddUnit = () => {
         setErrors(newErrors);
     }, [formData.super_area, formData.covered_area, formData.carpet_area]);
 
-    // Generic handler for most fields
-    const handleChange = (e) => {
-        const { name, value } = e.target;
-        setFormData(prev => ({ ...prev, [name]: value }));
-    };
-
     // Specific handler for Floor Selection
     const handleFloorChange = (e) => {
         const newFloor = e.target.value;
         const currentSuffix = unitSuffix;
+        const currentBlock = formData.block_tower;
 
         // Update floor and combine logic
         setFormData(prev => ({
             ...prev,
             floor_number: newFloor,
-            unit_number: newFloor && currentSuffix ? `${newFloor}-${currentSuffix}` : ''
+            unit_number: generateUnitNumber(currentBlock, newFloor, currentSuffix)
         }));
     };
 
@@ -106,14 +114,39 @@ const AddUnit = () => {
     const handleUnitSuffixChange = (e) => {
         const newSuffix = e.target.value;
         setUnitSuffix(newSuffix);
+        const currentBlock = formData.block_tower;
 
         // Combine logic using current floor state
         setFormData(prev => {
             const currentFloor = prev.floor_number;
             return {
                 ...prev,
-                unit_number: currentFloor && newSuffix ? `${currentFloor}-${newSuffix}` : ''
+                unit_number: generateUnitNumber(currentBlock, currentFloor, newSuffix)
             };
+        });
+    };
+
+    // Helper to generate unit number string
+    const generateUnitNumber = (block, floor, suffix) => {
+        // Format: [Block]-[Floor]-[Suffix] or [Floor]-[Suffix]
+        let parts = [];
+        if (block) parts.push(block);
+        if (floor) parts.push(floor);
+        if (suffix) parts.push(suffix);
+        return parts.join('-');
+    };
+
+    // Generic handler needs to handle block_tower change specially to update unit_number
+    const handleChange = (e) => {
+        const { name, value } = e.target;
+        setFormData(prev => {
+            const newState = { ...prev, [name]: value };
+
+            if (name === 'block_tower') {
+                newState.unit_number = generateUnitNumber(value, prev.floor_number, unitSuffix);
+            }
+
+            return newState;
         });
     };
 
@@ -198,6 +231,16 @@ const AddUnit = () => {
                                 </div>
                                 <div className="form-row">
                                     <div className="form-group">
+                                        <label>Block / Tower (Optional)</label>
+                                        <input
+                                            type="text"
+                                            name="block_tower"
+                                            value={formData.block_tower}
+                                            onChange={handleChange}
+                                            placeholder="e.g. A, B, Tower 1"
+                                        />
+                                    </div>
+                                    <div className="form-group">
                                         <label>Floor Number</label>
                                         <div className="select-wrapper">
                                             <select
@@ -223,7 +266,13 @@ const AddUnit = () => {
                                             required
                                         />
                                         <small style={{ display: 'block', marginTop: '5px', color: 'gray' }}>
-                                            Final Unit No: <strong>{formData.unit_number || '...'}</strong>
+                                            Final Unit No: <strong>
+                                                {formData.block_tower ? `${formData.block_tower}-` : ''}
+                                                {formData.floor_number ? `${formData.floor_number}-` : ''}
+                                                {unitSuffix}
+                                            </strong>
+                                            <br />
+                                            <em style={{ fontSize: '0.8rem' }}>(Will be saved as: {formData.block_tower ? `${formData.block_tower}-${formData.floor_number}-${unitSuffix}` : `${formData.floor_number}-${unitSuffix}`})</em>
                                         </small>
                                     </div>
                                 </div>
@@ -297,7 +346,7 @@ const AddUnit = () => {
                                     </div>
 
                                     <div className="form-group">
-                                        <label>Rent Per Sq. Ft</label>
+                                        <label>Projected Rent per sqft</label>
                                         <div className="input-with-suffix">
                                             <input
                                                 type="number"
@@ -319,6 +368,7 @@ const AddUnit = () => {
                                                 readOnly
                                                 placeholder="Calculated automatically"
                                                 style={{ backgroundColor: '#f9fafb' }}
+                                                title={`Calculated based on ${projects.find(p => p.id === parseInt(formData.project_id))?.calculation_type || 'Super Area'}`}
                                             />
                                             <span className="suffix">INR/mo</span>
                                         </div>

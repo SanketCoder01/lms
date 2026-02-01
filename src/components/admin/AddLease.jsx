@@ -2,8 +2,10 @@ import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import Sidebar from './Sidebar';
 import Step1BasicDetails from './lease-creation/Step1BasicDetails';
+import Step2Docs from './lease-creation/Step2Docs';
 import Step2RentConfig from './lease-creation/Step2RentConfig';
 import Step3Finalize from './lease-creation/Step3Finalize';
+import Step4Escalations from './lease-creation/Step4Escalations';
 import { leaseAPI, getProjects, unitAPI, partyAPI, ownershipAPI } from '../../services/api';
 import './AddLease.css';
 import './dashboard.css';
@@ -44,8 +46,27 @@ const AddLease = () => {
         utility_deposit: '',
         deposit_type: 'Cash',
         revenue_share_percentage: '',
-        revenue_share_applicable_on: 'Net Sales'
+        revenue_share_applicable_on: 'Net Sales',
+
+        // New Docs Fields
+        loi_date: '',
+        agreement_date: '',
+        deposit_payment_date: '',
+        registration_date: '',
+
+        // Rent Free Period
+        rent_free_start_date: '',
+        rent_free_end_date: '',
+
+        // Additional Dates & Validations
+        fitout_period_start: '',
+        notice_vacation_date: '',
+        opening_date: ''
     });
+
+
+
+    const [files, setFiles] = useState({}); // Store files
 
     const [escalationSteps, setEscalationSteps] = useState([
         { effectiveDate: '', effectiveToDate: '', increaseType: 'Percentage (%)', value: '' }
@@ -108,6 +129,12 @@ const AddLease = () => {
         }
     }, [formData.project_id]);
 
+    const handleFileChange = (e, fieldName) => {
+        const file = e.target.files[0];
+        if (file) {
+            setFiles(prev => ({ ...prev, [fieldName]: file }));
+        }
+    };
 
     // Validation & Navigation
     const nextStep = () => {
@@ -128,7 +155,13 @@ const AddLease = () => {
                 alert("Owner and Tenant cannot be the same.");
                 return;
             }
+            if (isSubLease && parseInt(formData.sub_tenant_id) === parseInt(formData.party_tenant_id)) {
+                alert("Sub Tenant and Main Tenant cannot be the same.");
+                return;
+            }
         }
+        // Step 2 is Docs - Optional or Basic Validation (dates) - skipping strict for now
+
         setCurrentStep(prev => prev + 1);
     };
 
@@ -192,13 +225,29 @@ const AddLease = () => {
                 revenue_share_percentage: (rentModel === 'RevenueShare' || rentModel === 'Hybrid') ? (parseFloat(formData.revenue_share_percentage) || 0) : null,
                 revenue_share_applicable_on: (rentModel === 'RevenueShare' || rentModel === 'Hybrid') ? formData.revenue_share_applicable_on : null,
 
-                escalations: escalations
+                // Rent Free Period
+                rent_free_start_date: formData.rent_free_start_date || null,
+                rent_free_end_date: formData.rent_free_end_date || null,
+
+                escalations: escalations,
+
+                // Docs Data (Dates) - Backend might need schema update for these fields or store in metadata/JSON
+                loi_date: formData.loi_date,
+                agreement_date: formData.agreement_date,
+                deposit_payment_date: formData.deposit_payment_date,
+                registration_date: formData.registration_date,
+
+                // New Date Fields
+                fitout_period_start: formData.fitout_period_start || null,
+                notice_vacation_date: formData.notice_vacation_date || null,
+                opening_date: formData.opening_date || null
             };
 
-            // NOTE: Hybrid model might need backend schema update for 'minimum_guarantee' or separate field. 
-            // For now mapping MGR to monthly_rent as confirmed in standard practice if not separate.
+            // TODO: Append files to FormData if backend supports multipart/form-data for files + JSON
+            // For now sending JSON payload. If files need upload, use FormData and append payload as string.
 
             console.log("Submitting Lease Payload:", payload);
+            console.log("Files to upload:", files);
             await leaseAPI.createLease(payload);
             setSubmitMessage('Lease created successfully!');
             setTimeout(() => navigate('/admin/leases'), 2000);
@@ -218,7 +267,11 @@ const AddLease = () => {
                         <Link to="/admin/dashboard">HOME</Link> &gt; <Link to="/admin/leases">LEASES</Link> &gt; <span className="active">ADD NEW</span>
                     </div>
                     <h1>Add New Lease</h1>
-                    <p>Step {currentStep} of 3: {currentStep === 1 ? 'Basic Details' : currentStep === 2 ? 'Rent Configuration' : 'Finalization'}</p>
+                    <p>Step {currentStep} of 4: {
+                        currentStep === 1 ? 'Basic Details' :
+                            currentStep === 2 ? 'Docs Execution' :
+                                currentStep === 3 ? 'Terms & Rent' : 'Escalations'
+                    }</p>
                 </header>
 
                 <div className="form-layout wizard-container">
@@ -226,9 +279,11 @@ const AddLease = () => {
                     <div className="stepper">
                         <div className={`step ${currentStep >= 1 ? 'completed' : ''}`}>1. Basics</div>
                         <div className="line"></div>
-                        <div className={`step ${currentStep >= 2 ? 'completed' : ''}`}>2. Rent</div>
+                        <div className={`step ${currentStep >= 2 ? 'completed' : ''}`}>2. Docs</div>
                         <div className="line"></div>
                         <div className={`step ${currentStep >= 3 ? 'completed' : ''}`}>3. Terms</div>
+                        <div className="line"></div>
+                        <div className={`step ${currentStep >= 4 ? 'completed' : ''}`}>4. Escalation</div>
                     </div>
 
                     {/* Steps Rendering */}
@@ -249,21 +304,41 @@ const AddLease = () => {
                     )}
 
                     {currentStep === 2 && (
-                        <Step2RentConfig
-                            rentModel={rentModel}
+                        <Step2Docs
                             formData={formData}
                             setFormData={setFormData}
+                            handleFileChange={handleFileChange}
+                        />
+                    )}
+
+
+                    {currentStep === 3 && (
+                        <>
+                            <Step2RentConfig // Renamed conceptually to Terms/Rent
+                                rentModel={rentModel}
+                                formData={formData}
+                                setFormData={setFormData}
+                                escalationSteps={[]} // Not used here anymore
+                                setEscalationSteps={null}
+                                selectedProject={projects.find(p => p.id === parseInt(formData.project_id))}
+                                selectedUnit={units.find(u => u.id === parseInt(formData.unit_id))}
+                            />
+                            <Step3Finalize // Merging Terms here or keeping separate? 
+                                // Ideally Step3Finalize should be part of this step or renamed
+                                formData={formData}
+                                setFormData={setFormData}
+                                selectedProject={projects.find(p => p.id === parseInt(formData.project_id))}
+                                selectedUnit={units.find(u => u.id === parseInt(formData.unit_id))}
+                            />
+                        </>
+                    )}
+
+                    {currentStep === 4 && (
+                        <Step4Escalations
                             escalationSteps={escalationSteps}
                             setEscalationSteps={setEscalationSteps}
                             addEscalationStep={addEscalationStep}
                             removeEscalationStep={removeEscalationStep}
-                        />
-                    )}
-
-                    {currentStep === 3 && (
-                        <Step3Finalize
-                            formData={formData}
-                            setFormData={setFormData}
                         />
                     )}
 
@@ -275,7 +350,7 @@ const AddLease = () => {
                             <button className="secondary-btn" onClick={() => navigate('/admin/leases')}>Cancel</button>
                         )}
 
-                        {currentStep < 3 ? (
+                        {currentStep < 4 ? (
                             <button className="primary-btn" onClick={nextStep}>Next Step</button>
                         ) : (
                             <button className="primary-btn submit-btn" onClick={handleSubmit}>Create Lease</button>

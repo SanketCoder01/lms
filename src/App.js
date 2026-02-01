@@ -12,6 +12,7 @@ import OwnerList from "./components/admin/OwnerList";
 import AddOwner from "./components/admin/AddOwner";
 import OwnerDetails from "./components/admin/OwnerDetails";
 import PartyMaster from "./components/admin/PartyMaster"; // New Party Master Component
+
 import AddParty from "./components/admin/AddParty";
 import EditParty from "./components/admin/EditParty";
 import OwnershipMapping from "./components/admin/OwnershipMapping";
@@ -127,6 +128,7 @@ function App() {
         <Route path="/admin/parties" element={<PartyMaster />} />
         <Route path="/admin/parties/add" element={<AddParty />} />
         <Route path="/admin/parties/edit/:id" element={<EditParty />} />
+
         <Route path="/admin/ownership-mapping" element={<OwnershipMapping />} />
 
         {/* Legacy Owner Routes (Can be deprecated later) */}

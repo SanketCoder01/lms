@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import Sidebar from './Sidebar';
 import './EditUnit.css';
-import { unitAPI } from '../../services/api';
+import { unitAPI, getProjectById } from '../../services/api';
 
 const EditUnit = () => {
     const { id } = useParams();
@@ -14,6 +14,7 @@ const EditUnit = () => {
         super_area: '',
         projected_rent: '', // Changed from monthly_rent to match DB
         floor_number: '',
+        block_tower: '', // Added
         unit_condition: '',
         plc: '',
         carpet_area: ''
@@ -22,8 +23,11 @@ const EditUnit = () => {
     const [message, setMessage] = useState('');
     const [error, setError] = useState('');
 
+    const [project, setProject] = useState(null);
+    const [rentPerSqft, setRentPerSqft] = useState('');
+
     useEffect(() => {
-        const fetchUnit = async () => {
+        const fetchUnitAndProject = async () => {
             try {
                 const res = await unitAPI.getUnitById(id);
                 const data = res.data;
@@ -33,17 +37,55 @@ const EditUnit = () => {
                     super_area: data.super_area || '',
                     projected_rent: data.projected_rent || '',
                     floor_number: data.floor_number || '',
+                    block_tower: data.block_tower || '', // Added
                     unit_condition: data.unit_condition || 'bare_shell',
                     plc: data.plc || 'front_facing',
-                    carpet_area: data.carpet_area || ''
+                    carpet_area: data.carpet_area || '',
+                    covered_area: data.covered_area || '', // Ensure covered_area is also fetched
+                    project_id: data.project_id
                 });
+
+                // Calculate initial rent per sqft if rent exists
+                if (data.projected_rent > 0 && data.super_area > 0) { // Default to super area for initial display if needed, or just let it recalculate
+                    // Actually better to not reverse calculate to avoid rounding errors, just let user enter new rate if they want to change
+                }
+
+                if (data.project_id) {
+                    const projRes = await getProjectById(data.project_id);
+                    setProject(projRes.data.data || projRes.data);
+                }
             } catch (err) {
                 console.error("Error fetching unit:", err);
                 setError("Failed to load unit details");
             }
         };
-        fetchUnit();
+        fetchUnitAndProject();
     }, [id]);
+
+    useEffect(() => {
+        if (!project || !rentPerSqft) return;
+
+        const calcType = project.calculation_type || 'Super Area';
+        let area = 0;
+
+        if (calcType === 'Covered Area') {
+            area = parseFloat(formData.covered_area) || 0;
+        } else if (calcType === 'Carpet Area') {
+            area = parseFloat(formData.carpet_area) || 0;
+        } else {
+            area = parseFloat(formData.super_area) || 0;
+        }
+
+        const rate = parseFloat(rentPerSqft);
+        const total = area * rate;
+
+        if (rate > 0) {
+            setFormData(prev => ({
+                ...prev,
+                projected_rent: total > 0 ? total.toString() : ''
+            }));
+        }
+    }, [formData.super_area, formData.covered_area, formData.carpet_area, rentPerSqft, project]);
 
     const handleChange = (e) => {
         setFormData({
@@ -115,17 +157,6 @@ const EditUnit = () => {
                                         />
                                     </div>
                                     <div className="form-group">
-                                        <label>Floor Number</label>
-                                        <input
-                                            type="text"
-                                            name="floor_number"
-                                            value={formData.floor_number}
-                                            onChange={handleChange}
-                                        />
-                                    </div>
-                                </div>
-                                <div className="form-row">
-                                    <div className="form-group">
                                         <label>Unit Status</label>
                                         <div className="select-wrapper">
                                             <select
@@ -140,32 +171,102 @@ const EditUnit = () => {
                                             </select>
                                         </div>
                                     </div>
+                                </div>
+                                <div className="form-row">
                                     <div className="form-group">
-                                        <label>Super Area (sq ft)</label>
+                                        <label>Block / Tower</label>
                                         <input
                                             type="text"
-                                            name="super_area"
-                                            value={formData.super_area}
+                                            name="block_tower"
+                                            value={formData.block_tower}
+                                            onChange={handleChange}
+                                        />
+                                    </div>
+                                    <div className="form-group">
+                                        <label>Floor Number</label>
+                                        <input
+                                            type="text"
+                                            name="floor_number"
+                                            value={formData.floor_number}
                                             onChange={handleChange}
                                         />
                                     </div>
                                 </div>
+                                <div className="form-group">
+                                    <label>Super Area (sq ft)</label>
+                                    <input
+                                        type="text"
+                                        name="super_area"
+                                        value={formData.super_area}
+                                        onChange={handleChange}
+                                    />
+                                </div>
+                            </section>
+
+                            {/* Lease details section if needed, or just rent */}
+                            <section className="form-section">
+                                <h3>Rent & Details</h3>
                                 <div className="form-row">
-                                    <div className="form-group">
-                                        <label>Projected Rent (₹)</label>
+                                    <label>Projected Rent (₹)</label>
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                        <div className="input-with-suffix" style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+                                            <input
+                                                type="number"
+                                                value={rentPerSqft}
+                                                onChange={(e) => setRentPerSqft(e.target.value)}
+                                                placeholder="Proj. Rent/sqft"
+                                                style={{ width: '100px' }}
+                                            />
+                                            <span style={{ fontSize: '12px', color: '#666' }}>
+                                                x {project?.calculation_type || 'Super Area'}
+                                            </span>
+                                        </div>
                                         <input
                                             type="text"
                                             name="projected_rent"
                                             value={formData.projected_rent}
-                                            onChange={handleChange}
+                                            readOnly
+                                            style={{ backgroundColor: '#f9fafb' }}
+                                            placeholder="Total Rent"
                                         />
                                     </div>
+                                </div>
+                                <div className="form-group">
+                                    <label>Covered Area (sq ft)</label>
+                                    <input
+                                        type="text"
+                                        name="covered_area"
+                                        value={formData.covered_area || ''}
+                                        onChange={handleChange}
+                                    />
+                                </div>
+                                <div className="form-group">
+                                    <label>Carpet Area (sq ft)</label>
+                                    <input
+                                        type="text"
+                                        name="carpet_area"
+                                        value={formData.carpet_area || ''}
+                                        onChange={handleChange}
+                                    />
+                                </div>
+                                <div className="form-group">
                                     <div className="form-group">
                                         <label>Unit Condition</label>
                                         <select name="unit_condition" value={formData.unit_condition} onChange={handleChange}>
                                             <option value="fully_fitted">Fully Fitted</option>
                                             <option value="semi_fitted">Semi Fitted</option>
                                             <option value="bare_shell">Bare Shell</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                <div className="form-group">
+                                    <div className="form-group">
+                                        <label>PLC</label>
+                                        <select name="plc" value={formData.plc} onChange={handleChange}>
+                                            <option value="front_facing">Front Facing</option>
+                                            <option value="corner">Corner</option>
+                                            <option value="park_facing">Park Facing</option>
+                                            <option value="road_facing">Road Facing</option>
                                         </select>
                                     </div>
                                 </div>
@@ -179,10 +280,10 @@ const EditUnit = () => {
                             </div>
 
                         </form>
-                    </div>
-                </div>
-            </main>
-        </div>
+                    </div >
+                </div >
+            </main >
+        </div >
     );
 };
 

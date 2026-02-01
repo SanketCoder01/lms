@@ -56,7 +56,8 @@ const Units = () => {
                     id: unit.id,
                     unitNo: unit.unit_number || 'N/A',
                     building: unit.building || 'N/A',
-                    area: unit.area || 'N/A',
+                    blockTower: unit.block_tower || '-',
+                    area: unit.super_area || 'N/A',
                     status: unit.status || 'unknown',
                     statusType: unit.status || 'unknown',
                     statusDesc: unit.status === 'vacant' ? 'Available for leasing' : 'Occupied'
@@ -180,7 +181,8 @@ const Units = () => {
                             <thead>
                                 <tr>
                                     <th>Unit No</th>
-                                    <th>Tower/Building</th>
+                                    <th>Building/Project</th>
+                                    <th>Block/Tower</th>
                                     <th>Area (SQ FT)</th>
                                     <th>Status</th>
                                     <th>Actions</th>
@@ -189,13 +191,14 @@ const Units = () => {
                             <tbody>
                                 {units.length === 0 ? (
                                     <tr>
-                                        <td colSpan="5" style={{ textAlign: 'center', padding: '20px' }}>No units found.</td>
+                                        <td colSpan="6" style={{ textAlign: 'center', padding: '20px' }}>No units found.</td>
                                     </tr>
                                 ) : (
                                     units.map((unit) => (
                                         <tr key={unit.id}>
                                             <td className="unit-id">{unit.unitNo}</td>
                                             <td>{unit.building}</td>
+                                            <td>{unit.blockTower}</td>
                                             <td>{unit.area}</td>
                                             <td><span className={`status-badge ${unit.status}`}>{unit.status}</span></td>
                                             <td>

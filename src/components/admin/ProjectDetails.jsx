@@ -114,11 +114,11 @@ const ProjectDetails = () => {
                         <strong>{project.total_units || 0}</strong>
                     </div>
                     <div className="stat-row">
-                        <span>Occupied:</span>
+                        <span>Leased Units:</span>
                         <strong>{project.occupied_units || 0}</strong>
                     </div>
                     <div className="stat-row">
-                        <span>Vacant:</span>
+                        <span>Vacant Units:</span>
                         <strong>{project.vacant_units || 0}</strong>
                     </div>
                     <div className="stat-row">
@@ -224,7 +224,7 @@ const ProjectDetails = () => {
                 {/* Metrics Banner */}
                 <div className="metrics-banner">
                     <div className="metric-card">
-                        <div className="metric-label">Occupied Units</div>
+                        <div className="metric-label">Leased Units</div>
                         <div className="metric-value">
                             {project.occupied_units || 0} / {project.total_units || 0} <span className="metric-sub">Units</span>
                         </div>
@@ -238,7 +238,7 @@ const ProjectDetails = () => {
                     <div className="metric-card">
                         <div className="metric-label">Leased Area</div>
                         <div className="metric-value">
-                            {project.leased_area || 0} <span className="metric-sub">sqft</span>
+                            {project.leased_area || 0} / {project.total_area || 0} <span className="metric-sub">sqft</span>
                         </div>
                         <div className="progress-bar">
                             <div

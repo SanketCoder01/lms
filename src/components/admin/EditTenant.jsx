@@ -2,8 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import Sidebar from './Sidebar';
 import { tenantAPI, getProjects, unitAPI } from '../../services/api';
+import { isValidPhone, isValidPAN, isValidAadhaar, isValidCIN } from '../../utils/validators';
 import { indianIndustries } from '../../utils/indianIndustries';
-import { isValidPhone } from '../../utils/validators';
 import './AddTenant.css';
 
 const EditTenant = () => {
@@ -22,9 +22,12 @@ const EditTenant = () => {
     // Form Data
     const [formData, setFormData] = useState({
         company_name: '',
+        brand_name: '',
+        legal_entity_type: '',
         company_registration_number: '',
         industry: '',
         tax_id: '',
+        id_type: '',
         contact_person_name: '',
         contact_person_email: '',
         contact_person_phone: '',
@@ -55,9 +58,12 @@ const EditTenant = () => {
 
                 setFormData({
                     company_name: data.company_name || '',
+                    brand_name: data.brand_name || '',
+                    legal_entity_type: data.legal_entity_type || '',
                     company_registration_number: data.registration_no || data.company_registration_number || '',
                     industry: data.industry || '',
                     tax_id: data.tax_id || '',
+                    id_type: data.id_type || '',
                     contact_person_name: data.contact_person_name || '',
                     contact_person_email: data.contact_person_email || '',
                     contact_person_phone: data.contact_person_phone || '',
@@ -172,6 +178,20 @@ const EditTenant = () => {
             return;
         }
 
+        // ID Validation
+        if (formData.id_type === 'PAN' && !isValidPAN(formData.tax_id)) {
+            alert("Invalid PAN format. Please check.");
+            return;
+        }
+        if (formData.id_type === 'Aadhaar' && !isValidAadhaar(formData.tax_id)) {
+            alert("Invalid Aadhaar format. Must be 12 digits.");
+            return;
+        }
+        if (formData.id_type === 'CIN' && !isValidCIN(formData.tax_id)) {
+            alert("Invalid CIN format. Please check.");
+            return;
+        }
+
         // Subtenant Validation
         for (let i = 0; i < subTenants.length; i++) {
             const st = subTenants[i];
@@ -236,6 +256,27 @@ const EditTenant = () => {
                                         <input type="text" name="company_name" value={formData.company_name} onChange={handleChange} required />
                                     </div>
                                     <div className="form-group">
+                                        <label>Brand Name</label>
+                                        <input type="text" name="brand_name" value={formData.brand_name} onChange={handleChange} />
+                                    </div>
+                                    <div className="form-group">
+                                        <label>Legal Entity Type</label>
+                                        <select name="legal_entity_type" value={formData.legal_entity_type} onChange={handleChange} style={{ width: '100%', padding: '10px', borderRadius: '6px', border: '1px solid #e2e8f0' }}>
+                                            <option value="">Select Type</option>
+                                            <option value="Private Limited">Private Limited</option>
+                                            <option value="Public Limited">Public Limited</option>
+                                            <option value="LLP">LLP</option>
+                                            <option value="Partnership">Partnership</option>
+                                            <option value="Proprietorship">Proprietorship</option>
+                                            <option value="HUF">HUF</option>
+                                            <option value="Individual">Individual</option>
+                                            <option value="Trust">Trust</option>
+                                            <option value="Society">Society</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                <div className="form-row three-cols">
+                                    <div className="form-group">
                                         <label>Registration No.</label>
                                         <input type="text" name="company_registration_number" value={formData.company_registration_number} onChange={handleChange} />
                                     </div>
@@ -255,15 +296,26 @@ const EditTenant = () => {
                                             ))}
                                         </datalist>
                                     </div>
-                                </div>
-                                <div className="form-row three-cols">
-                                    <div className="form-group">
-                                        <label>Tax ID / VAT</label>
-                                        <input type="text" name="tax_id" value={formData.tax_id} onChange={handleChange} />
-                                    </div>
                                     <div className="form-group">
                                         <label>Website</label>
                                         <input type="text" name="website" value={formData.website} onChange={handleChange} />
+                                    </div>
+                                </div>
+                                <div className="form-row three-cols">
+                                    <div className="form-group">
+                                        <label>ID Type</label>
+                                        <select name="id_type" value={formData.id_type} onChange={handleChange} style={{ width: '100%', padding: '10px', borderRadius: '6px', border: '1px solid #e2e8f0' }}>
+                                            <option value="">Select ID Type</option>
+                                            <option value="PAN">PAN</option>
+                                            <option value="Aadhaar">Aadhaar</option>
+                                            <option value="CIN">CIN</option>
+                                            <option value="GSTIN">GSTIN</option>
+                                            <option value="Other">Other</option>
+                                        </select>
+                                    </div>
+                                    <div className="form-group">
+                                        <label>ID Number</label>
+                                        <input type="text" name="tax_id" value={formData.tax_id} onChange={handleChange} />
                                     </div>
                                     <div className="form-group">
                                         <label>KYC Status</label>

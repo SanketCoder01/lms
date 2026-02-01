@@ -6,9 +6,12 @@ exports.createTenant = async (req, res) => {
     try {
         const {
             company_name,
+            brand_name,           // New
+            legal_entity_type,    // New
             company_registration_number,
             industry,
             tax_id,
+            id_type,              // New
             website,
             contact_person_name,
             contact_person_email,
@@ -20,9 +23,9 @@ exports.createTenant = async (req, res) => {
             country,
             kyc_status,
             status,
-            units,        // array of unit IDs
-            unit_ids,     // alternative name from frontend
-            subtenants    // array of subtenant objects
+            units,
+            unit_ids,
+            subtenants
         } = req.body;
 
         // Validate required field
@@ -41,9 +44,12 @@ exports.createTenant = async (req, res) => {
 
         const tenantValues = [
             company_name,
+            brand_name || null,
+            legal_entity_type || null,
             company_registration_number || null,
             industry || null,
             tax_id || null,
+            id_type || null,
             website || null,
             contact_person_name || null,
             contact_person_email || null,
@@ -60,10 +66,10 @@ exports.createTenant = async (req, res) => {
         // 1️⃣ Insert tenant
         const [tenantResult] = await connection.query(
             `INSERT INTO tenants 
-            (company_name, registration_no, industry, tax_id, website,
+            (company_name, brand_name, legal_entity_type, registration_no, industry, tax_id, id_type, website,
              contact_person_name, contact_person_email, contact_person_phone,
              address, city, state, zip_code, country, kyc_status, status)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
             tenantValues
         );
 
@@ -165,7 +171,8 @@ exports.getAllTenants = async (req, res) => {
                 t.contact_person_phone,
                 t.contact_person_email,
                 t.status,
-                COALESCE(SUM(u.super_area), 0) AS area_occupied
+                COALESCE(SUM(u.super_area), 0) AS area_occupied,
+                GROUP_CONCAT(u.unit_number SEPARATOR ', ') AS occupied_units
             FROM tenants t
             LEFT JOIN tenant_units tu ON t.id = tu.tenant_id
             LEFT JOIN units u ON tu.unit_id = u.id
@@ -262,9 +269,12 @@ exports.updateTenant = async (req, res) => {
         const {
             subtenants,
             company_name,
+            brand_name,
+            legal_entity_type,
             company_registration_number,
             industry,
             tax_id,
+            id_type,
             website,
             contact_person_name,
             contact_person_email,
@@ -303,6 +313,14 @@ exports.updateTenant = async (req, res) => {
             updateFields.push('company_name = ?');
             updateValues.push(company_name);
         }
+        if (brand_name !== undefined) {
+            updateFields.push('brand_name = ?');
+            updateValues.push(brand_name);
+        }
+        if (legal_entity_type !== undefined) {
+            updateFields.push('legal_entity_type = ?');
+            updateValues.push(legal_entity_type);
+        }
         if (company_registration_number !== undefined) {
             updateFields.push('registration_no = ?');
             updateValues.push(company_registration_number);
@@ -314,6 +332,10 @@ exports.updateTenant = async (req, res) => {
         if (tax_id !== undefined) {
             updateFields.push('tax_id = ?');
             updateValues.push(tax_id);
+        }
+        if (id_type !== undefined) {
+            updateFields.push('id_type = ?');
+            updateValues.push(id_type);
         }
         if (website !== undefined) {
             updateFields.push('website = ?');

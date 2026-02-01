@@ -4,7 +4,7 @@ import Sidebar from './Sidebar';
 import { tenantAPI, getProjects, unitAPI } from '../../services/api';
 import { indianCities, indianStates } from '../../utils/indianLocations';
 import { indianIndustries } from '../../utils/indianIndustries';
-import { isValidPhone } from '../../utils/validators';
+import { isValidPhone, isValidPAN, isValidAadhaar, isValidCIN } from '../../utils/validators';
 // Reusing OwnerList.css or similar generic styles for forms if available
 // Assuming we can use standard form styles or inline them for specific layout
 import './OwnerList.css';
@@ -16,9 +16,12 @@ const AddTenant = () => {
     // Form Data
     const [formData, setFormData] = useState({
         company_name: '',
+        brand_name: '',
+        legal_entity_type: '',
         company_registration_number: '',
         industry: '',
         tax_id: '',
+        id_type: '',
         website: '',
         contact_person_name: '',
         contact_person_email: '',
@@ -97,8 +100,23 @@ const AddTenant = () => {
         e.preventDefault();
 
         // Validation
+        // Validation
         if (!isValidPhone(formData.contact_person_phone)) {
             alert("Contact Person Phone must be exactly 10 digits.");
+            return;
+        }
+
+        // ID Validation
+        if (formData.id_type === 'PAN' && !isValidPAN(formData.tax_id)) {
+            alert("Invalid PAN format. Please check.");
+            return;
+        }
+        if (formData.id_type === 'Aadhaar' && !isValidAadhaar(formData.tax_id)) {
+            alert("Invalid Aadhaar format. Must be 12 digits.");
+            return;
+        }
+        if (formData.id_type === 'CIN' && !isValidCIN(formData.tax_id)) {
+            alert("Invalid CIN format. Please check.");
             return;
         }
 
@@ -172,12 +190,33 @@ const AddTenant = () => {
                             <h3 style={sectionTitleStyle}>Corporate Information</h3>
                             <div style={gridStyle}>
                                 <div>
-                                    <label style={labelStyle}>Company Name</label>
+                                    <label style={labelStyle}>Company Name *</label>
                                     <input type="text" name="company_name" placeholder="e.g. Acme Corp" style={inputStyle} value={formData.company_name} onChange={handleChange} required />
                                 </div>
                                 <div>
+                                    <label style={labelStyle}>Brand Name</label>
+                                    <input type="text" name="brand_name" placeholder="e.g. Acme" style={inputStyle} value={formData.brand_name} onChange={handleChange} />
+                                </div>
+                                <div>
+                                    <label style={labelStyle}>Legal Entity Type</label>
+                                    <select name="legal_entity_type" style={inputStyle} value={formData.legal_entity_type} onChange={handleChange}>
+                                        <option value="">Select Type</option>
+                                        <option value="Private Limited">Private Limited</option>
+                                        <option value="Public Limited">Public Limited</option>
+                                        <option value="LLP">LLP</option>
+                                        <option value="Partnership">Partnership</option>
+                                        <option value="Proprietorship">Proprietorship</option>
+                                        <option value="HUF">HUF</option>
+                                        <option value="Individual">Individual</option>
+                                        <option value="Trust">Trust</option>
+                                        <option value="Society">Society</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div style={gridStyle}>
+                                <div>
                                     <label style={labelStyle}>Company Registration No.</label>
-                                    <input type="text" name="company_registration_number" placeholder="e.g. 123456789" style={inputStyle} value={formData.company_registration_number} onChange={handleChange} />
+                                    <input type="text" name="company_registration_number" placeholder="e.g. U12345MH..." style={inputStyle} value={formData.company_registration_number} onChange={handleChange} />
                                 </div>
                                 <div>
                                     <label style={labelStyle}>Industry</label>
@@ -196,12 +235,36 @@ const AddTenant = () => {
                                         ))}
                                     </datalist>
                                 </div>
+                                <div>
+                                    <label style={labelStyle}>Website (optional)</label>
+                                    <input type="text" name="website" placeholder="e.g. https://www.company.com" style={inputStyle} value={formData.website} onChange={handleChange} />
+                                </div>
                             </div>
                             <div style={gridStyle}>
                                 <div>
-                                    <label style={labelStyle}>Tax ID/ VAT Number</label>
-                                    <input type="text" name="tax_id" placeholder="e.g. 123456789" style={inputStyle} value={formData.tax_id} onChange={handleChange} />
+                                    <label style={labelStyle}>ID Type (Validation Required)</label>
+                                    <select name="id_type" style={inputStyle} value={formData.id_type} onChange={handleChange}>
+                                        <option value="">Select ID Type</option>
+                                        <option value="PAN">PAN</option>
+                                        <option value="Aadhaar">Aadhaar</option>
+                                        <option value="CIN">CIN</option>
+                                        <option value="GSTIN">GSTIN</option>
+                                        <option value="Other">Other</option>
+                                    </select>
                                 </div>
+                                <div>
+                                    <label style={labelStyle}>ID Number (matches ID Type)</label>
+                                    <input
+                                        type="text"
+                                        name="tax_id"
+                                        placeholder="Enter ID Number"
+                                        style={inputStyle}
+                                        value={formData.tax_id}
+                                        onChange={handleChange}
+                                    />
+                                </div>
+                            </div>
+                            <div style={gridStyle}>
                                 <div>
                                     <label style={labelStyle}>Contact Person Name</label>
                                     <input type="text" name="contact_person_name" placeholder="e.g. John Doe" style={inputStyle} value={formData.contact_person_name} onChange={handleChange} />

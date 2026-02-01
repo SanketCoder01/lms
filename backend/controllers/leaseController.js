@@ -286,7 +286,17 @@ const createLease = async (req, res) => {
             deposit_type,
             revenue_share_percentage,
             revenue_share_applicable_on,
-            escalations
+            escalations,
+            // New Date Fields
+            fitout_period_start,
+            notice_vacation_date,
+            opening_date,
+            rent_free_start_date,
+            rent_free_end_date,
+            loi_date,
+            agreement_date,
+            deposit_payment_date,
+            registration_date
         } = req.body;
 
         // Validate required fields
@@ -332,8 +342,11 @@ const createLease = async (req, res) => {
                 tenure_months, lockin_period_months, notice_period_months,
                 monthly_rent, cam_charges, billing_frequency, payment_due_day,
                 currency_code, security_deposit, utility_deposit, deposit_type,
-                revenue_share_percentage, revenue_share_applicable_on, status
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                revenue_share_percentage, revenue_share_applicable_on, status,
+                fitout_period_start, notice_vacation_date, opening_date,
+                rent_free_start_date, rent_free_end_date,
+                loi_date, agreement_date, deposit_payment_date, registration_date
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
             [
                 project_id,
                 unit_id,
@@ -360,7 +373,16 @@ const createLease = async (req, res) => {
                 deposit_type || 'Cash',
                 revenue_share_percentage || null,
                 revenue_share_applicable_on || null,
-                'active'
+                'active',
+                fitout_period_start || null,
+                notice_vacation_date || null,
+                opening_date || null,
+                rent_free_start_date || null,
+                rent_free_end_date || null,
+                loi_date || null,
+                agreement_date || null,
+                deposit_payment_date || null,
+                registration_date || null
             ]
         );
 
@@ -576,7 +598,17 @@ const updateLease = async (req, res) => {
             revenue_share_percentage,
             revenue_share_applicable_on,
             status,
-            escalations
+            escalations,
+            // New Date Fields
+            fitout_period_start,
+            notice_vacation_date,
+            opening_date,
+            rent_free_start_date,
+            rent_free_end_date,
+            loi_date,
+            agreement_date,
+            deposit_payment_date,
+            registration_date
         } = req.body;
 
         // Check if lease exists
@@ -620,6 +652,18 @@ const updateLease = async (req, res) => {
         if (revenue_share_percentage !== undefined) updateFields.push('revenue_share_percentage = ?'), updateValues.push(revenue_share_percentage);
         if (revenue_share_applicable_on !== undefined) updateFields.push('revenue_share_applicable_on = ?'), updateValues.push(revenue_share_applicable_on);
         if (status !== undefined) updateFields.push('status = ?'), updateValues.push(status);
+
+        // New Date Fields
+        if (fitout_period_start !== undefined) updateFields.push('fitout_period_start = ?'), updateValues.push(fitout_period_start);
+        if (notice_vacation_date !== undefined) updateFields.push('notice_vacation_date = ?'), updateValues.push(notice_vacation_date);
+        if (opening_date !== undefined) updateFields.push('opening_date = ?'), updateValues.push(opening_date);
+        if (rent_free_start_date !== undefined) updateFields.push('rent_free_start_date = ?'), updateValues.push(rent_free_start_date);
+        if (rent_free_end_date !== undefined) updateFields.push('rent_free_end_date = ?'), updateValues.push(rent_free_end_date);
+        if (loi_date !== undefined) updateFields.push('loi_date = ?'), updateValues.push(loi_date);
+        if (agreement_date !== undefined) updateFields.push('agreement_date = ?'), updateValues.push(agreement_date);
+        if (deposit_payment_date !== undefined) updateFields.push('deposit_payment_date = ?'), updateValues.push(deposit_payment_date);
+        if (registration_date !== undefined) updateFields.push('registration_date = ?'), updateValues.push(registration_date);
+
 
         // Update lease if there are fields to update
         if (updateFields.length > 0) {

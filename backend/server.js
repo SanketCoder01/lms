@@ -31,7 +31,19 @@ const PORT = process.env.PORT || 5000;
 app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
-app.use("/uploads", express.static("uploads"));
+const path = require('path');
+
+// Explicitly set CSP to allow connections and prevent "default-src 'none'" errors
+app.use((req, res, next) => {
+  res.setHeader(
+    "Content-Security-Policy",
+    "default-src 'self' 'unsafe-inline' 'unsafe-eval' blob: data:; connect-src 'self' http://localhost:5000 ws://localhost:3000;"
+  );
+  next();
+});
+
+// Serve uploads from root directory (sibling to backend) if running from backend folder
+app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 
 /* =========================
    DATABASE CHECK
@@ -44,6 +56,13 @@ pool.getConnection()
   .catch((err) => {
     console.error("❌ Database connection failed:", err.message);
   });
+
+/* =========================
+   DEVTOOLS CHECK (Silence 404)
+========================= */
+app.get("/.well-known/appspecific/com.chrome.devtools.json", (req, res) => {
+  res.status(200).json({});
+});
 
 /* =========================
    ROOT ROUTE (IMPORTANT)
@@ -73,6 +92,7 @@ app.use("/api/roles", roleRoutes); // Mounted Route
 app.use("/api/dashboard", dashboardRoutes);
 app.use("/api/parties", partyRoutes);
 app.use("/api/ownerships", ownershipRoutes);
+// Ownership routes registered - Restart Trigger 7 (Path Fix)
 
 /* =========================
    HEALTH CHECK (RENDER)

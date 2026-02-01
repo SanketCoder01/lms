@@ -224,6 +224,11 @@ export const ownershipAPI = {
   removeOwner: (data) => API.post("/ownerships/remove", data),
   getOwnersByUnit: (unitId) => API.get(`/ownerships/unit/${unitId}`),
   getUnitsByParty: (partyId) => API.get(`/ownerships/party/${partyId}`),
+  // Document Chain
+  getDocumentTypes: () => API.get("/ownerships/document-types"),
+  addDocumentType: (data) => API.post("/ownerships/document-types", data),
+  uploadDocument: (data) => API.post("/ownerships/documents", data),
+  getDocuments: (unitId, partyId) => API.get(`/ownerships/documents/${unitId}/${partyId}`),
 };
 
 // Backward compatibility

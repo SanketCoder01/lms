@@ -57,6 +57,7 @@ const createUnit = async (req, res) => {
             project_id,
             unit_number,
             floor_number,
+            block_tower,
             super_area,
             carpet_area,
             covered_area,
@@ -80,6 +81,7 @@ const createUnit = async (req, res) => {
                 project_id,
                 unit_number,
                 floor_number,
+                block_tower,
                 super_area,
                 carpet_area,
                 covered_area,
@@ -88,12 +90,13 @@ const createUnit = async (req, res) => {
                 plc,
                 projected_rent,
                 status
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'vacant')
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'vacant')
             `,
             [
                 project_id,
                 unit_number,
                 floor_number || null,
+                block_tower || null,
                 super_area || null,
                 carpet_area || null,
                 covered_area || null,
@@ -151,6 +154,7 @@ const updateUnit = async (req, res) => {
     const {
         unit_number,
         floor_number,
+        block_tower,
         super_area,
         carpet_area,
         unit_condition,
@@ -166,6 +170,7 @@ const updateUnit = async (req, res) => {
             SET 
                 unit_number = ?, 
                 floor_number = ?, 
+                block_tower = ?,
                 super_area = ?, 
                 carpet_area = ?, 
                 unit_condition = ?, 
@@ -177,6 +182,7 @@ const updateUnit = async (req, res) => {
             [
                 unit_number,
                 floor_number || null,
+                block_tower || null,
                 super_area || null,
                 carpet_area || null,
                 unit_condition || 'bare_shell',
@@ -226,6 +232,7 @@ const getUnitById = async (req, res) => {
                 u.id,
                 u.unit_number,
                 u.floor_number,
+                u.block_tower,
                 u.super_area,
                 u.carpet_area,
                 u.covered_area,

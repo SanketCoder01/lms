@@ -134,7 +134,7 @@ const TenantList = () => {
                                 <tr>
                                     <th>Tenant Name</th>
                                     <th>Contact</th>
-                                    <th>Email</th>
+                                    <th>Occupied Units</th>
                                     <th>Area Occupied</th>
                                     <th>KYC Status</th>
                                     <th style={{ textAlign: 'right' }}>Actions</th>
@@ -161,10 +161,17 @@ const TenantList = () => {
                                                 </div>
                                             </div>
                                         </td>
-                                        <td>{tenant.contact_person_phone || 'N/A'}</td>
-                                        <td>{tenant.contact_person_email || 'N/A'}</td>
+                                        <td>
+                                            <div style={{ display: 'flex', flexDirection: 'column' }}>
+                                                <span>{tenant.contact_person_phone || 'N/A'}</span>
+                                                <span style={{ fontSize: '11px', color: '#666' }}>{tenant.contact_person_email}</span>
+                                            </div>
+                                        </td>
+                                        <td style={{ maxWidth: '150px', whiteSpace: 'normal', fontSize: '0.85rem' }}>
+                                            {tenant.occupied_units ? tenant.occupied_units : <span style={{ color: '#999' }}>No Units</span>}
+                                        </td>
                                         <td style={{ fontWeight: 500 }}>
-                                            {tenant.area_occupied ? parseFloat(tenant.area_occupied).toLocaleString() : '0'}
+                                            {tenant.area_occupied ? parseFloat(tenant.area_occupied).toLocaleString() : '0'} sqft
                                         </td>
                                         <td>
                                             <span className={`status-badge ${tenant.kyc_status || 'pending'}`}>

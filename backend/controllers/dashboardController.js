@@ -4,222 +4,168 @@ const getDashboardStats = async (req, res) => {
   try {
     const connection = await pool.getConnection();
 
-    try {
-      // Helper to calculate percentage change
-      const calculateChange = (current, previous) => {
-        const curr = parseFloat(current) || 0;
-        const prev = parseFloat(previous) || 0;
-
-        if (prev === 0) return curr > 0 ? "+100%" : "0%";
-        const change = ((curr - prev) / prev) * 100;
-        return `${change > 0 ? "+" : ""}${Math.round(change)}%`;
-      };
-
-      const getChangeType = (current, previous) => {
-        if (current > previous) return "positive";
-        if (current < previous) return "negative";
-        return "neutral";
-      };
-
-      // 1. Projects
-      const [projectsCurrent] = await connection.query("SELECT COUNT(*) as count FROM projects");
-      const [projectsPrev] = await connection.query("SELECT COUNT(*) as count FROM projects WHERE created_at < DATE_SUB(NOW(), INTERVAL 1 MONTH)");
-      const projectsCount = projectsCurrent[0]?.count || 0;
-      const prevProjects = projectsPrev[0]?.count || 0;
-
-      // 2. Units
-      const [unitsCurrent] = await connection.query("SELECT COUNT(*) as count FROM units");
-      const [unitsPrev] = await connection.query("SELECT COUNT(*) as count FROM units WHERE created_at < DATE_SUB(NOW(), INTERVAL 1 MONTH)");
-      const unitsCount = unitsCurrent[0]?.count || 0;
-      const prevUnits = unitsPrev[0]?.count || 0;
-
-      // 3. Masters (Total Parties)
-      const [partiesCurrent] = await connection.query("SELECT COUNT(*) as count FROM parties");
-      const [partiesPrev] = await connection.query("SELECT COUNT(*) as count FROM parties WHERE created_at < DATE_SUB(NOW(), INTERVAL 1 MONTH)");
-      const partiesCount = partiesCurrent[0]?.count || 0;
-      const prevParties = partiesPrev[0]?.count || 0;
-
-      // 4. Ownerships (Active Links)
-      const [ownershipsCurrent] = await connection.query("SELECT COUNT(*) as count FROM unit_ownerships WHERE ownership_status = 'Active'");
-      const [ownershipsPrev] = await connection.query("SELECT COUNT(*) as count FROM unit_ownerships WHERE created_at < DATE_SUB(NOW(), INTERVAL 1 MONTH) AND ownership_status = 'Active'");
-      const ownershipsCount = ownershipsCurrent[0]?.count || 0;
-      const prevOwnerships = ownershipsPrev[0]?.count || 0;
-
-      // 5. Leases
-      const [leasesCurrent] = await connection.query("SELECT COUNT(*) as count FROM leases WHERE status = 'active'");
-      const [leasesPrev] = await connection.query("SELECT COUNT(*) as count FROM leases WHERE created_at < DATE_SUB(NOW(), INTERVAL 1 MONTH) AND status = 'active'");
-      const leasesCount = leasesCurrent[0]?.count || 0;
-      const prevLeases = leasesPrev[0]?.count || 0;
-
-      // 6. Revenue (Monthly Run Rate from Active Leases)
-      const [revenueCurrent] = await connection.query("SELECT COALESCE(SUM(monthly_rent), 0) as total_revenue FROM leases WHERE status = 'active'");
-      // Simple prev calc: Revenue from leases active a month ago (approx by creation date for simplicity)
-      const [revenuePrev] = await connection.query("SELECT COALESCE(SUM(monthly_rent), 0) as total_revenue FROM leases WHERE status = 'active' AND created_at < DATE_SUB(NOW(), INTERVAL 1 MONTH)");
-
-      const totalRevenue = revenueCurrent[0]?.total_revenue || 0;
-      const prevRevenue = revenuePrev[0]?.total_revenue || 0;
-
-      // 7. Area Stats (Real Calculation)
-      // Total Area
-      const [totalAreaRes] = await connection.query("SELECT COALESCE(SUM(super_area), 0) as area FROM units");
-      const totalArea = parseFloat(totalAreaRes[0]?.area || 0);
-
-      // Occupied Area (Units linked to Active Leases - Distinct Units only)
-      const [occupiedAreaRes] = await connection.query(`
-        SELECT COALESCE(SUM(super_area), 0) as area
-        FROM units
-        WHERE id IN (SELECT unit_id FROM leases WHERE status = 'active')
-      `);
-      const occupiedArea = parseFloat(occupiedAreaRes[0]?.area || 0);
-
-      // Calculate Weighted Average Rent (Total Revenue / Total Occupied Area)
-      // If occupiedArea is 0, avoid division by zero
-      const avgRentAchieved = occupiedArea > 0 ? (totalRevenue / occupiedArea) : 0;
-
-      const vacantArea = totalArea - occupiedArea;
-      // Avg Expected Rent for Vacant (avg of projected_rent from units table)
-      const [vacantStats] = await connection.query(`
-        SELECT COALESCE(AVG(projected_rent / NULLIF(super_area, 0)), 0) as avg_expected 
-        FROM units 
-        WHERE id NOT IN (SELECT unit_id FROM leases WHERE status = 'active')
-      `);
-      const avgExpectedRent = parseFloat(vacantStats[0]?.avg_expected || 0);
-
-      const areaStats = {
-        occupied: { area: occupiedArea, avgRentPerSqft: avgRentAchieved.toFixed(2) },
-        vacant: { area: vacantArea, avgRentPerSqft: avgExpectedRent.toFixed(2) }
-      };
-
-      // 8. Upcoming Renewals (Leases ending in next 90 days)
-      const [renewals] = await connection.query(`
-        SELECT l.lease_end as lease_end_date, l.id as lease_id, p.project_name, u.unit_number, 
-        COALESCE(pt.company_name, CONCAT(pt.first_name, ' ', pt.last_name)) as tenant_name,
-        DATEDIFF(l.lease_end, CURDATE()) as days_remaining
-        FROM leases l
-        LEFT JOIN projects p ON l.project_id = p.id
-        LEFT JOIN units u ON l.unit_id = u.id
-        LEFT JOIN parties pt ON l.party_tenant_id = pt.id
-        WHERE l.status = 'active'
-        AND l.lease_end BETWEEN CURDATE() AND DATE_ADD(CURDATE(), INTERVAL 90 DAY)
-        ORDER BY l.lease_end ASC
-        LIMIT 5
-      `);
-
-      // 9. Upcoming Expiries (Leases ending in next 60 days - High Priority)
-      const [expiries] = await connection.query(`
-        SELECT l.lease_end as lease_end_date, l.id as lease_id, p.project_name, u.unit_number, 
-        COALESCE(pt.company_name, CONCAT(pt.first_name, ' ', pt.last_name)) as tenant_name,
-        DATEDIFF(l.lease_end, CURDATE()) as days_remaining
-        FROM leases l
-        LEFT JOIN projects p ON l.project_id = p.id
-        LEFT JOIN units u ON l.unit_id = u.id
-        LEFT JOIN parties pt ON l.party_tenant_id = pt.id
-        WHERE l.status = 'active'
-        AND l.lease_end BETWEEN CURDATE() AND DATE_ADD(CURDATE(), INTERVAL 60 DAY)
-        ORDER BY l.lease_end ASC
-        LIMIT 5
-      `);
-
-      // 10. Rent Escalations
-      let escalations = [];
-      try {
-        const [escRows] = await connection.query(`
-          SELECT re.effective_from as effective_date, re.increase_type, re.value, 
-          l.id as lease_id, p.project_name, u.unit_number,
-          DATEDIFF(re.effective_from, CURDATE()) as days_until_escalation
-          FROM lease_escalations re
-          JOIN leases l ON re.lease_id = l.id
-          LEFT JOIN projects p ON l.project_id = p.id
-          LEFT JOIN units u ON l.unit_id = u.id
-          WHERE re.effective_from BETWEEN CURDATE() AND DATE_ADD(CURDATE(), INTERVAL 90 DAY)
-          AND l.status = 'active'
-          ORDER BY re.effective_from ASC
-          LIMIT 5
-        `);
-        escalations = escRows;
-      } catch (err) {
-        console.warn("Escalations query failed", err);
+    // Default response structure with safe defaults (0 instead of undefined)
+    const response = {
+      topRow: {
+        totalProjects: { value: 0, label: "Total Projects" },
+        totalUnits: { value: 0, label: "Total Units" },
+        totalProjectArea: { value: 0, label: "Total Project Area", unit: "sq ft" }
+      },
+      secondRow: {
+        unitsSold: { value: 0, label: "Units Sold" },
+        unitsUnsold: { value: 0, label: "Units Unsold" },
+        areaSold: { value: 0, label: "Area Sold", unit: "sq ft" },
+        areaUnsold: { value: 0, label: "Area Unsold", unit: "sq ft" },
+        unitOwnership: { value: 0, label: "Unit Ownerships" }
+      },
+      thirdRow: {
+        unitsLeased: { value: 0, label: "Units Leased" },
+        unitsVacant: { value: 0, label: "Units Vacant" },
+        areaLeased: { value: 0, label: "Area Leased", unit: "sq ft" },
+        areaVacant: { value: 0, label: "Area Vacant", unit: "sq ft" },
+        totalLessees: { value: 0, label: "Total Lessees" }
+      },
+      financials: {
+        rentMonth: { value: 0, label: "Rent (Month)" },
+        rentYear: { value: 0, label: "Rent (Year)" },
+        opportunityLoss: { value: 0, label: "Opportunity Loss (Vacancy)" },
+        avgActualRent: { value: "0.00", label: "Avg Actual Rent / Sqft" },
+        avgProjectedRent: { value: "0.00", label: "Avg Projected Rent / Sqft" },
+        deviation: { value: "0.00", percent: "0%", label: "Deviation" }
+      },
+      graphs: {
+        revenueTrends: []
       }
+    };
 
-      // 11. Revenue Trends (Calculated from active leases over time)
-      // Complexity: Snapshotting revenue for past months is hard without a ledger. 
-      // Approximation: Calculate potential revenue for each month based on lease start/end dates.
+    try {
+      // --- 1. Top Row: Projects, Units, Total Area ---
+      // Total Projects
+      let totalProjects = 0;
+      try {
+        const [projRows] = await connection.query("SELECT COUNT(*) as count FROM projects");
+        totalProjects = projRows[0]?.count || 0;
+        response.topRow.totalProjects.value = totalProjects;
+      } catch (e) { console.error("Error fetching projects:", e.message); }
+
+      // Total Units
+      let totalUnits = 0;
+      let totalProjectArea = 0;
+      let globalProjectedRentTotal = 0;
+      try {
+        const [unitRows] = await connection.query("SELECT COUNT(*) as count, COALESCE(SUM(super_area), 0) as total_area, COALESCE(SUM(projected_rent), 0) as total_projected_rent FROM units");
+        totalUnits = unitRows[0]?.count || 0;
+        totalProjectArea = parseFloat(unitRows[0]?.total_area || 0);
+        globalProjectedRentTotal = parseFloat(unitRows[0]?.total_projected_rent || 0);
+
+        response.topRow.totalUnits.value = totalUnits;
+        response.topRow.totalProjectArea.value = totalProjectArea;
+      } catch (e) { console.error("Error fetching units:", e.message); }
+
+      // --- 2. Second Row: Sold vs Unsold (Based on Ownership) ---
+      let unitsSold = 0;
+      let areaSold = 0;
+      try {
+        const [soldRows] = await connection.query(`
+            SELECT COUNT(DISTINCT u.id) as count, COALESCE(SUM(u.super_area), 0) as area
+            FROM units u
+            JOIN unit_ownerships uo ON u.id = uo.unit_id
+            WHERE uo.ownership_status = 'Active'
+          `);
+        unitsSold = soldRows[0]?.count || 0;
+        areaSold = parseFloat(soldRows[0]?.area || 0);
+
+        response.secondRow.unitsSold.value = unitsSold;
+        response.secondRow.areaSold.value = areaSold;
+        response.secondRow.unitsUnsold.value = totalUnits - unitsSold;
+        response.secondRow.areaUnsold.value = totalProjectArea - areaSold;
+      } catch (e) { console.error("Error fetching sales:", e.message); }
+
+      try {
+        const [ownershipRows] = await connection.query("SELECT COUNT(*) as count FROM unit_ownerships WHERE ownership_status = 'Active'");
+        response.secondRow.unitOwnership.value = ownershipRows[0]?.count || 0;
+      } catch (e) { console.error("Error fetching ownership:", e.message); }
+
+      // --- 3. Third Row: Leased vs Vacant (Based on Leases) ---
+      let unitsLeased = 0;
+      let areaLeased = 0;
+      let totalActualRentMonthly = 0;
+      try {
+        const [leasedRows] = await connection.query(`
+            SELECT COUNT(DISTINCT u.id) as count, COALESCE(SUM(u.super_area), 0) as area, COALESCE(SUM(l.monthly_rent), 0) as total_rent
+            FROM units u
+            JOIN leases l ON u.id = l.unit_id
+            WHERE l.status = 'active'
+          `);
+        unitsLeased = leasedRows[0]?.count || 0;
+        areaLeased = parseFloat(leasedRows[0]?.area || 0);
+        totalActualRentMonthly = parseFloat(leasedRows[0]?.total_rent || 0);
+
+        response.thirdRow.unitsLeased.value = unitsLeased;
+        response.thirdRow.areaLeased.value = areaLeased;
+        response.thirdRow.unitsVacant.value = totalUnits - unitsLeased;
+        response.thirdRow.areaVacant.value = totalProjectArea - areaLeased;
+      } catch (e) { console.error("Error fetching leases:", e.message); }
+
+      try {
+        const [lesseeRows] = await connection.query("SELECT COUNT(DISTINCT party_tenant_id) as count FROM leases WHERE status = 'active'");
+        response.thirdRow.totalLessees.value = lesseeRows[0]?.count || 0;
+      } catch (e) { console.error("Error fetching lessees:", e.message); }
+
+      // --- 4. Financial Dashboard ---
+      const rentForMonth = totalActualRentMonthly;
+      const rentForYear = rentForMonth * 12;
+
+      response.financials.rentMonth.value = rentForMonth;
+      response.financials.rentYear.value = rentForYear;
+
+      try {
+        const [vacantProjRows] = await connection.query(`
+            SELECT COALESCE(SUM(projected_rent), 0) as loss
+            FROM units
+            WHERE id NOT IN (SELECT unit_id FROM leases WHERE status = 'active')
+          `);
+        response.financials.opportunityLoss.value = parseFloat(vacantProjRows[0]?.loss || 0);
+      } catch (e) { console.error("Error fetching vacancy loss:", e.message); }
+
+      const avgActualRentPerSqft = areaLeased > 0 ? (rentForMonth / areaLeased) : 0;
+      const avgProjectedRentPerSqft = totalProjectArea > 0 ? (globalProjectedRentTotal / totalProjectArea) : 0;
+      const deviation = avgActualRentPerSqft - avgProjectedRentPerSqft;
+      const deviationPercent = avgProjectedRentPerSqft > 0 ? ((deviation / avgProjectedRentPerSqft) * 100) : 0;
+
+      response.financials.avgActualRent.value = avgActualRentPerSqft.toFixed(2);
+      response.financials.avgProjectedRent.value = avgProjectedRentPerSqft.toFixed(2);
+      response.financials.deviation.value = deviation.toFixed(2);
+      response.financials.deviation.percent = deviationPercent.toFixed(1) + '%';
+
+      // ii. Revenue Graph (Trends)
       const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
       const today = new Date();
-      const finalTrends = [];
+      const revenueTrends = [];
 
-      for (let i = 11; i >= 0; i--) {
-        const d = new Date(today.getFullYear(), today.getMonth() - i, 1);
-        const monthName = months[d.getMonth()];
-        const year = d.getFullYear();
+      try {
+        for (let i = 11; i >= 0; i--) {
+          const d = new Date(today.getFullYear(), today.getMonth() - i, 1);
+          const monthName = months[d.getMonth()];
+          const year = d.getFullYear();
+          const startOfMonth = `${year}-${String(d.getMonth() + 1).padStart(2, '0')}-01`;
+          const endOfMonth = new Date(year, d.getMonth() + 1, 0).toISOString().slice(0, 10);
 
-        // Query sum of rent for leases active in that month
-        // Active means: lease_start <= EndOfMonth AND (lease_end >= StartOfMonth OR lease_end IS NULL)
-        const startOfMonth = `${year}-${String(d.getMonth() + 1).padStart(2, '0')}-01`;
-        const endOfMonth = new Date(year, d.getMonth() + 1, 0).toISOString().slice(0, 10);
+          const [trendRes] = await connection.query(`
+                SELECT COALESCE(SUM(monthly_rent), 0) as revenue 
+                FROM leases 
+                WHERE lease_start <= ? AND (lease_end >= ? OR lease_end IS NULL)
+            `, [endOfMonth, startOfMonth]);
 
-        const [trendRes] = await connection.query(`
-            SELECT COALESCE(SUM(monthly_rent), 0) as revenue 
-            FROM leases 
-            WHERE lease_start <= ? AND (lease_end >= ? OR lease_end IS NULL)
-        `, [endOfMonth, startOfMonth]);
+          revenueTrends.push({
+            month: monthName,
+            revenue: parseFloat(trendRes[0]?.revenue || 0)
+          });
+        }
+        response.graphs.revenueTrends = revenueTrends;
+      } catch (e) { console.error("Error fetching trends:", e.message); }
 
-        finalTrends.push({
-          month: monthName,
-          revenue: parseFloat(trendRes[0]?.revenue || 0)
-        });
-      }
-
-      res.json({
-        metrics: {
-          totalProjects: {
-            value: projectsCount,
-            change: `${calculateChange(projectsCount, prevProjects)} vs last month`,
-            type: getChangeType(projectsCount, prevProjects)
-          },
-          totalUnits: {
-            value: unitsCount,
-            change: `${calculateChange(unitsCount, prevUnits)} vs last month`,
-            type: getChangeType(unitsCount, prevUnits)
-          },
-          totalMasters: {
-            value: partiesCount,
-            change: `${calculateChange(partiesCount, prevParties)} vs last month`,
-            type: getChangeType(partiesCount, prevParties)
-          },
-          totalOwnerships: {
-            value: ownershipsCount,
-            change: `${calculateChange(ownershipsCount, prevOwnerships)} vs last month`,
-            type: "neutral"
-          },
-          totalLeases: {
-            value: leasesCount,
-            change: `${calculateChange(leasesCount, prevLeases)} vs last month`,
-            type: getChangeType(leasesCount, prevLeases)
-          },
-          totalRevenue: {
-            value: totalRevenue,
-            change: `${calculateChange(totalRevenue, prevRevenue)} YTD`,
-            type: getChangeType(totalRevenue, prevRevenue)
-          }
-        },
-        areaStats: areaStats,
-        upcomingRenewals: renewals.map(r => ({
-          ...r,
-          badge: `${r.days_remaining} Days`,
-          badgeType: r.days_remaining < 30 ? 'warning' : 'success'
-        })),
-        upcomingExpiries: expiries.map(e => ({
-          ...e,
-          badge: e.days_remaining < 30 ? 'HIGH RISK' : 'MEDIUM',
-          badgeType: e.days_remaining < 30 ? 'danger' : 'warning'
-        })),
-        rentEscalations: escalations.map(e => ({
-          ...e,
-          effective_from: e.effective_date
-        })),
-        revenueTrends: finalTrends
-      });
+      res.json(response);
 
     } finally {
       connection.release();

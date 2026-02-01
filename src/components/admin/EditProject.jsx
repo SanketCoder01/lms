@@ -14,6 +14,7 @@ const EditProject = () => {
     location: "",
     address: "",
     project_type: "",
+    calculation_type: "",
     total_floors: "",
     total_project_area: "",
     description: "",
@@ -50,6 +51,7 @@ const EditProject = () => {
           location: data.location || "",
           address: data.address || "",
           project_type: data.project_type || "RETAIL/SHOP",
+          calculation_type: data.calculation_type || "Super Area",
           total_floors: data.total_floors || "",
           total_project_area: data.total_project_area || "",
           description: data.description || "",
@@ -180,6 +182,14 @@ const EditProject = () => {
                       <option value="Mixed Use">Mixed Use</option>
                     </select>
                   </div>
+                </div>
+                <div className="form-group vertical">
+                  <label>Calculation Basis</label>
+                  <select name="calculation_type" value={formData.calculation_type} onChange={handleChange}>
+                    <option value="Super Area">Super Area</option>
+                    <option value="Covered Area">Covered Area</option>
+                    <option value="Carpet Area">Carpet Area</option>
+                  </select>
                 </div>
                 <div className="form-group vertical">
                   <label>Address</label>

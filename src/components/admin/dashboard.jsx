@@ -4,9 +4,42 @@ import Sidebar from './Sidebar';
 import { getDashboardStats, getProjects, tenantAPI, unitAPI } from '../../services/api';
 import './dashboard.css';
 
+const initialStats = {
+    topRow: {
+        totalProjects: { value: 0, label: "Total Projects" },
+        totalUnits: { value: 0, label: "Total Units" },
+        totalProjectArea: { value: 0, label: "Total Project Area", unit: "sq ft" }
+    },
+    secondRow: {
+        unitsSold: { value: 0, label: "Units Sold" },
+        unitsUnsold: { value: 0, label: "Units Unsold" },
+        areaSold: { value: 0, label: "Area Sold", unit: "sq ft" },
+        areaUnsold: { value: 0, label: "Area Unsold", unit: "sq ft" },
+        unitOwnership: { value: 0, label: "Unit Ownerships" }
+    },
+    thirdRow: {
+        unitsLeased: { value: 0, label: "Units Leased" },
+        unitsVacant: { value: 0, label: "Units Vacant" },
+        areaLeased: { value: 0, label: "Area Leased", unit: "sq ft" },
+        areaVacant: { value: 0, label: "Area Vacant", unit: "sq ft" },
+        totalLessees: { value: 0, label: "Total Lessees" }
+    },
+    financials: {
+        rentMonth: { value: 0, label: "Rent (Month)" },
+        rentYear: { value: 0, label: "Rent (Year)" },
+        opportunityLoss: { value: 0, label: "Opportunity Loss (Vacancy)" },
+        avgActualRent: { value: "0.00", label: "Avg Actual Rent / Sqft" },
+        avgProjectedRent: { value: "0.00", label: "Avg Projected Rent / Sqft" },
+        deviation: { value: "0.00", percent: "0%", label: "Deviation" }
+    },
+    graphs: {
+        revenueTrends: []
+    }
+};
+
 const Dashboard = () => {
     const navigate = useNavigate();
-    const [stats, setStats] = useState(null);
+    const [stats, setStats] = useState(initialStats);
     const [loading, setLoading] = useState(true);
 
     // Search State
@@ -56,9 +89,12 @@ const Dashboard = () => {
         const fetchStats = async () => {
             try {
                 const response = await getDashboardStats();
-                setStats(response.data);
+                if (response.data) {
+                    setStats(response.data);
+                }
             } catch (error) {
                 console.error("Error fetching dashboard stats:", error);
+                // Keep initialStats if error occurs
             } finally {
                 setLoading(false);
             }
@@ -66,8 +102,17 @@ const Dashboard = () => {
         fetchStats();
     }, []);
 
-    // Helper data - handle the new nested structure
-    const s = stats?.metrics || {};
+    // Helper Card Component
+    const StatCard = ({ title, value, unit, subtext, color = "blue", onClick }) => (
+        <div className="stat-card clickable" onClick={onClick} style={{ cursor: onClick ? 'pointer' : 'default', borderColor: `var(--${color})`, borderTopWidth: '4px' }}>
+            <h4 style={{ fontSize: '0.85rem', color: '#6B7280', textTransform: 'none' }}>{title}</h4>
+            <div className="stat-value" style={{ color: `var(--${color})` }}>
+                {value !== undefined && value !== null ? (typeof value === 'number' ? value.toLocaleString() : value) : '0'}
+                {unit && <span style={{ fontSize: '0.9rem', color: '#9CA3AF', marginLeft: '4px' }}>{unit}</span>}
+            </div>
+            {subtext && <div className="stat-change neutral">{subtext}</div>}
+        </div>
+    );
 
     return (
         <div className="dashboard-container">
@@ -113,232 +158,164 @@ const Dashboard = () => {
                         <button className="icon-btn" onClick={() => navigate('/admin/notifications')} title="Notifications">
                             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.73 21a2 2 0 0 1-3.46 0"></path></svg>
                         </button>
-
-                        <button className="primary-btn" onClick={() => navigate('/admin/leases')}>
-                            + New Lease
-                        </button>
                     </div>
                 </header>
 
-                {/* ROW 1: 5 Main Entities (Wrapping Grid) */}
-                <section className="stats-grid-top">
-                    {loading ? (
-                        <div className="loading-state">Loading...</div>
-                    ) : (
-                        [
-                            { title: "Total Projects", value: s.totalProjects?.value || 0, change: s.totalProjects?.change, cls: s.totalProjects?.type || "neutral", stroke: "#2ED573", link: "/admin/projects" },
-                            { title: "Total Units", value: s.totalUnits?.value || 0, change: s.totalUnits?.change, cls: s.totalUnits?.type || "neutral", stroke: "#FF4757", link: "/admin/units" },
-                            { title: "Total Masters", value: s.totalMasters?.value || 0, change: s.totalMasters?.change, cls: s.totalMasters?.type || "neutral", stroke: "#2E66FF", link: "/admin/parties" },
-                            { title: "Active Ownerships", value: s.totalOwnerships?.value || 0, change: s.totalOwnerships?.change, cls: "neutral", stroke: "#FFA502", link: "/admin/ownership-mapping" },
-                            { title: "Total Leases", value: s.totalLeases?.value || 0, change: s.totalLeases?.change, cls: s.totalLeases?.type || "neutral", stroke: "#5352ED", link: "/admin/leases" }
-                        ].map((item, idx) => (
-                            <div className="stat-card clickable" key={idx} onClick={() => navigate(item.link)} style={{ cursor: 'pointer' }}>
-                                <h4>{item.title}</h4>
-                                <div className="stat-value">{item.value}</div>
-                                <div className={`stat-change ${item.cls}`}>
-                                    {item.change}
+                {loading ? (
+                    <div className="loading-state">Loading Dashboard...</div>
+                ) : (
+                    <>
+                        {/* ROW 1: Projects, Units, Total Area */}
+                        <h4 className="section-title" style={{ marginTop: 0, marginBottom: '15px' }}>Overview</h4>
+                        <section className="stats-grid-top stats-grid-3">
+                            <StatCard title="Total Projects" value={stats?.topRow?.totalProjects?.value} subtext={stats?.topRow?.totalProjects?.change} color="blue" onClick={() => navigate('/admin/projects')} />
+                            <StatCard title="Total Units" value={stats?.topRow?.totalUnits?.value} subtext={stats?.topRow?.totalUnits?.change} color="blue" onClick={() => navigate('/admin/units')} />
+                            <StatCard title="Total Project Area" value={stats?.topRow?.totalProjectArea?.value} unit="sq ft" color="blue" onClick={() => navigate('/admin/units')} />
+                        </section>
+
+                        {/* ROW 2: Sales Status */}
+                        <h4 className="section-title" style={{ marginBottom: '15px' }}>Sales Status</h4>
+                        <section className="stats-grid-top stats-grid-5">
+                            <StatCard title="Units Sold" value={stats?.secondRow?.unitsSold?.value} color="green" onClick={() => navigate('/admin/units')} />
+                            <StatCard title="Units Unsold" value={stats?.secondRow?.unitsUnsold?.value} color="orange" onClick={() => navigate('/admin/units')} />
+                            <StatCard title="Area Sold" value={stats?.secondRow?.areaSold?.value} unit="sq ft" color="green" onClick={() => navigate('/admin/units')} />
+                            <StatCard title="Area Unsold" value={stats?.secondRow?.areaUnsold?.value} unit="sq ft" color="orange" onClick={() => navigate('/admin/units')} />
+                            <StatCard title="Unit Ownerships" value={stats?.secondRow?.unitOwnership?.value} color="purple" onClick={() => navigate('/admin/ownership-mapping')} />
+                        </section>
+
+                        {/* ROW 3: Leasing Status */}
+                        <h4 className="section-title" style={{ marginBottom: '15px' }}>Leasing Status</h4>
+                        <section className="stats-grid-top stats-grid-5">
+                            <StatCard title="Units Leased" value={stats?.thirdRow?.unitsLeased?.value} color="blue" onClick={() => navigate('/admin/leases')} />
+                            <StatCard title="Units Vacant" value={stats?.thirdRow?.unitsVacant?.value} color="red" onClick={() => navigate('/admin/units')} />
+                            <StatCard title="Area Leased" value={stats?.thirdRow?.areaLeased?.value} unit="sq ft" color="blue" onClick={() => navigate('/admin/leases')} />
+                            <StatCard title="Area Vacant" value={stats?.thirdRow?.areaVacant?.value} unit="sq ft" color="red" onClick={() => navigate('/admin/units')} />
+                            <StatCard title="Total Lessees" value={stats?.thirdRow?.totalLessees?.value} color="purple" onClick={() => navigate('/admin/parties')} />
+                        </section>
+
+                        {/* Financial Dashboard */}
+                        <h4 className="section-title" style={{ marginBottom: '15px' }}>Financial Dashboard</h4>
+                        <div className="financial-grid">
+
+                            {/* Financial Metrics */}
+                            <div className="financial-metrics" style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                                <div className="stat-card" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                    <div>
+                                        <h4>Total Rent (Month)</h4>
+                                        <div className="stat-value">₹{Number(stats?.financials?.rentMonth?.value || 0).toLocaleString()}</div>
+                                    </div>
                                 </div>
-                                <div className="mini-sparkline">
-                                    <svg width="100%" height="35" viewBox="0 0 100 35" preserveAspectRatio="none">
-                                        <path
-                                            d="M0,25 C12,15 30,30 50,20 S88,15 100,22"
-                                            fill="none"
-                                            stroke={item.stroke}
-                                            strokeWidth="2.5"
-                                            strokeLinecap="round"
-                                        />
+                                <div className="stat-card" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                    <div>
+                                        <h4>Total Rent (Year / Annualized)</h4>
+                                        <div className="stat-value">₹{Number(stats?.financials?.rentYear?.value || 0).toLocaleString()}</div>
+                                    </div>
+                                </div>
+                                <div className="stat-card" style={{ borderLeft: '4px solid #DC2626' }}>
+                                    <h4>Opportunity Loss (Vacancy)</h4>
+                                    <div className="stat-value" style={{ color: '#DC2626' }}>₹{Number(stats?.financials?.opportunityLoss?.value || 0).toLocaleString()}</div>
+                                </div>
+                                <div className="stat-card">
+                                    <h4>Avg Actual Rent / Sqft</h4>
+                                    <div className="stat-value">₹{stats?.financials?.avgActualRent?.value}</div>
+                                </div>
+                                <div className="stat-card">
+                                    <h4>Deviation (Actual vs Projected)</h4>
+                                    <div className="stat-value" style={{ color: parseFloat(stats?.financials?.deviation?.value || 0) >= 0 ? 'green' : 'red' }}>
+                                        {stats?.financials?.deviation?.value}
+                                        <span style={{ fontSize: '0.8rem', marginLeft: '5px' }}>({stats?.financials?.deviation?.percent})</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Revenue Graph */}
+                            <div className="stat-card revenue-card" style={{ height: 'auto', minHeight: '300px' }}>
+                                <div style={{ marginBottom: '20px' }}>
+                                    <h4>Total Project Revenue (Trend)</h4>
+                                    <div className="sub-text">Monthly revenue trend based on active leases</div>
+                                </div>
+                                <div style={{ flex: 1, position: 'relative' }}>
+                                    <svg viewBox="0 0 1000 300" preserveAspectRatio="none" style={{ width: '100%', height: '100%', overflow: 'visible' }}>
+                                        <defs>
+                                            <linearGradient id="trendGradient" x1="0" y1="0" x2="0" y2="1">
+                                                <stop offset="0%" stopColor="#2E66FF" stopOpacity="0.2" />
+                                                <stop offset="100%" stopColor="#2E66FF" stopOpacity="0" />
+                                            </linearGradient>
+                                        </defs>
+                                        <line x1="0" y1="250" x2="1000" y2="250" stroke="#F3F4F6" strokeWidth="2" />
+                                        <line x1="0" y1="150" x2="1000" y2="150" stroke="#F3F4F6" strokeWidth="2" />
+                                        <line x1="0" y1="50" x2="1000" y2="50" stroke="#F3F4F6" strokeWidth="2" />
+
+                                        {stats?.graphs?.revenueTrends && stats.graphs.revenueTrends.length > 0 && (
+                                            <>
+                                                {/* Area Fill */}
+                                                <path
+                                                    d={(() => {
+                                                        const data = stats.graphs.revenueTrends;
+                                                        if (!data || data.length === 0) return "";
+                                                        const revenues = data.map(d => d.revenue);
+                                                        const maxRev = Math.max(...revenues) || 100;
+                                                        const width = 1000;
+                                                        const height = 250;
+                                                        const step = width / (data.length - 1);
+
+                                                        const points = data.map((d, i) => {
+                                                            const x = i * step;
+                                                            const y = height - (d.revenue / maxRev) * 200;
+                                                            return `${x},${y}`;
+                                                        });
+
+                                                        let path = `M${points[0]}`;
+                                                        for (let i = 1; i < points.length; i++) {
+                                                            path += ` L ${points[i]}`;
+                                                        }
+                                                        // Close the path for fill
+                                                        path += ` L ${width},${height} L 0,${height} Z`;
+                                                        return path;
+                                                    })()}
+                                                    fill="url(#trendGradient)"
+                                                    stroke="none"
+                                                />
+                                                {/* Stroke Line */}
+                                                <path
+                                                    d={(() => {
+                                                        const data = stats.graphs.revenueTrends;
+                                                        if (!data || data.length === 0) return "";
+                                                        const revenues = data.map(d => d.revenue);
+                                                        const maxRev = Math.max(...revenues) || 100;
+                                                        const width = 1000;
+                                                        const height = 250;
+                                                        const step = width / (data.length - 1);
+
+                                                        const points = data.map((d, i) => {
+                                                            const x = i * step;
+                                                            const y = height - (d.revenue / maxRev) * 200;
+                                                            return `${x},${y}`;
+                                                        });
+
+                                                        let path = `M${points[0]}`;
+                                                        for (let i = 1; i < points.length; i++) {
+                                                            path += ` L ${points[i]}`;
+                                                        }
+                                                        return path;
+                                                    })()}
+                                                    fill="none"
+                                                    stroke="#2E66FF"
+                                                    strokeWidth="3"
+                                                    strokeLinejoin="round"
+                                                />
+                                            </>
+                                        )}
                                     </svg>
                                 </div>
-                            </div>
-                        ))
-                    )}
-                </section>
-
-                {/* ROW 2: Revenue & Area */}
-                <section className="stats-grid-secondary">
-                    {/* Revenue Card */}
-                    <div className="stat-card revenue-card">
-                        <div>
-                            <h4>Total Revenue</h4>
-                            <div className="stat-value">{s.totalRevenue?.value || "₹0.0M"}</div>
-                            <div className="stat-change negative">
-                                {s.totalRevenue?.change}
+                                <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '10px', fontSize: '0.75rem', color: '#9CA3AF' }}>
+                                    {stats?.graphs?.revenueTrends?.map((d, i) => <span key={i}>{d.month}</span>)}
+                                </div>
                             </div>
                         </div>
-                        <div className="mini-chart-wave">
-                            <svg width="120" height="40" viewBox="0 0 120 40">
-                                <path d="M0,35 C30,35 30,10 60,10 C90,10 90,25 120,20" fill="none" stroke="#FF4757" strokeWidth="2.5" strokeLinecap="round" />
-                            </svg>
-                        </div>
-                    </div>
 
-                    {/* Area Occupied */}
-                    <div className="area-card">
-                        <div className="area-info">
-                            <h4>Area Occupied</h4>
-                            <span className="sub-text">Average Rent Achieved: ₹{Number(stats?.areaStats?.occupied?.avgRentPerSqft || 0).toFixed(2)} per sq ft</span>
-                        </div>
-                        <div className="area-metrics">
-                            <span className="big-num">{stats?.areaStats?.occupied?.area?.toLocaleString() || '0'} sq ft</span>
-                            <span className="label">Super / Leasable Area</span>
-                        </div>
-                    </div>
-
-                    {/* Area Vacant */}
-                    <div className="area-card">
-                        <div className="area-info">
-                            <h4>Area Vacant</h4>
-                            <span className="sub-text">Average Expected Rent: ₹{Number(stats?.areaStats?.vacant?.avgRentPerSqft || 0).toFixed(2)} per sq ft</span>
-                        </div>
-                        <div className="area-metrics">
-                            <span className="big-num">{stats?.areaStats?.vacant?.area?.toLocaleString() || '0'} sq ft</span>
-                            <span className="label">Super / Leasable Area</span>
-                        </div>
-                    </div>
-                </section>
-
-                {/* REVENUE CHART SECTION */}
-                <section className="chart-section">
-                    <div className="section-header">
-                        <h2>
-                            Revenue Trends <span className="text-muted">Gross revenue across all properties</span>
-                        </h2>
-                        <div className="chart-legend">
-                            <span className="legend-item"><span className="dot current" /> This year</span>
-                            <span className="legend-item"><span className="dot last" /> Last year</span>
-                        </div>
-                    </div>
-                    <div className="chart-wrapper">
-                        {/* Dynamic Chart */}
-                        <svg viewBox="0 0 1000 300" preserveAspectRatio="none" className="revenue-chart-svg" style={{ width: '100%', height: '250px', overflow: 'visible' }}>
-                            <defs>
-                                <linearGradient id="trendGradient" x1="0" y1="0" x2="0" y2="1">
-                                    <stop offset="0%" stopColor="#2E66FF" stopOpacity="0.18" />
-                                    <stop offset="100%" stopColor="#2E66FF" stopOpacity="0" />
-                                </linearGradient>
-                            </defs>
-                            <path d="M0,250 L1000,250" stroke="#F0F2F5" />
-                            <path d="M0,200 L1000,200" stroke="#F0F2F5" />
-                            <path d="M0,150 L1000,150" stroke="#F0F2F5" />
-
-                            {stats?.revenueTrends && (
-                                <path
-                                    d={(() => {
-                                        const data = stats.revenueTrends;
-                                        if (!data || data.length === 0) return "";
-
-                                        const revenues = data.map(d => d.revenue);
-                                        const maxRev = Math.max(...revenues) * 1.2 || 100;
-                                        const width = 1000;
-                                        const height = 250;
-                                        const step = width / (data.length - 1);
-
-                                        const points = data.map((d, i) => {
-                                            const x = i * step;
-                                            const y = height - (d.revenue / maxRev) * height;
-                                            return `${x},${y}`;
-                                        });
-
-                                        let path = `M${points[0]}`;
-                                        for (let i = 1; i < points.length; i++) {
-                                            const [x, y] = points[i].split(',');
-                                            path += ` L ${x},${y}`;
-                                        }
-                                        return path;
-                                    })()}
-                                    fill="url(#trendGradient)"
-                                    stroke="#2E66FF"
-                                    strokeWidth="3"
-                                    strokeLinejoin="round"
-                                />
-                            )}
-                        </svg>
-                        <div className="chart-labels">
-                            {stats?.revenueTrends?.map((d, i) => (
-                                <span key={i}>{d.month}</span>
-                            )) || <span>Loading...</span>}
-                        </div>
-                    </div>
-                </section>
-
-                {/* LISTS SECTIONS */}
-                <section className="lists-grid">
-                    {/* Renewals */}
-                    <div className="list-card">
-                        <div className="list-header">
-                            <h3>Upcoming Renewals</h3>
-                            <button className="link-btn" onClick={() => navigate('/admin/leases?filter=renewals')}>View All</button>
-                        </div>
-                        <div className="list-content">
-                            {stats?.upcomingRenewals?.length > 0 ? stats.upcomingRenewals.map((item, idx) => (
-                                <div className="list-item" key={idx}>
-                                    <div className="date-badge">
-                                        <span className="month">{new Date(item.lease_end_date).toLocaleString('default', { month: 'short' })}</span>
-                                        <span className="day">{new Date(item.lease_end_date).getDate()}</span>
-                                    </div>
-                                    <div className="item-details">
-                                        <div className="primary-text">{item.unit_number} • {new Date(item.lease_end_date).toLocaleDateString()}</div>
-                                        <div className="secondary-text">{item.tenant_name}</div>
-                                    </div>
-                                    <span className={`status-pill ${item.badgeType}`}>
-                                        {item.badge}
-                                    </span>
-                                </div>
-                            )) : <p className="empty-text">No upcoming renewals.</p>}
-                        </div>
-                    </div>
-
-                    {/* Expiries */}
-                    <div className="list-card">
-                        <div className="list-header">
-                            <h3>Upcoming Expiries</h3>
-                            <button className="link-btn" onClick={() => navigate('/admin/leases?filter=expiries')}>View All</button>
-                        </div>
-                        <div className="list-content">
-                            {stats?.upcomingExpiries?.length > 0 ? stats.upcomingExpiries.map((item, idx) => (
-                                <div className="list-item" key={idx}>
-                                    <div className="date-badge">
-                                        <span className="month">{new Date(item.lease_end_date).toLocaleString('default', { month: 'short' })}</span>
-                                        <span className="day">{new Date(item.lease_end_date).getDate()}</span>
-                                    </div>
-                                    <div className="item-details">
-                                        <div className="primary-text">{item.unit_number} • {new Date(item.lease_end_date).toLocaleDateString()}</div>
-                                        <div className="secondary-text">{item.tenant_name}</div>
-                                    </div>
-                                    <span className={`status-pill ${item.badgeType}`}>
-                                        {item.badge}
-                                    </span>
-                                </div>
-                            )) : <p className="empty-text">No upcoming expiries.</p>}
-                        </div>
-                    </div>
-
-                    {/* Rent Escalations */}
-                    <div className="list-card">
-                        <div className="list-header">
-                            <h3>Rent Escalations</h3>
-                            <button className="link-btn" onClick={() => navigate('/admin/leases?filter=escalations')}>View All</button>
-                        </div>
-                        <div className="list-content">
-                            {stats?.rentEscalations?.length > 0 ? stats.rentEscalations.map((item, idx) => (
-                                <div className="list-item" key={idx}>
-                                    <div className="date-badge gray">
-                                        <span className="month">{new Date(item.effective_from).toLocaleString('default', { month: 'short' }).toUpperCase()}</span>
-                                        <span className="day">{new Date(item.effective_from).getDate()}</span>
-                                    </div>
-                                    <div className="item-details">
-                                        <div className="primary-text">{item.unit_number} • {new Date(item.effective_from).getFullYear()}</div>
-                                        <div className="secondary-text">{item.increase_type}</div>
-                                    </div>
-                                    <span className="value-text success">
-                                        {item.increase_type === 'Percentage' ? `+${item.value}%` : `+₹${item.value}`}
-                                    </span>
-                                </div>
-                            )) : <p className="empty-text">No escalations.</p>}
-                        </div>
-                    </div>
-                </section>
-
+                    </>
+                )}
             </main>
         </div>
     );

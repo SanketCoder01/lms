@@ -1,26 +1,27 @@
-require('dotenv').config({ path: require('path').resolve(__dirname, '../.env') });
-const pool = require('../config/db');
+const db = require('../config/db');
 
-const checkSchema = async () => {
+(async () => {
     try {
-        const connection = await pool.getConnection();
-        const tables = ['owners', 'tenants', 'leases', 'units'];
+        console.log("Connected path loaded. Getting connection...");
+        const connection = await db.getConnection();
+        console.log("Connection acquired.");
 
+        const tables = ['unit_ownerships', 'leases', 'projects', 'units', 'lease_escalations'];
         for (const table of tables) {
-            console.log(`\n--- ${table} ---`);
             try {
                 const [columns] = await connection.query(`SHOW COLUMNS FROM ${table}`);
+                console.log(`\n--- ${table} ---`);
                 console.log(columns.map(c => `${c.Field} (${c.Type})`).join(', '));
-            } catch (e) {
-                console.log(`Table ${table} likely does not exist.`);
+            } catch (err) {
+                console.log(`\n--- ${table} ---`);
+                console.log("ERROR: " + err.message);
             }
         }
+
         connection.release();
-        process.exit();
-    } catch (e) {
-        console.error(e);
+        process.exit(0);
+    } catch (err) {
+        console.error("Fatal error:", err);
         process.exit(1);
     }
-};
-
-checkSchema();
+})();

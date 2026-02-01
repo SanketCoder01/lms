@@ -28,6 +28,7 @@ const addProject = async (req, res) => {
       location,
       address,
       project_type,
+      calculation_type,
       total_floors,
       total_project_area,
       description
@@ -44,6 +45,7 @@ const addProject = async (req, res) => {
       location || null,
       address || null,
       project_type || null,
+      calculation_type || 'Super Area',
       floors,
       area,
       image,
@@ -54,8 +56,8 @@ const addProject = async (req, res) => {
 
     const [result] = await pool.execute(
       `INSERT INTO projects 
-      (project_name, location, address, project_type, total_floors, total_project_area, project_image, description)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      (project_name, location, address, project_type, calculation_type, total_floors, total_project_area, project_image, description)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       values
     );
 
@@ -180,7 +182,7 @@ const updateProject = async (req, res) => {
 
     let sql = `
       UPDATE projects SET
-      project_name=?, location=?, address=?, project_type=?,
+      project_name=?, location=?, address=?, project_type=?, calculation_type=?,
       total_floors=?, total_project_area=?, description=?, status=?
     `;
     const values = [
@@ -188,6 +190,7 @@ const updateProject = async (req, res) => {
       location || null,
       address || null,
       project_type || null,
+      calculation_type || 'Super Area',
       floors,
       area,
       description || null,

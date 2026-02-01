@@ -3,7 +3,7 @@ import { useNavigate, Link, useParams } from 'react-router-dom';
 import Sidebar from './Sidebar';
 import { partyAPI } from '../../services/api';
 import { indianStates, indianCities } from '../../utils/indianLocations';
-import { isValidPhone } from '../../utils/validators';
+import { isValidPhone, isValidPAN, isValidAadhaar, isValidCIN } from '../../utils/validators';
 import './PartyForm.css';
 
 const EditParty = () => {
@@ -16,6 +16,8 @@ const EditParty = () => {
     const [formData, setFormData] = useState({
         type: 'Individual',
         company_name: '',
+        brand_name: '',
+        legal_entity_type: '',
         title: '',
         first_name: '',
         last_name: '',
@@ -72,6 +74,20 @@ const EditParty = () => {
         }
         if (formData.alt_phone && !isValidPhone(formData.alt_phone)) {
             alert("Alternate Phone Number must be exactly 10 digits.");
+            return;
+        }
+
+        // ID Validation
+        if (formData.identification_type === 'PAN' && !isValidPAN(formData.identification_number)) {
+            alert("Invalid PAN format. Please check.");
+            return;
+        }
+        if (formData.identification_type === 'Aadhar' && !isValidAadhaar(formData.identification_number)) {
+            alert("Invalid Aadhaar format. Must be 12 digits.");
+            return;
+        }
+        if (formData.identification_type === 'CIN' && !isValidCIN(formData.identification_number)) {
+            alert("Invalid CIN format. Please check.");
             return;
         }
 
@@ -142,6 +158,35 @@ const EditParty = () => {
                                         required={formData.type === 'Company'}
                                         placeholder="e.g. Acme Corp Pvt Ltd"
                                     />
+                                </div>
+                                <div className="form-group">
+                                    <label>Brand Name</label>
+                                    <input
+                                        className="form-input"
+                                        name="brand_name"
+                                        value={formData.brand_name}
+                                        onChange={handleChange}
+                                        placeholder="e.g. Acme"
+                                    />
+                                </div>
+                                <div className="form-group">
+                                    <label>Legal Entity Type</label>
+                                    <select
+                                        className="form-select"
+                                        name="legal_entity_type"
+                                        value={formData.legal_entity_type}
+                                        onChange={handleChange}
+                                    >
+                                        <option value="">Select Type</option>
+                                        <option value="Private Limited">Private Limited</option>
+                                        <option value="Public Limited">Public Limited</option>
+                                        <option value="LLP">LLP</option>
+                                        <option value="Partnership">Partnership</option>
+                                        <option value="Proprietorship">Proprietorship</option>
+                                        <option value="HUF">HUF</option>
+                                        <option value="Trust">Trust</option>
+                                        <option value="Society">Society</option>
+                                    </select>
                                 </div>
                             </div>
                         </div>
@@ -243,11 +288,12 @@ const EditParty = () => {
                                     value={formData.identification_type}
                                     onChange={handleChange}
                                 >
-                                    <option value="Tax ID">Tax ID / PAN</option>
+                                    <option value="PAN">PAN</option>
+                                    <option value="Aadhar">Aadhaar</option>
+                                    <option value="CIN">CIN</option>
+                                    <option value="GSTIN">GSTIN</option>
                                     <option value="Voter ID">Voter ID</option>
                                     <option value="Passport">Passport</option>
-                                    <option value="Aadhar">Aadhar</option>
-                                    <option value="CIN">CIN (Company)</option>
                                     <option value="Other">Other</option>
                                 </select>
                             </div>

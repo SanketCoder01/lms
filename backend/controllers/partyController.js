@@ -28,7 +28,7 @@ exports.getPartyById = async (req, res) => {
 // Create a new party
 exports.createParty = async (req, res) => {
     const {
-        type, company_name, title, first_name, last_name,
+        type, company_name, brand_name, legal_entity_type, title, first_name, last_name,
         email, phone, alt_phone, identification_type, identification_number,
         address_line1, address_line2, city, state, postal_code, country
     } = req.body;
@@ -36,12 +36,12 @@ exports.createParty = async (req, res) => {
     try {
         const [result] = await pool.query(
             `INSERT INTO parties (
-                type, company_name, title, first_name, last_name,
+                type, company_name, brand_name, legal_entity_type, title, first_name, last_name,
                 email, phone, alt_phone, identification_type, identification_number,
                 address_line1, address_line2, city, state, postal_code, country
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
             [
-                type || 'Individual', company_name, title, first_name, last_name,
+                type || 'Individual', company_name, brand_name, legal_entity_type, title, first_name, last_name,
                 email, phone, alt_phone, identification_type, identification_number,
                 address_line1, address_line2, city, state, postal_code, country
             ]
@@ -56,7 +56,7 @@ exports.createParty = async (req, res) => {
 // Update a party
 exports.updateParty = async (req, res) => {
     const {
-        type, company_name, title, first_name, last_name,
+        type, company_name, brand_name, legal_entity_type, title, first_name, last_name,
         email, phone, alt_phone, identification_type, identification_number,
         address_line1, address_line2, city, state, postal_code, country
     } = req.body;
@@ -64,12 +64,12 @@ exports.updateParty = async (req, res) => {
     try {
         await pool.query(
             `UPDATE parties SET
-                type=?, company_name=?, title=?, first_name=?, last_name=?,
+                type=?, company_name=?, brand_name=?, legal_entity_type=?, title=?, first_name=?, last_name=?,
                 email=?, phone=?, alt_phone=?, identification_type=?, identification_number=?,
                 address_line1=?, address_line2=?, city=?, state=?, postal_code=?, country=?
              WHERE id=?`,
             [
-                type, company_name, title, first_name, last_name,
+                type, company_name, brand_name, legal_entity_type, title, first_name, last_name,
                 email, phone, alt_phone, identification_type, identification_number,
                 address_line1, address_line2, city, state, postal_code, country,
                 req.params.id

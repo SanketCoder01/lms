@@ -6,9 +6,45 @@ const Step2RentConfig = ({
     setFormData,
     escalationSteps,
     setEscalationSteps,
-    addEscalationStep,
-    removeEscalationStep
+    selectedProject,
+    selectedUnit
 }) => {
+
+    const [rentRate, setRentRate] = React.useState('');
+    const [mgRate, setMgRate] = React.useState('');
+
+    React.useEffect(() => {
+        if (rentRate && selectedProject && selectedUnit) {
+            const calcType = selectedProject.calculation_type || 'Super Area';
+            let area = 0;
+            // Note: Assuming unit object has these fields. If not, might need to ensure they are fetched.
+            // Based on AddUnit, they should be there.
+            if (calcType === 'Covered Area') area = parseFloat(selectedUnit.covered_area) || 0;
+            else if (calcType === 'Carpet Area') area = parseFloat(selectedUnit.carpet_area) || 0;
+            else area = parseFloat(selectedUnit.super_area) || 0;
+
+            const total = parseFloat(rentRate) * area;
+            setFormData(prev => ({ ...prev, monthly_rent: total > 0 ? total.toString() : '' }));
+        }
+    }, [rentRate, selectedProject, selectedUnit, setFormData]);
+
+    React.useEffect(() => {
+        if (mgRate && selectedProject && selectedUnit) {
+            const calcType = selectedProject.calculation_type || 'Super Area';
+            let area = 0;
+            if (calcType === 'Covered Area') area = parseFloat(selectedUnit.covered_area) || 0;
+            else if (calcType === 'Carpet Area') area = parseFloat(selectedUnit.carpet_area) || 0;
+            else area = parseFloat(selectedUnit.super_area) || 0;
+
+            const total = parseFloat(mgRate) * area;
+            // For Hybrid, it sets minimum_guarantee. For RevenueShare, it sets monthly_rent (which acts as MG/Base).
+            if (rentModel === 'Hybrid') {
+                setFormData(prev => ({ ...prev, minimum_guarantee: total > 0 ? total.toString() : '' }));
+            } else {
+                setFormData(prev => ({ ...prev, monthly_rent: total > 0 ? total.toString() : '' }));
+            }
+        }
+    }, [mgRate, selectedProject, selectedUnit, setFormData, rentModel]);
 
     return (
         <div className="form-section">
@@ -20,73 +56,56 @@ const Step2RentConfig = ({
                     <h4>Fixed Rent Details</h4>
                     <div className="form-row">
                         <div className="form-group">
-                            <label>Fixed Rent Amount (Monthly)</label>
+                            <label>Rent Rate (Per Sqft)</label>
+                            <div className="input-with-suffix" style={{ display: 'flex', alignItems: 'center' }}>
+                                <input
+                                    type="number"
+                                    className="form-control"
+                                    placeholder="Rate"
+                                    value={rentRate}
+                                    onChange={(e) => setRentRate(e.target.value)}
+                                />
+                                <span style={{ marginLeft: '10px', fontSize: '0.9rem', color: '#666' }}>
+                                    on {selectedProject?.calculation_type || 'Super Area'}
+                                </span>
+                            </div>
+                        </div>
+                        <div className="form-group">
+                            <label>Total Monthly Rent (Calculated)</label>
                             <div className="currency-input">
                                 <span className="currency-symbol">₹</span>
                                 <input
                                     type="number"
                                     placeholder="0.00"
                                     value={formData.monthly_rent}
-                                    onChange={(e) => setFormData({ ...formData, monthly_rent: e.target.value })}
+                                    readOnly
+                                    style={{ backgroundColor: '#f3f4f6' }}
                                 />
                                 <span className="currency-code">INR</span>
                             </div>
                         </div>
                     </div>
 
-                    {/* ESCALATIONS */}
-                    <div className="escalations-section" style={{ marginTop: '20px' }}>
-                        <h5>Rent Escalations</h5>
-                        <p style={{ fontSize: '0.9rem', color: '#718096', marginBottom: '10px' }}>
-                            Define effective dates for rent increases.
-                        </p>
-
-                        {escalationSteps.map((step, index) => (
-                            <div className="escalation-row" key={index} style={{ display: 'flex', gap: '15px', marginBottom: '10px', alignItems: 'flex-end' }}>
-                                <div className="form-group" style={{ flex: 1 }}>
-                                    <label>Effective Date</label>
-                                    <input type="date" className="form-control" value={step.effectiveDate} onChange={(e) => {
-                                        const newSteps = [...escalationSteps];
-                                        newSteps[index].effectiveDate = e.target.value;
-                                        setEscalationSteps(newSteps);
-                                    }} />
-                                </div>
-                                <div className="form-group" style={{ flex: 1 }}>
-                                    <label>Effective To (Optional)</label>
-                                    <input type="date" className="form-control" value={step.effectiveToDate} onChange={(e) => {
-                                        const newSteps = [...escalationSteps];
-                                        newSteps[index].effectiveToDate = e.target.value;
-                                        setEscalationSteps(newSteps);
-                                    }} />
-                                </div>
-                                <div className="form-group" style={{ flex: 1 }}>
-                                    <label>Type</label>
-                                    <select className="form-control" value={step.increaseType} onChange={(e) => {
-                                        const newSteps = [...escalationSteps];
-                                        newSteps[index].increaseType = e.target.value;
-                                        setEscalationSteps(newSteps);
-                                    }}>
-                                        <option>Percentage (%)</option>
-                                        <option>Fixed Amount</option>
-                                    </select>
-                                </div>
-                                <div className="form-group" style={{ flex: 1 }}>
-                                    <label>Value</label>
-                                    <input type="number" className="form-control" value={step.value} onChange={(e) => {
-                                        const newSteps = [...escalationSteps];
-                                        newSteps[index].value = e.target.value;
-                                        setEscalationSteps(newSteps);
-                                    }} />
-                                </div>
-                                <button type="button" className="remove-btn" onClick={() => removeEscalationStep(index)} style={{ marginBottom: '5px', padding: '8px', background: '#ffe4e6', color: '#e11d48', border: 'none', borderRadius: '4px', cursor: 'pointer' }}>
-                                    X
-                                </button>
-                            </div>
-                        ))}
-
-                        <button type="button" className="add-btn" onClick={addEscalationStep} style={{ marginTop: '10px', padding: '8px 12px', background: '#f1f5f9', border: '1px solid #cbd5e1', borderRadius: '4px', cursor: 'pointer' }}>
-                            + Add Escalation Step
-                        </button>
+                    {/* Rent Free Period */}
+                    <div className="form-row" style={{ marginTop: '15px' }}>
+                        <div className="form-group">
+                            <label>Rent Free Period Start</label>
+                            <input
+                                type="date"
+                                className="form-control"
+                                value={formData.rent_free_start_date || ''}
+                                onChange={(e) => setFormData({ ...formData, rent_free_start_date: e.target.value })}
+                            />
+                        </div>
+                        <div className="form-group">
+                            <label>Rent Free Period End</label>
+                            <input
+                                type="date"
+                                className="form-control"
+                                value={formData.rent_free_end_date || ''}
+                                onChange={(e) => setFormData({ ...formData, rent_free_end_date: e.target.value })}
+                            />
+                        </div>
                     </div>
                 </div>
             )}
@@ -100,34 +119,68 @@ const Step2RentConfig = ({
                     <h4>Revenue Share Details</h4>
                     <div className="form-row">
                         <div className="form-group">
-                            <label>Minimum Guarantee (MGR) {rentModel === 'Hybrid' ? '(Optional)' : ''}</label>
+                            <label>MG Rate (Per Sqft)</label>
+                            <div className="input-with-suffix" style={{ display: 'flex', alignItems: 'center' }}>
+                                <input
+                                    type="number"
+                                    className="form-control"
+                                    placeholder="Rate"
+                                    value={mgRate}
+                                    onChange={(e) => setMgRate(e.target.value)}
+                                />
+                                <span style={{ marginLeft: '10px', fontSize: '0.9rem', color: '#666' }}>
+                                    on {selectedProject?.calculation_type || 'Super Area'}
+                                </span>
+                            </div>
+                        </div>
+                        <div className="form-group">
+                            <label>Min Guarantee Amount (Calc)</label>
                             <div className="currency-input">
                                 <span className="currency-symbol">₹</span>
                                 <input
                                     type="number"
                                     placeholder="0.00"
-                                    value={rentModel === 'Hybrid' ? (formData.minimum_guarantee || '') : formData.monthly_rent} // For RevShare, MGR is stored in monthly_rent usually, or use separate field
-                                    onChange={(e) => {
-                                        if (rentModel === 'Hybrid') {
-                                            setFormData({ ...formData, minimum_guarantee: e.target.value })
-                                        } else {
-                                            setFormData({ ...formData, monthly_rent: e.target.value })
-                                        }
-                                    }}
+                                    readOnly
+                                    style={{ backgroundColor: '#f3f4f6' }}
+                                    value={rentModel === 'Hybrid' ? (formData.minimum_guarantee || '') : formData.monthly_rent}
                                 />
                                 <span className="currency-code">INR</span>
                             </div>
                         </div>
                         <div className="form-group">
                             <label>Revenue Share Percentage (%)</label>
-                            <input
-                                type="number"
-                                placeholder="e.g. 10"
-                                className="form-control"
-                                value={formData.revenue_share_percentage}
-                                onChange={(e) => setFormData({ ...formData, revenue_share_percentage: e.target.value })}
-                            />
+                            <div className="input-with-suffix" style={{ display: 'flex', alignItems: 'center' }}>
+                                <input
+                                    type="number"
+                                    placeholder="e.g. 10"
+                                    className="form-control"
+                                    value={formData.revenue_share_percentage}
+                                    onChange={(e) => setFormData({ ...formData, revenue_share_percentage: e.target.value })}
+                                />
+                                <span style={{ marginLeft: '10px' }}>%</span>
+                            </div>
                         </div>
+                        <div className="form-group">
+                            <label>Projected Share Amount (Calc)</label>
+                            <div className="currency-input">
+                                <span className="currency-symbol">₹</span>
+                                <input
+                                    type="number"
+                                    placeholder="Calculating..."
+                                    readOnly
+                                    style={{ backgroundColor: '#f3f4f6' }}
+                                    value={
+                                        (formData.revenue_share_percentage && (rentModel === 'Hybrid' ? formData.minimum_guarantee : formData.monthly_rent))
+                                            ? ((parseFloat(rentModel === 'Hybrid' ? formData.minimum_guarantee : formData.monthly_rent) / parseFloat(formData.revenue_share_percentage)) * 100).toFixed(2)
+                                            : '0.00'
+                                    }
+                                />
+                                <span className="currency-code">Sales</span>
+                            </div>
+                            <small style={{ color: '#666', fontSize: '0.8em' }}>Sales required to match MGR</small>
+                        </div>
+                    </div>
+                    <div className="form-row" style={{ marginTop: '15px' }}>
                         <div className="form-group">
                             <label>Applicable On</label>
                             <select

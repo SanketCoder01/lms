@@ -14,6 +14,7 @@ const AddProject = () => {
     location: "",
     address: "",
     project_type: "",
+    calculation_type: "Super Area",
     total_floors: "",
     total_project_area: "",
     description: "",
@@ -201,6 +202,34 @@ const AddProject = () => {
                     <option value="Industrial">Industrial</option>
                     <option value="Mixed Use">Mixed Use</option>
                   </select>
+                </div>
+
+                <div className="form-group">
+                  <label>Calculation Basis (Select all that apply)</label>
+                  <div className="checkbox-group" style={{ display: 'flex', flexDirection: 'column', gap: '5px', marginTop: '5px' }}>
+                    {["Super Area", "Covered Area", "Carpet Area"].map((type) => (
+                      <label key={type} style={{ display: 'flex', alignItems: 'center', cursor: 'pointer', fontSize: '14px' }}>
+                        <input
+                          type="checkbox"
+                          checked={formData.calculation_type.includes(type)}
+                          onChange={(e) => {
+                            const checked = e.target.checked;
+                            setFormData(prev => {
+                              let currentTypes = prev.calculation_type ? prev.calculation_type.split(',').filter(x => x) : [];
+                              if (checked) {
+                                if (!currentTypes.includes(type)) currentTypes.push(type);
+                              } else {
+                                currentTypes = currentTypes.filter(t => t !== type);
+                              }
+                              return { ...prev, calculation_type: currentTypes.join(',') };
+                            });
+                          }}
+                          style={{ marginRight: '8px', width: 'auto' }}
+                        />
+                        {type}
+                      </label>
+                    ))}
+                  </div>
                 </div>
 
                 <div className="form-group">

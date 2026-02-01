@@ -77,16 +77,7 @@ const Step1BasicDetails = ({
                             />
                             Revenue Share
                         </label>
-                        <label className="radio-option">
-                            <input
-                                type="radio"
-                                name="rentModel"
-                                value="Hybrid"
-                                checked={rentModel === 'Hybrid'}
-                                onChange={(e) => setRentModel(e.target.value)}
-                            />
-                            Hybrid
-                        </label>
+
                     </div>
                     {isSubLease && <small style={{ color: '#e53e3e' }}>Sublease supports Fixed Rent only.</small>}
                 </div>
@@ -145,6 +136,12 @@ const Step1BasicDetails = ({
                             </option>
                         ))}
                     </select>
+                    {!isSubLease && formData.party_tenant_id && formData.party_owner_id && formData.party_tenant_id === formData.party_owner_id && (
+                        <small className="error-text" style={{ color: 'red' }}>Owner and Tenant cannot be the same party.</small>
+                    )}
+                    {isSubLease && formData.party_tenant_id && formData.sub_tenant_id && formData.party_tenant_id === formData.sub_tenant_id && (
+                        <small className="error-text" style={{ color: 'red' }}>Sub Tenant and Main Tenant cannot be the same party.</small>
+                    )}
                 </div>
                 <div className="form-group">
                     <label>{isSubLease ? 'Main Tenant (Lessor) *' : 'Owner (Landlord) *'}</label>
