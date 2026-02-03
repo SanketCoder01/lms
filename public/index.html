@@ -13,7 +13,7 @@
 
   <!-- CSP to allow backend connections and suppress devtools errors -->
   <meta http-equiv="Content-Security-Policy"
-    content="default-src 'self' 'unsafe-inline' 'unsafe-eval' blob: data: https:; connect-src 'self' http://localhost:5000 ws://localhost:3000 http://localhost:3000; style-src 'self' 'unsafe-inline' https:; font-src 'self' data: https:; img-src 'self' data: https: blob: http://localhost:5000; worker-src 'self' blob:;" />
+    content="default-src 'self' 'unsafe-inline' 'unsafe-eval' blob: data: https:; connect-src * 'unsafe-inline'; style-src 'self' 'unsafe-inline' https:; font-src 'self' data: https:; img-src 'self' data: https: blob:; worker-src 'self' blob:;" />
 
   <title>Cusec Consulting LLP</title>
 </head>

@@ -37,7 +37,7 @@ const path = require('path');
 app.use((req, res, next) => {
   res.setHeader(
     "Content-Security-Policy",
-    "default-src 'self' 'unsafe-inline' 'unsafe-eval' blob: data:; connect-src 'self' http://localhost:5000 ws://localhost:3000;"
+    "default-src 'self' 'unsafe-inline' 'unsafe-eval' blob: data: https:; connect-src * 'unsafe-inline'; style-src 'self' 'unsafe-inline' https:; font-src 'self' data: https:; img-src 'self' data: https: blob:;"
   );
   next();
 });
