@@ -20,6 +20,7 @@ const FilterOptionsMaster = () => {
 
     useEffect(() => {
         fetchOptions();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [selectedCategory]);
 
     const fetchOptions = async () => {

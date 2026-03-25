@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import Sidebar from './Sidebar';
-import { getProjectById, unitAPI, tenantAPI, FILE_BASE_URL } from '../../services/api';
+import { getProjectById, unitAPI, FILE_BASE_URL } from '../../services/api';
 import './ProjectDetails.css'; // We'll create this CSS file next
 
 const ProjectDetails = () => {

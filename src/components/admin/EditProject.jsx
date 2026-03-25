@@ -24,7 +24,6 @@ const EditProject = () => {
   const [image, setImage] = useState(null);
   const [locations, setLocations] = useState([]);
   const [types, setTypes] = useState(["RETAIL/SHOP", "Commercial", "Industrial", "Mixed Use"]);
-  const [message, setMessage] = useState('');
 
   // Fetch Locations and Types
   useEffect(() => {
