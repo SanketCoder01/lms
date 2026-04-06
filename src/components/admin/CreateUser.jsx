@@ -15,6 +15,7 @@ const CreateUser = () => {
         fullName: '',
         email: '',
         phone: '',
+        password: '',
         role_id: '',
         status: 'active'
     });
@@ -39,8 +40,8 @@ const CreateUser = () => {
     const handleSubmit = async (e) => {
         e.preventDefault();
 
-        if (!formData.fullName || !formData.email || !formData.role_id) {
-            alert("Please fill all required fields");
+        if (!formData.fullName || !formData.email || !formData.role_id || !formData.password) {
+            alert("Please fill all required fields, including password.");
             return;
         }
 
@@ -77,7 +78,7 @@ const CreateUser = () => {
                 email: formData.email,
                 role_name: role_name, // Sending role_name as expected by backend
                 status: formData.status,
-                password: "TempPassword123!" // Changed key to 'password' matching controller destructuring
+                password: formData.password
             });
 
             alert("User created successfully");
@@ -146,7 +147,20 @@ const CreateUser = () => {
                                         placeholder="+1 (555) 000-0000"
                                     />
                                 </div>
+                                <div className="form-group">
+                                    <label>Password</label>
+                                    <input
+                                        type="password"
+                                        name="password"
+                                        value={formData.password}
+                                        onChange={handleChange}
+                                        placeholder="Enter password"
+                                        required
+                                    />
+                                </div>
+                            </div>
 
+                            <div className="form-row">
                                 <div className="form-group">
                                     <label>Role</label>
                                     <div className="select-wrapper">

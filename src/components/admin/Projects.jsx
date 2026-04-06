@@ -240,11 +240,12 @@ const Projects = () => {
                       <div className="units-cell">
                         <span className="unit-count">
                           {project.total_units || 0} Units<br />
-                          <small style={{fontSize: '0.8rem', color: '#64748b'}}>{project.total_floors || 0} Floors</small>
+                          <small style={{ fontSize: '0.8rem', color: '#64748b' }}>{project.total_floors || 0} Floors</small>
                         </span>
                         <span className="occupancy-label">
-                          {/* Mock occupancy - replace with real data if available in API */}
-                          {(project.total_units > 0 ? '85% Occupied' : 'New Construction')}
+                          {project.occupied_units !== undefined || project.leased_units !== undefined
+                            ? `${project.occupied_units ?? project.leased_units ?? 0} / ${project.total_units || 0} Leased`
+                            : (project.total_units > 0 ? 'View Details' : 'New Construction')}
                         </span>
                       </div>
                     </td>
@@ -263,6 +264,33 @@ const Projects = () => {
                           title="View Details"
                         >
                           <svg viewBox="0 0 24 24" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+                        </Link>
+                        <Link
+                          to={`/admin/add-unit?projectId=${project.id}`}
+                          className="action-icon-btn add-unit-btn"
+                          title="Add Unit"
+                          style={{
+                            width: '32px',
+                            height: '32px',
+                            borderRadius: '50%',
+                            background: '#f0fdf4',
+                            border: '2px solid #10b981',
+                            color: '#10b981',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            fontSize: '20px',
+                            fontWeight: '700',
+                            lineHeight: '1',
+                            textDecoration: 'none',
+                            cursor: 'pointer',
+                            transition: 'all 0.2s',
+                            flexShrink: 0,
+                          }}
+                          onMouseEnter={e => { e.currentTarget.style.background = '#10b981'; e.currentTarget.style.color = '#fff'; }}
+                          onMouseLeave={e => { e.currentTarget.style.background = '#f0fdf4'; e.currentTarget.style.color = '#10b981'; }}
+                        >
+                          +
                         </Link>
                         <Link
                           to={`/admin/edit-project/${project.id}`}

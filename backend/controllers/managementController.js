@@ -1,23 +1,22 @@
-const pool = require("../config/db");
+const supabase = require("../config/db");
 
 /* ================= DASHBOARD STATS ================= */
 exports.getDashboardStats = async (req, res) => {
     try {
-        const [projects] = await pool.query("SELECT COUNT(*) as count FROM projects");
-        const [units] = await pool.query("SELECT COUNT(*) as count FROM units");
-        const [owners] = await pool.query("SELECT COUNT(*) as count FROM owners");
-        const [tenants] = await pool.query("SELECT COUNT(*) as count FROM tenants");
-        const [leases] = await pool.query("SELECT COUNT(*) as count FROM leases");
-
-        // Revenue could be sum of lease amounts. For now, let's try to sum it if column exists, else hardcode or 0.
-        // Let's stick to 0 or static for revenue unless we check lease schema.
+        const [projects, units, owners, tenants, leases] = await Promise.all([
+            supabase.from('projects').select('*', { count: 'exact', head: true }),
+            supabase.from('units').select('*', { count: 'exact', head: true }),
+            supabase.from('owners').select('*', { count: 'exact', head: true }),
+            supabase.from('tenants').select('*', { count: 'exact', head: true }),
+            supabase.from('leases').select('*', { count: 'exact', head: true })
+        ]);
 
         res.json({
-            totalProjects: projects[0].count,
-            totalUnits: units[0].count,
-            totalOwners: owners[0].count,
-            totalTenants: tenants[0].count,
-            totalLeases: leases[0].count,
+            totalProjects: projects.count || 0,
+            totalUnits: units.count || 0,
+            totalOwners: owners.count || 0,
+            totalTenants: tenants.count || 0,
+            totalLeases: leases.count || 0,
             totalRevenue: "₹0", // Placeholder until Financials module is ready
         });
     } catch (err) {
@@ -31,56 +30,36 @@ exports.getReports = async (req, res) => {
     try {
         const { project_id, owner_id, tenant_id, search } = req.query;
 
-        let query = `
-            SELECT 
-                l.id,
-                p.project_name,
-                COALESCE(t.company_name, CONCAT(t.first_name, ' ', t.last_name)) as tenant_name,
-                l.lease_start as date,
-                l.lease_type as type,
-                l.status
-            FROM leases l
-            LEFT JOIN projects p ON l.project_id = p.id
-            LEFT JOIN parties t ON l.party_tenant_id = t.id
-            LEFT JOIN parties o ON l.party_owner_id = o.id
-            WHERE 1=1
-        `;
+        let query = supabase.from('leases').select(`
+            id, lease_start, lease_type, status,
+            projects(project_name),
+            tenant:parties!leases_party_tenant_id_fkey(company_name, first_name, last_name)
+        `).order('created_at', { ascending: false });
 
-        const params = [];
+        if (project_id) query = query.eq('project_id', project_id);
+        if (owner_id) query = query.eq('party_owner_id', owner_id);
+        if (tenant_id) query = query.eq('party_tenant_id', tenant_id);
 
-        if (project_id) {
-            query += " AND l.project_id = ?";
-            params.push(project_id);
-        }
+        const { data, error } = await query;
+        if(error) throw error;
 
-        if (owner_id) {
-            query += " AND l.party_owner_id = ?";
-            params.push(owner_id);
-        }
-
-        if (tenant_id) {
-            query += " AND l.party_tenant_id = ?";
-            params.push(tenant_id);
-        }
+        let formatted = data.map(r => ({
+            id: r.id,
+            name: `${r.projects?.project_name || 'N/A'} - ${r.tenant?.company_name || String(r.tenant?.first_name || '') + ' ' + String(r.tenant?.last_name || '')}`.trim(),
+            date: new Date(r.lease_start).toLocaleDateString(),
+            type: r.lease_type,
+            status: r.status,
+            project_name: r.projects?.project_name,
+            tenant_name: r.tenant?.company_name || String(r.tenant?.first_name || '') + ' ' + String(r.tenant?.last_name || '')
+        }));
 
         if (search) {
-            query += " AND (p.project_name LIKE ? OR t.company_name LIKE ? OR t.first_name LIKE ? OR t.last_name LIKE ?)";
-            const term = `%${search}%`;
-            params.push(term, term, term, term);
+            const s = search.toLowerCase();
+            formatted = formatted.filter(f => 
+                (f.project_name && f.project_name.toLowerCase().includes(s)) ||
+                (f.tenant_name && f.tenant_name.toLowerCase().includes(s))
+            );
         }
-
-        query += " ORDER BY l.created_at DESC";
-
-        const [rows] = await pool.query(query, params);
-
-        // Format for frontend
-        const formatted = rows.map(r => ({
-            id: r.id,
-            name: `${r.project_name} - ${r.tenant_name}`,
-            date: new Date(r.date).toLocaleDateString(),
-            type: r.type,
-            status: r.status
-        }));
 
         res.json(formatted);
     } catch (err) {
@@ -92,15 +71,20 @@ exports.getReports = async (req, res) => {
 /* ================= DOCUMENTS ================= */
 exports.getDocuments = async (req, res) => {
     try {
-        const [docs] = await pool.query("SELECT * FROM documents ORDER BY created_at DESC");
-        // Map to frontend expected format if needed
-        const formatted = docs.map(d => ({
-            id: d.id,
-            projectName: d.project_name || "Unknown", // Assuming column exists
-            date: d.created_at,
-            uploadedBy: d.uploaded_by || "Admin",
-            category: d.category
-        }));
+        // Fallback for documents since schema might be owner_documents, tenant_documents etc. 
+        // Assuming there is a generic documents table if this legacy API exists
+        const { data: docs, error } = await supabase.from('documents').select('*').order('created_at', { ascending: false });
+        
+        let formatted = [];
+        if (!error && docs) {
+            formatted = docs.map(d => ({
+                id: d.id,
+                projectName: d.project_name || "Unknown",
+                date: d.created_at,
+                uploadedBy: d.uploaded_by || "Admin",
+                category: d.category
+            }));
+        }
         res.json(formatted);
     } catch (err) {
         console.error("Get Docs Error:", err);
@@ -111,8 +95,9 @@ exports.getDocuments = async (req, res) => {
 /* ================= NOTIFICATIONS ================= */
 exports.getNotifications = async (req, res) => {
     try {
-        const [notes] = await pool.query("SELECT * FROM notifications ORDER BY created_at DESC");
-        res.json(notes);
+        const { data, error } = await supabase.from('notifications').select('*').order('created_at', { ascending: false });
+        if(error) throw error;
+        res.json(data || []);
     } catch (err) {
         console.error("Get Notifications Error:", err);
         res.status(500).json({ message: "Failed to fetch notifications" });
@@ -121,23 +106,21 @@ exports.getNotifications = async (req, res) => {
 
 /* ================= SEARCH ================= */
 exports.searchData = async (req, res) => {
-    res.json([]); // Implement real search later if needed
+    res.json([]);
 };
 
 /* ================= PROFILE ================= */
 exports.getProfile = async (req, res) => {
-    // Default to User ID 1 for now
     try {
-        const [rows] = await pool.query("SELECT first_name, last_name, email, phone, job_title, location FROM users WHERE id = 1");
-        if (rows.length > 0) {
-            const u = rows[0];
+        const { data, error } = await supabase.from('users').select('first_name, last_name, email, phone, job_title, location').eq('id', 1).single();
+        if (data) {
             res.json({
-                firstName: u.first_name,
-                lastName: u.last_name,
-                email: u.email,
-                phone: u.phone,
-                jobTitle: u.job_title,
-                location: u.location
+                firstName: data.first_name,
+                lastName: data.last_name,
+                email: data.email,
+                phone: data.phone,
+                jobTitle: data.job_title,
+                location: data.location
             });
         } else {
             res.status(404).json({ message: "User not found" });
@@ -151,10 +134,11 @@ exports.getProfile = async (req, res) => {
 exports.updateProfile = async (req, res) => {
     const { firstName, lastName, phone, jobTitle, location } = req.body;
     try {
-        await pool.query(
-            "UPDATE users SET first_name=?, last_name=?, phone=?, job_title=?, location=? WHERE id=1",
-            [firstName, lastName, phone, jobTitle, location]
-        );
+        const { error } = await supabase.from('users').update({
+            first_name: firstName, last_name: lastName, phone, job_title: jobTitle, location
+        }).eq('id', 1);
+
+        if(error) throw error;
         res.json({ message: "Profile updated successfully" });
     } catch (err) {
         console.error("Update Profile Error:", err);

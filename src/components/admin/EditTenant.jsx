@@ -256,7 +256,7 @@ const EditTenant = () => {
                                         <input type="text" name="company_name" value={formData.company_name} onChange={handleChange} required />
                                     </div>
                                     <div className="form-group">
-                                        <label>Brand Name</label>
+                                        <label>Brand Name/Nickname</label>
                                         <input type="text" name="brand_name" value={formData.brand_name} onChange={handleChange} />
                                     </div>
                                     <div className="form-group">

@@ -15,6 +15,11 @@ const OwnershipMapping = () => {
     const [documents, setDocuments] = useState([]); // Documents for current owner
     const [refreshDocs, setRefreshDocs] = useState(0);
     const [isAssignModalOpen, setIsAssignModalOpen] = useState(false);
+    
+    // Search state
+    const [globalSearch, setGlobalSearch] = useState('');
+    const [searchResults, setSearchResults] = useState([]);
+    const [isSearching, setIsSearching] = useState(false);
 
     useEffect(() => {
         fetchProjects();
@@ -28,6 +33,7 @@ const OwnershipMapping = () => {
             setUnits([]);
             setSelectedUnit('');
         }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [selectedProject]);
 
     useEffect(() => {
@@ -48,6 +54,41 @@ const OwnershipMapping = () => {
         }
     }, [selectedUnit, activeOwners, refreshDocs]);
 
+    useEffect(() => {
+        const timer = setTimeout(() => {
+            if (globalSearch) {
+                performGlobalSearch();
+            } else {
+                setSearchResults([]);
+            }
+        }, 500);
+        return () => clearTimeout(timer);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [globalSearch]);
+
+    const performGlobalSearch = async () => {
+        try {
+            setIsSearching(true);
+            const res = await ownershipAPI.getAllOwnerships({ search: globalSearch });
+            setSearchResults(res.data || []);
+        } catch (e) {
+            console.error("Search failed", e);
+        } finally {
+            setIsSearching(false);
+        }
+    };
+
+    const handleSelectSearchResult = (result) => {
+        const projectId = result.units?.projects?.id || result.units?.project_id || (projects.find(p => p.project_name === result.units?.projects?.project_name)?.id);
+        const unitId = result.unit_id;
+        if (projectId) setSelectedProject(projectId);
+        setTimeout(() => {
+            setSelectedUnit(unitId);
+        }, 100);
+        setGlobalSearch('');
+        setSearchResults([]);
+    };
+
     const fetchProjects = async () => {
         try {
             const res = await getProjects();
@@ -57,9 +98,12 @@ const OwnershipMapping = () => {
 
     const fetchUnits = async (projectId) => {
         try {
-            // Fetch ALL units so we can manage documents for sold ones
-            const res = await unitAPI.getUnitsByProject(projectId, false);
-            setUnits(Array.isArray(res.data) ? res.data : (res.data?.data || []));
+            // Fetch units for project, send excludeSold=true to filter units already fully assigned / sold
+            const res = await unitAPI.getUnitsByProject(projectId, true);
+            const data = Array.isArray(res.data) ? res.data : (res.data?.data || []);
+            // Front-end final filter: only keep units that aren't fully assigned or if they are the currently selected one
+            const filteredUnits = data.filter(u => !u.is_full || (selectedUnit && Number(u.id) === Number(selectedUnit)));
+            setUnits(filteredUnits);
         } catch (error) { console.error(error); }
     };
 
@@ -127,7 +171,9 @@ const OwnershipMapping = () => {
 
     const viewDocument = (doc) => {
         if (doc?.file_path) {
-            const url = `${FILE_BASE_URL}${doc.file_path}`;
+            const url = doc.file_path.startsWith('http') 
+                ? doc.file_path 
+                : `${FILE_BASE_URL.replace('/api', '')}${doc.file_path.startsWith('/') ? '' : '/'}${doc.file_path}`;
             window.open(url, '_blank');
         }
     };
@@ -143,6 +189,78 @@ const OwnershipMapping = () => {
                     <h1>Ownership Mapping</h1>
                     <p>Assign Owners to Units and Manage Documents.</p>
                 </header>
+                
+                <div className="header-actions" style={{ display: 'flex', justifyContent: 'flex-end', flexWrap: 'wrap', gap: '15px', marginBottom: '15px' }}>
+                    <div style={{ position: 'relative', flex: '1 1 300px', maxWidth: '400px' }}>
+                        <div className="search-wrapper" style={{ position: 'relative', display: 'flex', alignItems: 'center', width: '100%' }}>
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ position: 'absolute', left: '12px', color: '#64748b' }}>
+                                <circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                            </svg>
+                            <input
+                                type="text"
+                                placeholder="Search unit, name, company..."
+                                value={globalSearch}
+                                onChange={(e) => setGlobalSearch(e.target.value)}
+                                style={{
+                                    width: '100%',
+                                    padding: '10px 12px 10px 36px',
+                                    border: '1px solid #e2e8f0',
+                                    borderRadius: '6px',
+
+                                    fontSize: '0.9rem',
+                                    outline: 'none',
+                                    background: '#f8fafc'
+                                }}
+                            />
+                        </div>
+                        {globalSearch && (
+                            <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 10, background: '#fff', border: '1px solid #cbd5e1', borderRadius: '4px', maxHeight: '300px', overflowY: 'auto', boxShadow: '0 4px 6px rgba(0,0,0,0.1)' }}>
+                                {isSearching ? <div style={{ padding: '10px', color: '#64748b' }}>Searching...</div> : (
+                                    searchResults.length > 0 ? searchResults.map(r => (
+                                        <div key={r.id} onClick={() => handleSelectSearchResult(r)} style={{ padding: '10px', cursor: 'pointer', borderBottom: '1px solid #f1f5f9' }} onMouseEnter={e => e.currentTarget.style.background = '#f1f5f9'} onMouseLeave={e => e.currentTarget.style.background = '#transparent'}>
+                                            <div style={{ fontWeight: 600 }}>{r.parties?.company_name || `${r.parties?.first_name} ${r.parties?.last_name}`}</div>
+                                            <div style={{ fontSize: '12px', color: '#64748b' }}>Unit: {r.units?.unit_number} | {r.units?.projects?.project_name}</div>
+                                        </div>
+                                    )) : <div style={{ padding: '10px', color: '#64748b' }}>No existing active ownerships found.</div>
+                                )}
+                            </div>
+                        )}
+                    </div>
+
+                    <button onClick={() => {
+                        if (unitOwners.length === 0) {
+                            alert("No ownership history to export for this unit.");
+                            return;
+                        }
+                        const headers = ["Unit Number", "Owner Name", "Share %", "Status", "Start Date", "End Date"];
+                        const currentUnitNum = units.find(u => u.id === parseInt(selectedUnit))?.unit_number || 'N/A';
+                        const rows = unitOwners.map(o => [
+                            currentUnitNum,
+                            o.company_name || `${o.first_name} ${o.last_name}`,
+                            o.share_percentage || 100,
+                            o.ownership_status,
+                            new Date(o.start_date).toLocaleDateString(),
+                            o.end_date ? new Date(o.end_date).toLocaleDateString() : '-'
+                        ]);
+                        let csvContent = "data:text/csv;charset=utf-8," 
+                            + headers.join(",") + "\n"
+                            + rows.map(r => r.map(c => `"${c}"`).join(",")).join("\n");
+                        const encodedUri = encodeURI(csvContent);
+                        const link = document.createElement("a");
+                        link.setAttribute("href", encodedUri);
+                        link.setAttribute("download", `ownership_unit_${currentUnitNum}.csv`);
+                        document.body.appendChild(link);
+                        link.click();
+                        document.body.removeChild(link);
+                    }} className="secondary-btn" style={{ background: '#f8f9fa', color: '#333', border: '1px solid #ddd', padding: '8px 16px', borderRadius: '4px', cursor: 'pointer', display: 'flex', alignItems: 'center' }} disabled={!selectedUnit}>
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ marginRight: '6px' }}>
+                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                            <polyline points="7 10 12 15 17 10"></polyline>
+                            <line x1="12" y1="15" x2="12" y2="3"></line>
+                        </svg>
+                        Export Unit History CSV
+                    </button>
+                </div>
 
                 <div className="mapping-interface">
                     <div className="selection-panel">
@@ -160,12 +278,10 @@ const OwnershipMapping = () => {
                             <select value={selectedUnit} onChange={(e) => setSelectedUnit(e.target.value)} disabled={!selectedProject}>
                                 <option value="">-- Choose Unit --</option>
                                 {units.map(u => (
-                                    <option key={u.id} value={u.id} style={{ display: u.status === 'Sold' ? 'none' : 'block' }}>Unit {u.unit_number} ({u.status})</option>
+                                    <option key={u.id} value={u.id}>
+                                        Unit {u.unit_number} (Available {100 - (u.total_share || 0)}%)
+                                    </option>
                                 ))}
-                                {/* Add the selected unit if it's sold so it stays visible */}
-                                {selectedUnit && units.find(u => u.id === selectedUnit)?.status === 'Sold' && (
-                                    <option value={selectedUnit}>Unit {units.find(u => u.id === selectedUnit).unit_number} (Sold - Current)</option>
-                                )}
                             </select>
                         </div>
                     </div>
@@ -197,9 +313,16 @@ const OwnershipMapping = () => {
                                         <div className="owner-info">
                                             <h4 style={{ color: '#64748b' }}>No Active Owner</h4>
                                         </div>
-                                        <button className="assign-btn" onClick={() => setIsAssignModalOpen(true)}>Assign New Owner(s)</button>
                                     </div>
                                 )}
+                                {/* Always show assign button so joint owners can be added */}
+                                <button
+                                    className="assign-btn"
+                                    onClick={() => setIsAssignModalOpen(true)}
+                                    style={{ marginTop: '12px' }}
+                                >
+                                    {activeOwners.length > 0 ? '+ Add Joint Owner' : 'Assign New Owner(s)'}
+                                </button>
 
                                 {activeOwners.length > 0 && (
                                     <>
@@ -341,7 +464,7 @@ const AssignOwnerModal = ({ isOpen, onClose, unitId, onAssign }) => {
     useEffect(() => {
         const searchParties = async () => {
             try {
-                const res = await partyAPI.getAllParties({ search });
+                const res = await partyAPI.getAllParties(search ? { search } : {});
                 setParties(res.data || []);
             } catch (e) { console.error(e); }
         };
@@ -436,25 +559,25 @@ const AssignOwnerModal = ({ isOpen, onClose, unitId, onAssign }) => {
                     )}
                 </div>
 
-                {selectedOwners.length < 4 && (
+                        {selectedOwners.length < 4 && (
                     <div className="form-group" style={{ position: 'relative' }}>
                         <label>Search Party to Add</label>
                         <input
                             className="form-input"
                             value={search}
                             onChange={(e) => setSearch(e.target.value)}
-                            placeholder="Type company or name..."
+                            placeholder="Type to filter, or scroll to select..."
                         />
-                        {search && parties.length > 0 && (
-                            <div className="search-results" style={{ position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 10, background: '#fff', border: '1px solid #cbd5e1', maxHeight: '150px', overflowY: 'auto', boxShadow: '0 4px 6px rgba(0,0,0,0.1)' }}>
+                        {parties.length > 0 && (
+                            <div className="search-results" style={{ position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 10, background: '#fff', border: '1px solid #cbd5e1', maxHeight: '200px', overflowY: 'auto', boxShadow: '0 4px 6px rgba(0,0,0,0.1)' }}>
                                 {parties.map(p => (
                                     <div
                                         key={p.id}
                                         className="search-item"
                                         onClick={() => handleAddOwner(p)}
                                         style={{ padding: '8px 12px', cursor: 'pointer', borderBottom: '1px solid #f1f5f9' }}
-                                        onMouseEnter={(e) => e.target.style.background = '#f1f5f9'}
-                                        onMouseLeave={(e) => e.target.style.background = 'transparent'}
+                                        onMouseEnter={(e) => e.currentTarget.style.background = '#f1f5f9'}
+                                        onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
                                     >
                                         {p.company_name || `${p.first_name} ${p.last_name}`} ({p.type})
                                     </div>

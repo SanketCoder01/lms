@@ -147,7 +147,7 @@ const OwnerDetails = () => {
               />
             </div>
             <div className="profile-info">
-              <h2>{owner.name}</h2>
+              <h2>{owner.company_name || owner.name}</h2>
               <p>ID: #OWN-{owner.id} | Owner since {new Date(owner.created_at).toLocaleDateString(undefined, { year: 'numeric', month: 'short' })}</p>
             </div>
           </div>
@@ -208,12 +208,14 @@ const OwnerDetails = () => {
                   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#374151" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
                 </div>
                 <div className="contact-text">
-                  <label>Full Name</label>
+                  <label>Company / Full Name</label>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <p>{owner.name}</p>
+                    <p>{owner.company_name || owner.name}</p>
                     <span className="badge-verified">{owner.kyc_status || 'Pending'}</span>
                   </div>
-                  <span style={{ fontSize: '0.75rem', color: '#6b7280' }}>100% Ownership</span>
+                  {owner.company_name && owner.name && (
+                    <span style={{ fontSize: '0.75rem', color: '#6b7280' }}>Contact: {owner.name}</span>
+                  )}
                 </div>
               </div>
               <div className="contact-item">
@@ -315,7 +317,7 @@ const OwnerDetails = () => {
                                   background: unit.status === 'occupied' ? '#dcfce7' : '#fee2e2',
                                   color: unit.status === 'occupied' ? '#166534' : '#991b1b'
                                 }}>
-                                  {unit.status === 'occupied' ? 'Occupied' : 'Vacant'}
+                                  {unit.status === 'occupied' ? 'Leased' : 'Vacant'}
                                 </span>
                               </td>
                               <td style={{ textAlign: 'right' }} className="rent-val">
@@ -350,7 +352,7 @@ const OwnerDetails = () => {
                       </div>
                       <div className="doc-info">
                         <a
-                          href={`${FILE_BASE_URL.replace('/api', '')}/${doc.document_path ? doc.document_path.replace(/\\\\/g, '/') : ''}`}
+                          href={doc.document_path?.startsWith('http') ? doc.document_path : `${FILE_BASE_URL.replace('/api', '')}/${doc.document_path ? doc.document_path.replace(/\\\\/g, '/') : ''}`}
                           target="_blank"
                           rel="noopener noreferrer"
                           className="doc-name"

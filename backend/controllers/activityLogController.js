@@ -1,4 +1,4 @@
-const pool = require("../config/db");
+const supabase = require("../config/db");
 
 /* ================= GET LOGS ================= */
 const getActivityLogs = async (req, res) => {
@@ -7,84 +7,65 @@ const getActivityLogs = async (req, res) => {
     const limit = parseInt(req.query.limit) || 10;
     const offset = (page - 1) * limit;
 
-    // Extract filters
     const { module, location, search, startDate, endDate } = req.query;
 
-    // Base query
-    let query = `
-            SELECT 
-                l.id, l.action, l.module, l.details, l.created_at, l.ip_address,
-                u.first_name, u.last_name, u.profile_image, u.location,
-                r.role_name
-            FROM activity_logs l
-            LEFT JOIN users u ON l.user_id = u.id
-            LEFT JOIN roles r ON u.role_id = r.id
-            WHERE 1=1
-        `;
-    const params = [];
+    let query = supabase.from('activity_logs').select(`
+        id, action, module, details, created_at, ip_address, user_id,
+        users!left(first_name, last_name, profile_image, location, roles(role_name))
+    `, { count: 'exact' });
 
-    // Apply Filters
-    if (module && module !== 'All Modules') {
-      query += " AND l.module = ?";
-      params.push(module);
+    if (module && module !== 'All Modules') query = query.eq('module', module);
+    if (startDate) query = query.gte('created_at', startDate);
+    if (endDate) query = query.lte('created_at', endDate);
+
+    // Supabase can't natively ilike deeply nested foreign tables purely through the main table in a simple way while keeping outer join,
+    // unless using inner join (`!inner`). Let's fetch and filter in JS if search/location are present to avoid dropping rows.
+    
+    // We will do a full fetch if there's text search because filtering outer joined nested tables in PostgREST is difficult.
+    // If no search/location, use pagination natively.
+    if (!search && (!location || location === 'All Locations')) {
+        query = query.range(offset, offset + limit - 1).order('created_at', { ascending: false });
+        const { data, count, error } = await query;
+        if (error) throw error;
+        
+        const formatted = data.map(l => ({
+            id: l.id, action: l.action, module: l.module, details: l.details, 
+            created_at: l.created_at, ip_address: l.ip_address,
+            first_name: l.users?.first_name, last_name: l.users?.last_name, profile_image: l.users?.profile_image,
+            location: l.users?.location, role_name: l.users?.roles?.role_name
+        }));
+        
+        return res.json({ logs: formatted, total: count || 0, page, limit });
     }
+
+    // Manual JS filtering fallback for complex relational text search
+    const { data: allData, error: allErr } = await query.order('created_at', { ascending: false });
+    if(allErr) throw allErr;
+
+    let filtered = allData.map(l => ({
+        id: l.id, action: l.action, module: l.module, details: l.details, created_at: l.created_at, ip_address: l.ip_address,
+        first_name: l.users?.first_name, last_name: l.users?.last_name, profile_image: l.users?.profile_image,
+        location: l.users?.location, role_name: l.users?.roles?.role_name
+    }));
 
     if (location && location !== 'All Locations') {
-      // Assuming location is stored in users table
-      query += " AND u.location = ?";
-      params.push(location);
+        filtered = filtered.filter(f => f.location === location);
     }
-
+    
     if (search) {
-      query += " AND (l.action LIKE ? OR l.details LIKE ? OR u.first_name LIKE ? OR u.last_name LIKE ?)";
-      const term = `%${search}%`;
-      params.push(term, term, term, term);
+        const s = search.toLowerCase();
+        filtered = filtered.filter(f => 
+            (f.action && f.action.toLowerCase().includes(s)) ||
+            (f.details && f.details.toLowerCase().includes(s)) ||
+            (f.first_name && f.first_name.toLowerCase().includes(s)) ||
+            (f.last_name && f.last_name.toLowerCase().includes(s))
+        );
     }
 
-    if (startDate) {
-      query += " AND l.created_at >= ?";
-      params.push(startDate);
-    }
+    const total = filtered.length;
+    const paginated = filtered.slice(offset, offset + limit);
 
-    if (endDate) {
-      query += " AND l.created_at <= ?";
-      params.push(endDate);
-    }
-
-    // --- Get Total Count (Respecting Filters) ---
-    // We construct a separate count query mirroring the main query's WHERE clause
-    let countQuery = `
-            SELECT COUNT(*) as total 
-            FROM activity_logs l 
-            LEFT JOIN users u ON l.user_id = u.id 
-            WHERE 1=1
-        `;
-    // We can't reuse 'params' directly because we need to rebuild the WHERE clause for count
-    // or just wrap the main query logic.
-    // Simpler approach: Re-append the same conditions to countQuery
-
-    if (module && module !== 'All Modules') countQuery += " AND l.module = ?";
-    if (location && location !== 'All Locations') countQuery += " AND u.location = ?";
-    if (search) countQuery += " AND (l.action LIKE ? OR l.details LIKE ? OR u.first_name LIKE ? OR u.last_name LIKE ?)";
-    if (startDate) countQuery += " AND l.created_at >= ?";
-    if (endDate) countQuery += " AND l.created_at <= ?";
-
-    const [totalRows] = await pool.execute(countQuery, params);
-    const total = totalRows[0].total;
-
-    // Finalize Main Query
-    query += " ORDER BY l.created_at DESC LIMIT ? OFFSET ?";
-    params.push(limit, offset);
-
-    // Execute Main Query
-    const [logs] = await pool.query(query, params);
-
-    res.json({
-      logs,
-      total,
-      page,
-      limit
-    });
+    res.json({ logs: paginated, total, page, limit });
 
   } catch (error) {
     console.error("Get logs error:", error);
@@ -97,52 +78,40 @@ const exportActivityLogs = async (req, res) => {
   try {
     const { module, location, search, startDate, endDate } = req.query;
 
-    let query = `
-            SELECT 
-                l.id, l.created_at, l.action, l.module, l.details,
-                CONCAT(u.first_name, ' ', u.last_name) as user_name,
-                r.role_name
-            FROM activity_logs l
-            LEFT JOIN users u ON l.user_id = u.id
-            LEFT JOIN roles r ON u.role_id = r.id
-            WHERE 1=1
-        `;
-    const params = [];
+    let query = supabase.from('activity_logs').select(`
+        id, action, module, details, created_at,
+        users!left(first_name, last_name, location, roles(role_name))
+    `).order('created_at', { ascending: false });
 
-    // Apply Filters (Same as getActivityLogs)
-    if (module && module !== 'All Modules') {
-      query += " AND l.module = ?";
-      params.push(module);
-    }
+    if (module && module !== 'All Modules') query = query.eq('module', module);
+    if (startDate) query = query.gte('created_at', startDate);
+    if (endDate) query = query.lte('created_at', endDate);
+
+    const { data, error } = await query;
+    if(error) throw error;
+
+    let filtered = data.map(l => ({
+        id: l.id, action: l.action, module: l.module, details: l.details, created_at: l.created_at,
+        first_name: l.users?.first_name, last_name: l.users?.last_name,
+        user_name: `${l.users?.first_name || ''} ${l.users?.last_name || ''}`.trim(),
+        location: l.users?.location, role_name: l.users?.roles?.role_name
+    }));
 
     if (location && location !== 'All Locations') {
-      query += " AND u.location = ?";
-      params.push(location);
+        filtered = filtered.filter(f => f.location === location);
     }
-
     if (search) {
-      query += " AND (l.action LIKE ? OR l.details LIKE ? OR u.first_name LIKE ? OR u.last_name LIKE ?)";
-      const term = `%${search}%`;
-      params.push(term, term, term, term);
+        const s = search.toLowerCase();
+        filtered = filtered.filter(f => 
+            (f.action && f.action.toLowerCase().includes(s)) ||
+            (f.details && f.details.toLowerCase().includes(s)) ||
+            (f.first_name && f.first_name.toLowerCase().includes(s)) ||
+            (f.last_name && f.last_name.toLowerCase().includes(s))
+        );
     }
 
-    if (startDate) {
-      query += " AND l.created_at >= ?";
-      params.push(startDate);
-    }
-
-    if (endDate) {
-      query += " AND l.created_at <= ?";
-      params.push(endDate);
-    }
-
-    query += " ORDER BY l.created_at DESC";
-
-    const [rows] = await pool.query(query, params);
-
-    // Convert to CSV
     const csvHeaders = "ID,Date,User,Role,Action,Module,Details\n";
-    const csvRows = rows.map(row => {
+    const csvRows = filtered.map(row => {
       const date = new Date(row.created_at).toLocaleString().replace(/,/g, '');
       const details = row.details ? row.details.replace(/[\r\n,]/g, ' ') : '';
       const action = row.action ? row.action.replace(/,/g, ' ') : '';

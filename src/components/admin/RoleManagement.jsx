@@ -345,11 +345,22 @@ const RoleManagement = () => {
 
               {/* USER INFO */}
               <div className="user-info">
-                <img
-                  src={`https://i.pravatar.cc/150?u=${user.id}`}
-                  alt={user.name}
-                  className="user-avatar"
-                />
+                <div className="user-avatar-initials" style={{
+                  width: '40px',
+                  height: '40px',
+                  borderRadius: '50%',
+                  background: `hsl(${(user.name.charCodeAt(0) * 37) % 360}, 55%, 55%)`,
+                  color: '#fff',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  fontWeight: '700',
+                  fontSize: '0.9rem',
+                  flexShrink: 0,
+                  letterSpacing: '0.5px'
+                }}>
+                  {user.name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)}
+                </div>
                 <div className="user-details">
                   <h4>{user.name}</h4>
                   <span>{user.email}</span>

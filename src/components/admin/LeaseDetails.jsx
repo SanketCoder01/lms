@@ -50,21 +50,23 @@ const LeaseDetails = () => {
     const getEffectiveRent = () => {
         let base = parseFloat(lease.monthly_rent || 0);
         if (!lease.escalations || lease.escalations.length === 0) return base;
-        
+
         const today = new Date();
         // Sort escalations by date ascending
         const sortedEscalations = [...lease.escalations].sort((a, b) => new Date(a.effective_from) - new Date(b.effective_from));
-        
+
         let currentRent = base;
         for (const esc of sortedEscalations) {
             const fromDate = new Date(esc.effective_from);
             const toDate = esc.effective_to ? new Date(esc.effective_to) : null;
-            
+
             if (today >= fromDate && (!toDate || today <= toDate)) {
                 if (esc.increase_type === 'Fixed Amount') {
                     currentRent = base + parseFloat(esc.value || 0);
                 } else if (esc.increase_type === 'Rate Per Sqft') {
                     currentRent = parseFloat(esc.value || 0) * (lease.sub_lease_area_sqft || lease.chargeable_area || 1);
+                } else if (esc.increase_type === 'Add Rate Per Sqft' || esc.increase_type === 'Add MG') {
+                    currentRent = base + (parseFloat(esc.value || 0) * (lease.sub_lease_area_sqft || lease.chargeable_area || 1));
                 } else {
                     currentRent = base * (1 + parseFloat(esc.value || 0) / 100);
                 }
@@ -150,8 +152,12 @@ const LeaseDetails = () => {
 
                         <div style={{ paddingTop: '16px', borderTop: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between' }}>
                             <div>
-                                <label style={{ display: 'block', fontSize: '0.8rem', color: '#718096', marginBottom: '4px' }}>Type:</label>
-                                <div style={{ fontWeight: 500, color: '#2d3748' }}>Commercial {lease.unit_condition === 'bare_shell' ? 'Shell' : 'Office'}</div>
+                                <label style={{ display: 'block', fontSize: '0.8rem', color: '#718096', marginBottom: '4px' }}>Unit Condition:</label>
+                                <div style={{ fontWeight: 500, color: '#2d3748' }}>{lease.unit_condition ?
+                                    (lease.unit_condition === 'bare_shell' ? 'Bare Shell' :
+                                        lease.unit_condition === 'warm_shell' ? 'Warm Shell' :
+                                            lease.unit_condition === 'fully_furnished' ? 'Fully Furnished' : 'Commercial')
+                                    : 'Commercial Office'}</div>
                             </div>
                             <div style={{ textAlign: 'right' }}>
                                 <label style={{ display: 'block', fontSize: '0.8rem', color: '#718096', marginBottom: '4px' }}>Size:</label>
@@ -235,7 +241,7 @@ const LeaseDetails = () => {
                                 <label style={{ color: '#0369a1', fontWeight: 600 }}>Currently Effective Rent</label>
                                 <span className="amount" style={{ color: '#0369a1', fontWeight: 700 }}>{formatCurrency(effectiveRent)}</span>
                             </div>
-                            
+
                             <div className="rent-item">
                                 <label>Original Base Rent</label>
                                 <span className="amount" style={{ color: '#718096' }}>{formatCurrency(lease.monthly_rent)}</span>
@@ -279,7 +285,6 @@ const LeaseDetails = () => {
                             <div className="deposit-highlight">
                                 <label style={{ fontSize: '0.8rem', color: '#3182ce', fontWeight: 600 }}>Amount Held</label>
                                 <span className="deposit-amount">{formatCurrency(lease.security_deposit)}</span>
-                                <span style={{ fontSize: '0.75rem', color: '#718096' }}>Type: {lease.deposit_type}</span>
                             </div>
 
                             <div className="deposit-details">
@@ -309,6 +314,48 @@ const LeaseDetails = () => {
                                 </div>
                             </div>
                         )}
+                    </div>
+
+                    {/* Uploaded Documents */}
+                    <div className="documents-card">
+                        <h3 style={{ margin: 0, color: '#2d3748', textTransform: 'none', fontWeight: 600, fontSize: '1.1rem', marginBottom: '15px' }}>Uploaded Documents</h3>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                            {lease.loi_document_url ? (
+                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px', background: '#f8fafc', borderRadius: '6px', border: '1px solid #e2e8f0' }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#475569" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
+                                        <span style={{ fontSize: '0.9rem', color: '#334155', fontWeight: 500 }}>Letter of Intent (LOI)</span>
+                                    </div>
+                                    <a href={lease.loi_document_url} target="_blank" rel="noopener noreferrer" style={{ color: '#3182ce', fontSize: '0.85rem', fontWeight: 600, textDecoration: 'none' }}>View Document</a>
+                                </div>
+                            ) : (
+                                <div style={{ fontSize: '0.85rem', color: '#94a3b8', fontStyle: 'italic', padding: '8px 0' }}>No LOI document uploaded.</div>
+                            )}
+
+                            {lease.agreement_document_url ? (
+                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px', background: '#f8fafc', borderRadius: '6px', border: '1px solid #e2e8f0' }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#475569" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
+                                        <span style={{ fontSize: '0.9rem', color: '#334155', fontWeight: 500 }}>Lease Agreement</span>
+                                    </div>
+                                    <a href={lease.agreement_document_url} target="_blank" rel="noopener noreferrer" style={{ color: '#3182ce', fontSize: '0.85rem', fontWeight: 600, textDecoration: 'none' }}>View Document</a>
+                                </div>
+                            ) : (
+                                <div style={{ fontSize: '0.85rem', color: '#94a3b8', fontStyle: 'italic', padding: '8px 0' }}>No Agreement document uploaded.</div>
+                            )}
+
+                            {lease.registration_document_url ? (
+                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px', background: '#f8fafc', borderRadius: '6px', border: '1px solid #e2e8f0' }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#475569" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
+                                        <span style={{ fontSize: '0.9rem', color: '#334155', fontWeight: 500 }}>Registration Document</span>
+                                    </div>
+                                    <a href={lease.registration_document_url} target="_blank" rel="noopener noreferrer" style={{ color: '#3182ce', fontSize: '0.85rem', fontWeight: 600, textDecoration: 'none' }}>View Document</a>
+                                </div>
+                            ) : (
+                                <div style={{ fontSize: '0.85rem', color: '#94a3b8', fontStyle: 'italic', padding: '8px 0' }}>No Registration document uploaded.</div>
+                            )}
+                        </div>
                     </div>
                 </div>
 

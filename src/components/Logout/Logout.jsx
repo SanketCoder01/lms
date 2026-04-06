@@ -1,16 +1,20 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
+import { supabase } from '../../lib/supabase';
 import './Logout.css';
 
 const Logout = () => {
     const navigate = useNavigate();
 
     const handleCancel = () => {
-        navigate('/dashboard'); // Go back to dashboard on cancel
+        navigate(-1); // Go back to previous page on cancel
     };
 
-    const handleLogout = () => {
-        navigate('/'); // Go back to Login on confirm
+    const handleLogout = async () => {
+        await supabase.auth.signOut();
+        localStorage.removeItem('token');
+        localStorage.removeItem('user');
+        navigate('/login');
     };
 
     return (

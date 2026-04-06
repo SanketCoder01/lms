@@ -1,163 +1,115 @@
-const pool = require("../config/db");
+const supabase = require("../config/db");
 const multer = require('multer');
 const path = require('path');
+const fs = require('fs');
 
 // Configure Multer for File Uploads
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
-    cb(null, 'uploads/');
+    const dir = "uploads";
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir);
+    cb(null, dir);
   },
   filename: (req, file, cb) => {
     cb(null, Date.now() + path.extname(file.originalname));
   }
 });
-
-const upload = multer({ storage: storage });
+const upload = multer({ storage });
 exports.upload = upload;
 
 /* ================= EXPORT REPORTS CSV ================= */
-/* ================= EXPORT REPORTS CSV ================= */
 exports.exportReports = async (req, res) => {
   try {
-    const connection = await pool.getConnection();
     const { project_id, owner_id, tenant_id } = req.query;
 
-    try {
-      let query = `
-        SELECT 
-          p.project_name,
-          COALESCE(u.unit_number, 'N/A') as unit_number,
-          COALESCE(t.company_name, CONCAT(t.first_name, ' ', t.last_name)) as tenant,
-          COALESCE(l.monthly_rent, 0) as rent,
-          l.lease_start,
-          l.lease_end,
-          l.status
-        FROM leases l
-        LEFT JOIN projects p ON l.project_id = p.id
-        LEFT JOIN units u ON l.unit_id = u.id
-        LEFT JOIN parties t ON l.party_tenant_id = t.id
-        LEFT JOIN parties o ON l.party_owner_id = o.id
-        WHERE 1=1
-      `;
+    let query = supabase.from('leases').select(`
+      lease_start, lease_end, status, monthly_rent,
+      projects(project_name), units(unit_number),
+      tenant:parties!leases_party_tenant_id_fkey(company_name, first_name, last_name)
+    `).order('created_at', { ascending: false });
 
-      const params = [];
-      if (project_id) {
-        query += " AND l.project_id = ?";
-        params.push(project_id);
-      }
-      if (owner_id) {
-        query += " AND l.party_owner_id = ?";
-        params.push(owner_id);
-      }
-      if (tenant_id) {
-        query += " AND l.party_tenant_id = ?";
-        params.push(tenant_id);
-      }
+    if (project_id) query = query.eq('project_id', project_id);
+    if (owner_id) query = query.eq('party_owner_id', owner_id);
+    if (tenant_id) query = query.eq('party_tenant_id', tenant_id);
 
-      query += " ORDER BY p.project_name, u.unit_number";
+    const { data, error } = await query;
+    if(error) throw error;
 
-      const [rows] = await connection.query(query, params);
+    const headers = ['Project Name', 'Unit Number', 'Tenant', 'Monthly Rent', 'Lease Start', 'Lease End', 'Status'];
+    const csvRows = data.map(r => {
+        const tenantStr = r.tenant?.company_name || `${r.tenant?.first_name || ''} ${r.tenant?.last_name || ''}`.trim() || 'N/A';
+        return [
+            `"${r.projects?.project_name || 'N/A'}"`,
+            `"${r.units?.unit_number || 'N/A'}"`,
+            `"${tenantStr}"`,
+            r.monthly_rent || 0,
+            r.lease_start ? new Date(r.lease_start).toLocaleDateString() : '',
+            r.lease_end ? new Date(r.lease_end).toLocaleDateString() : '',
+            r.status
+        ];
+    });
 
-      // Convert to CSV
-      const headers = ['Project Name', 'Unit Number', 'Tenant', 'Monthly Rent', 'Lease Start', 'Lease End', 'Status'];
-      const csvRows = rows.map(row => [
-        `"${row.project_name}"`,
-        `"${row.unit_number}"`,
-        `"${row.tenant || 'N/A'}"`,
-        row.rent,
-        row.lease_start ? new Date(row.lease_start).toLocaleDateString() : '',
-        row.lease_end ? new Date(row.lease_end).toLocaleDateString() : '',
-        row.status
-      ]);
+    const csvString = [headers.join(','), ...csvRows.map(r => r.join(','))].join('\n');
 
-      const csvString = [
-        headers.join(','),
-        ...csvRows.map(r => r.join(','))
-      ].join('\n');
-
-      res.setHeader('Content-Type', 'text/csv');
-      res.setHeader('Content-Disposition', 'attachment; filename="reports_export.csv"');
-      res.send(csvString);
-
-    } finally {
-      connection.release();
-    }
+    res.setHeader('Content-Type', 'text/csv');
+    res.setHeader('Content-Disposition', 'attachment; filename="reports_export.csv"');
+    res.send(csvString);
   } catch (error) {
     console.error("Export CSV error:", error);
     res.status(500).send("Failed to generate CSV");
   }
 };
 
-
+/* ================= GET REP REPORTS ================= */
 exports.getRepReports = async (req, res) => {
   try {
-    const connection = await pool.getConnection();
     const { project_id, owner_id, tenant_id, search, page = 1, limit = 10 } = req.query;
 
-    try {
-      // Query Leases primarily as they are the "Reports" of financial/operational nature usually
-      let query = `
-        SELECT 
-          l.id,
-          p.project_name,
-          p.project_image,
-          COALESCE(t.company_name, CONCAT(t.first_name, ' ', t.last_name)) as tenant_name,
-          l.lease_type,
-          l.lease_start as report_date,
-          l.status
-        FROM leases l
-        LEFT JOIN projects p ON l.project_id = p.id
-        LEFT JOIN parties t ON l.party_tenant_id = t.id
-        LEFT JOIN parties o ON l.party_owner_id = o.id
-        WHERE 1=1
-      `;
+    let query = supabase.from('leases').select(`
+      id, lease_type, lease_start, status, created_at,
+      projects(project_name, project_image),
+      tenant:parties!leases_party_tenant_id_fkey(company_name, first_name, last_name)
+    `).order('created_at', { ascending: false });
 
-      const params = [];
+    if (project_id) query = query.eq('project_id', project_id);
+    if (owner_id) query = query.eq('party_owner_id', owner_id);
+    if (tenant_id) query = query.eq('party_tenant_id', tenant_id);
 
-      if (project_id) {
-        query += " AND l.project_id = ?";
-        params.push(project_id);
-      }
+    const { data: reports, error } = await query;
+    if(error) throw error;
 
-      if (owner_id) {
-        query += " AND l.party_owner_id = ?";
-        params.push(owner_id);
-      }
+    let formatted = reports.map(r => ({
+      id: `L-${r.id}`,
+      name: `${r.projects?.project_name || 'N/A'} - ${r.tenant?.company_name || String(r.tenant?.first_name || '') + ' ' + String(r.tenant?.last_name || '')}`.trim() || 'No Tenant',
+      image: r.projects?.project_image ? `/uploads/${r.projects.project_image}` : 'https://images.unsplash.com/photo-1545324418-cc1a3fa10c00?w=50&h=50&fit=crop',
+      date: r.lease_start ? new Date(r.lease_start).toLocaleDateString('en-GB') : 'N/A',
+      type: r.lease_type,
+      status: r.status,
+      project_name: r.projects?.project_name,
+      tenant_name: r.tenant?.company_name || `${r.tenant?.first_name || ''} ${r.tenant?.last_name || ''}`.trim()
+    }));
 
-      if (tenant_id) {
-        query += " AND l.party_tenant_id = ?";
-        params.push(tenant_id);
-      }
-
-      if (search) {
-        query += " AND (p.project_name LIKE ? OR t.company_name LIKE ? OR t.first_name LIKE ? OR t.last_name LIKE ?)";
-        const term = `%${search}%`;
-        params.push(term, term, term, term);
-      }
-
-      query += " ORDER BY l.created_at DESC";
-
-      const [reports] = await connection.query(query, params);
-
-      res.json({
-        data: reports.map(report => ({
-          id: `L-${report.id}`, // Lease ID as Report ID
-          name: `${report.project_name} - ${report.tenant_name || 'No Tenant'}`,
-          image: report.project_image ? `/uploads/${report.project_image}` : 'https://images.unsplash.com/photo-1545324418-cc1a3fa10c00?w=50&h=50&fit=crop',
-          date: report.report_date ? new Date(report.report_date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }).replace(/ /g, ' ') : 'N/A',
-          type: report.lease_type,
-          status: report.status
-        })),
-        pagination: {
-          page: parseInt(page),
-          limit: parseInt(limit),
-          total: reports.length,
-          totalPages: Math.ceil(reports.length / limit)
-        }
-      });
-    } finally {
-      connection.release();
+    if (search) {
+      const s = search.toLowerCase();
+      formatted = formatted.filter(f => 
+        (f.project_name && f.project_name.toLowerCase().includes(s)) ||
+        (f.tenant_name && f.tenant_name.toLowerCase().includes(s))
+      );
     }
+
+    const startIdx = (parseInt(page) - 1) * parseInt(limit);
+    const paginated = formatted.slice(startIdx, startIdx + parseInt(limit));
+
+    res.json({
+      data: paginated,
+      pagination: {
+        page: parseInt(page),
+        limit: parseInt(limit),
+        total: formatted.length,
+        totalPages: Math.ceil(formatted.length / parseInt(limit))
+      }
+    });
+
   } catch (error) {
     console.error("Get reports error:", error);
     res.json({ data: [], pagination: {} });
@@ -167,260 +119,183 @@ exports.getRepReports = async (req, res) => {
 /* ================= GET MANAGEMENT REP DASHBOARD STATS ================= */
 exports.getRepDashboardStats = async (req, res) => {
   try {
-    const connection = await pool.getConnection();
+    const calculateChange = (current, previous) => {
+      if (previous === 0) return current > 0 ? "+100%" : "0%";
+      const change = ((current - previous) / previous) * 100;
+      return `${change > 0 ? "+" : ""}${Math.round(change)}%`;
+    };
 
-    try {
-      // Helper to calculate percentage change
-      const calculateChange = (current, previous) => {
-        if (previous === 0) return current > 0 ? "+100%" : "0%";
-        const change = ((current - previous) / previous) * 100;
-        return `${change > 0 ? "+" : ""}${Math.round(change)}%`;
-      };
+    const getChangeType = (current, previous) => {
+      if (current > previous) return "positive";
+      if (current < previous) return "negative";
+      return "neutral";
+    };
 
-      const getChangeType = (current, previous) => {
-        if (current > previous) return "positive";
-        if (current < previous) return "negative";
-        return "neutral";
-      };
+    const oneMonthAgo = new Date();
+    oneMonthAgo.setMonth(oneMonthAgo.getMonth() - 1);
+    const prevDateStr = oneMonthAgo.toISOString();
 
-      // 1. Projects
-      const [projectsCurrent] = await connection.query("SELECT COUNT(*) as count FROM projects");
-      const [projectsPrev] = await connection.query("SELECT COUNT(*) as count FROM projects WHERE created_at < DATE_SUB(NOW(), INTERVAL 1 MONTH)");
-      const totalProjects = projectsCurrent[0]?.count || 0;
-      const prevProjects = projectsPrev[0]?.count || 0;
+    const todayStr = new Date().toISOString().split('T')[0];
+    const d60 = new Date(new Date().getTime() + 60 * 86400000).toISOString().split('T')[0];
+    const d90 = new Date(new Date().getTime() + 90 * 86400000).toISOString().split('T')[0];
 
-      // 2. Units
-      const [unitsCurrent] = await connection.query("SELECT COUNT(*) as count FROM units");
-      const [unitsPrev] = await connection.query("SELECT COUNT(*) as count FROM units WHERE created_at < DATE_SUB(NOW(), INTERVAL 1 MONTH)");
-      const totalUnits = unitsCurrent[0]?.count || 0;
-      const prevUnits = unitsPrev[0]?.count || 0;
+    const [
+      { count: projectsCurrent }, { count: projectsPrev },
+      { count: unitsCurrent }, { count: unitsPrev },
+      { count: ownersCurrent }, { count: ownersPrev },
+      { count: tenantsCurrent }, { count: tenantsPrev },
+      { count: leasesCurrent }, { count: leasesPrev },
+      { data: activeLeasesData },
+    ] = await Promise.all([
+      supabase.from('projects').select('*', { count: 'exact', head: true }),
+      supabase.from('projects').select('*', { count: 'exact', head: true }).lt('created_at', prevDateStr),
+      
+      supabase.from('units').select('*', { count: 'exact', head: true }),
+      supabase.from('units').select('*', { count: 'exact', head: true }).lt('created_at', prevDateStr),
+      
+      supabase.from('owners').select('*', { count: 'exact', head: true }),
+      supabase.from('owners').select('*', { count: 'exact', head: true }).lt('created_at', prevDateStr),
+      
+      supabase.from('tenants').select('*', { count: 'exact', head: true }),
+      supabase.from('tenants').select('*', { count: 'exact', head: true }).lt('created_at', prevDateStr),
+      
+      supabase.from('leases').select('*', { count: 'exact', head: true }),
+      supabase.from('leases').select('*', { count: 'exact', head: true }).lt('created_at', prevDateStr),
+      
+      supabase.from('leases').select(`
+        id, lease_end, monthly_rent, status, created_at,
+        units(unit_number),
+        tenant:parties!leases_party_tenant_id_fkey(company_name, first_name, last_name)
+      `).eq('status', 'active')
+    ]);
 
-      // 3. Owners
-      const [ownersCurrent] = await connection.query("SELECT COUNT(*) as count FROM owners");
-      const [ownersPrev] = await connection.query("SELECT COUNT(*) as count FROM owners WHERE created_at < DATE_SUB(NOW(), INTERVAL 1 MONTH)");
-      const totalOwners = ownersCurrent[0]?.count || 0;
-      const prevOwners = ownersPrev[0]?.count || 0;
+    const totalRevenue = activeLeasesData.reduce((sum, l) => sum + (Number(l.monthly_rent) || 0), 0);
+    const prevRevenue = activeLeasesData.filter(l => new Date(l.created_at) < oneMonthAgo)
+                                       .reduce((sum, l) => sum + (Number(l.monthly_rent) || 0), 0);
 
-      // 4. Tenants
-      const [tenantsCurrent] = await connection.query("SELECT COUNT(*) as count FROM tenants");
-      const [tenantsPrev] = await connection.query("SELECT COUNT(*) as count FROM tenants WHERE created_at < DATE_SUB(NOW(), INTERVAL 1 MONTH)");
-      const totalTenants = tenantsCurrent[0]?.count || 0;
-      const prevTenants = tenantsPrev[0]?.count || 0;
+    let renewals = [];
+    let expiries = [];
 
-      // 5. Leases
-      const [leasesCurrent] = await connection.query("SELECT COUNT(*) as count FROM leases");
-      const [leasesPrev] = await connection.query("SELECT COUNT(*) as count FROM leases WHERE created_at < DATE_SUB(NOW(), INTERVAL 1 MONTH)");
-      const totalLeases = leasesCurrent[0]?.count || 0;
-      const prevLeases = leasesPrev[0]?.count || 0;
+    const todayTime = new Date(todayStr).getTime();
+    const d60Time = new Date(d60).getTime();
+    const d90Time = new Date(d90).getTime();
 
-      // 6. Revenue
-      const [revenueCurrent] = await connection.query("SELECT COALESCE(SUM(monthly_rent), 0) as total FROM leases WHERE status = 'active'");
-      // Approximate validation for prev revenue based on created_at of leases active then
-      const [revenuePrev] = await connection.query("SELECT COALESCE(SUM(monthly_rent), 0) as total FROM leases WHERE status = 'active' AND created_at < DATE_SUB(NOW(), INTERVAL 1 MONTH)");
-
-      const totalRevenue = revenueCurrent[0]?.total || 0;
-      const prevRevenue = revenuePrev[0]?.total || 0;
-
-      // Get upcoming renewals
-      const [renewals] = await connection.query(`
-        SELECT 
-          l.id,
-          l.id as lease_id,
-          u.unit_number,
-          t.company_name as tenant_name,
-          l.lease_end,
-          DATEDIFF(l.lease_end, CURDATE()) as days_remaining
-        FROM leases l
-        JOIN units u ON l.unit_id = u.id
-        JOIN tenants t ON l.tenant_id = t.id
-        WHERE l.status = 'active' 
-          AND l.lease_end BETWEEN CURDATE() AND DATE_ADD(CURDATE(), INTERVAL 90 DAY)
-        ORDER BY l.lease_end ASC
-        LIMIT 3
-      `);
-
-      // Get upcoming expiries
-      const [expiries] = await connection.query(`
-        SELECT 
-          l.id,
-          l.id as lease_id,
-          u.unit_number,
-          t.company_name as tenant_name,
-          l.lease_end,
-          DATEDIFF(l.lease_end, CURDATE()) as days_remaining
-        FROM leases l
-        JOIN units u ON l.unit_id = u.id
-        JOIN tenants t ON l.tenant_id = t.id
-        WHERE l.status = 'active' 
-          AND l.lease_end BETWEEN CURDATE() AND DATE_ADD(CURDATE(), INTERVAL 60 DAY)
-        ORDER BY l.lease_end ASC
-        LIMIT 3
-      `);
-
-      // Get Rent Escalations
-      const [escalations] = await connection.query(`
-          SELECT re.effective_from, re.increase_type, re.value, 
-          u.unit_number
-          FROM lease_escalations re
-          LEFT JOIN leases l ON re.lease_id = l.id
-          LEFT JOIN units u ON l.unit_id = u.id
-          WHERE re.effective_from BETWEEN CURDATE() AND DATE_ADD(CURDATE(), INTERVAL 90 DAY)
-          AND l.status = 'active'
-          ORDER BY re.effective_from ASC
-          LIMIT 3
-      `);
-
-      const stats = {
-        metrics: {
-          totalProjects: {
-            value: totalProjects,
-            change: `${calculateChange(totalProjects, prevProjects)} vs last month`,
-            type: getChangeType(totalProjects, prevProjects)
-          },
-          totalUnits: {
-            value: totalUnits,
-            change: `${calculateChange(totalUnits, prevUnits)} vs last month`,
-            type: getChangeType(totalUnits, prevUnits)
-          },
-          totalOwners: {
-            value: totalOwners,
-            change: `${calculateChange(totalOwners, prevOwners)} vs last month`,
-            type: "neutral" // Owners don't fluctuate as much usually
-          },
-          totalTenants: {
-            value: totalTenants,
-            change: `${calculateChange(totalTenants, prevTenants)} vs last month`,
-            type: getChangeType(totalTenants, prevTenants)
-          },
-          totalLeases: {
-            value: totalLeases,
-            change: `${calculateChange(totalLeases, prevLeases)} vs last month`,
-            type: getChangeType(totalLeases, prevLeases)
-          },
-          totalRevenue: {
-            value: totalRevenue > 0 ? `₹${(totalRevenue / 1000000).toFixed(1)}M` : "₹0.0M",
-            change: `${calculateChange(totalRevenue, prevRevenue)} YTD`, // Keeping YTD label but calculation is MoM roughly
-            type: getChangeType(totalRevenue, prevRevenue)
-          }
-        },
-        upcomingRenewals: renewals.map(r => ({
-          id: r.id,
-          leaseId: r.lease_id,
-          unit: `Unit ${r.unit_number}`,
-          tenant: r.tenant_name,
-          date: r.lease_end,
-          daysRemaining: r.days_remaining,
-          badge: `${r.days_remaining} Days`,
-          badgeType: r.days_remaining < 30 ? 'warning' : 'success'
-        })),
-        upcomingExpiries: expiries.map(e => ({
-          id: e.id,
-          leaseId: e.lease_id,
-          unit: `Unit ${e.unit_number}`,
-          tenant: e.tenant_name,
-          date: e.lease_end,
-          daysRemaining: e.days_remaining,
-          badge: e.days_remaining < 30 ? 'HIGH RISK' : e.days_remaining < 60 ? 'MEDIUM' : 'LOW',
-          badgeType: e.days_remaining < 30 ? 'danger' : e.days_remaining < 60 ? 'warning' : 'success'
-        })),
-        rentEscalations: escalations.map(e => ({
-          effective_from: e.effective_from,
-          increase_type: e.increase_type,
-          value: e.value,
-          unit_number: `Unit ${e.unit_number}`
-        }))
-      };
-
-      // Get Revenue Trends (Mock/Calculated)
-      const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-      const currentMonth = new Date().getMonth();
-      const revenueTrends = [];
-
-      for (let i = 0; i < 12; i++) {
-        const monthIndex = (currentMonth + i + 1) % 12;
-        const baseRev = parseFloat(totalRevenue) || 0;
-        const randomFactor = 0.8 + Math.random() * 0.4;
-        revenueTrends.push({
-          month: months[monthIndex],
-          revenue: Math.round(baseRev * randomFactor)
-        });
-      }
-
-      res.json({
-        metrics: stats.metrics,
-        upcomingRenewals: stats.upcomingRenewals,
-        upcomingExpiries: stats.upcomingExpiries,
-        rentEscalations: stats.rentEscalations,
-        revenueTrends: revenueTrends, // Added for graph
-        areaStats: { // Added for area cards
-          occupied: { area: 245000, avgRentPerSqft: 57.20 }, // Mocked for Rep view pattern match
-          vacant: { area: 42000, avgRentPerSqft: 53.82 }
+    activeLeasesData.forEach(l => {
+        if (!l.lease_end) return;
+        const endTime = new Date(l.lease_end).getTime();
+        if (endTime >= todayTime && endTime <= d90Time) {
+            const daysRemaining = Math.ceil((endTime - todayTime) / 86400000);
+            const tenantFormat = l.tenant?.company_name || `${l.tenant?.first_name || ''} ${l.tenant?.last_name || ''}`.trim();
+            const item = {
+                id: l.id,
+                leaseId: l.id,
+                unit: `Unit ${l.units?.unit_number || 'N/A'}`,
+                tenant: tenantFormat,
+                date: l.lease_end,
+                daysRemaining
+            };
+            renewals.push(item);
+            if (endTime <= d60Time) expiries.push(item);
         }
-      });
-    } finally {
-      connection.release();
+    });
+
+    renewals.sort((a,b) => a.daysRemaining - b.daysRemaining).splice(3);
+    expiries.sort((a,b) => a.daysRemaining - b.daysRemaining).splice(3);
+
+    const { data: escData } = await supabase.from('lease_escalations').select(`
+        effective_from, increase_type, value, leases(units(unit_number))
+    `).gte('effective_from', todayStr).lte('effective_from', d90).order('effective_from').limit(3);
+
+    const mappedEscData = (escData || []).map(e => ({
+        effective_from: e.effective_from,
+        increase_type: e.increase_type,
+        value: e.value,
+        unit_number: `Unit ${e.leases?.units?.unit_number || 'N/A'}`
+    }));
+
+    const stats = {
+        totalProjects: projectsCurrent || 0,
+        prevProjects: projectsPrev || 0,
+        totalUnits: unitsCurrent || 0,
+        prevUnits: unitsPrev || 0,
+        totalOwners: ownersCurrent || 0,
+        prevOwners: ownersPrev || 0,
+        totalTenants: tenantsCurrent || 0,
+        prevTenants: tenantsPrev || 0,
+        totalLeases: leasesCurrent || 0,
+        prevLeases: leasesPrev || 0
+    };
+
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    const currentMonth = new Date().getMonth();
+    const revenueTrends = [];
+    for (let i = 0; i < 12; i++) {
+        const monthIndex = (currentMonth + i + 1) % 12;
+        revenueTrends.push({ month: months[monthIndex], revenue: Math.round(totalRevenue * (0.8 + Math.random() * 0.4)) });
     }
+
+    res.json({
+      metrics: {
+        totalProjects: { value: stats.totalProjects, change: `${calculateChange(stats.totalProjects, stats.prevProjects)} vs last month`, type: getChangeType(stats.totalProjects, stats.prevProjects) },
+        totalUnits: { value: stats.totalUnits, change: `${calculateChange(stats.totalUnits, stats.prevUnits)} vs last month`, type: getChangeType(stats.totalUnits, stats.prevUnits) },
+        totalOwners: { value: stats.totalOwners, change: `${calculateChange(stats.totalOwners, stats.prevOwners)} vs last month`, type: "neutral" },
+        totalTenants: { value: stats.totalTenants, change: `${calculateChange(stats.totalTenants, stats.prevTenants)} vs last month`, type: getChangeType(stats.totalTenants, stats.prevTenants) },
+        totalLeases: { value: stats.totalLeases, change: `${calculateChange(stats.totalLeases, stats.prevLeases)} vs last month`, type: getChangeType(stats.totalLeases, stats.prevLeases) },
+        totalRevenue: { value: totalRevenue > 0 ? `₹${(totalRevenue / 1000000).toFixed(1)}M` : "₹0.0M", change: `${calculateChange(totalRevenue, prevRevenue)} YTD`, type: getChangeType(totalRevenue, prevRevenue) }
+      },
+      upcomingRenewals: renewals.map(r => ({ ...r, badge: `${r.daysRemaining} Days`, badgeType: r.daysRemaining < 30 ? 'warning' : 'success' })),
+      upcomingExpiries: expiries.map(e => ({ ...e, badge: e.daysRemaining < 30 ? 'HIGH RISK' : e.daysRemaining < 60 ? 'MEDIUM' : 'LOW', badgeType: e.daysRemaining < 30 ? 'danger' : e.daysRemaining < 60 ? 'warning' : 'success' })),
+      rentEscalations: mappedEscData,
+      revenueTrends,
+      areaStats: { occupied: { area: 245000, avgRentPerSqft: 57.20 }, vacant: { area: 42000, avgRentPerSqft: 53.82 } }
+    });
+
   } catch (error) {
     console.error("Rep dashboard stats error:", error);
     res.status(500).json({ error: error.message });
   }
 };
 
-
-
 /* ================= GET NOTIFICATIONS ================= */
 exports.getRepNotifications = async (req, res) => {
   try {
-    const connection = await pool.getConnection();
     const { type, page = 1, limit = 10 } = req.query;
 
-    try {
-      let query = `
-        SELECT 
-          n.*,
-          CASE 
-            WHEN n.type = 'lease_alert' THEN 'Lease alerts'
-            WHEN n.type = 'escalation' THEN 'Escalations'
-            WHEN n.type = 'expiry' THEN 'Expiries'
-            WHEN n.type = 'system' THEN 'System alerts'
-            ELSE 'All'
-          END as category
-        FROM notifications n
-        WHERE 1=1
-      `;
+    let query = supabase.from('notifications').select('*').order('created_at', { ascending: false });
 
-      const params = [];
+    if (type && type !== 'All') {
+      query = query.eq('type', type.toLowerCase().replace(' ', '_'));
+    }
 
-      if (type && type !== 'All') {
-        query += " AND n.type = ?";
-        params.push(type.toLowerCase().replace(' ', '_'));
-      }
+    const { data: notifications, error } = await query;
+    if(error) throw error;
 
-      query += " ORDER BY n.created_at DESC";
+    const startIdx = (parseInt(page) - 1) * parseInt(limit);
+    const paginated = notifications.slice(startIdx, startIdx + parseInt(limit));
 
-      const [notifications] = await connection.query(query, params);
+    res.json({
+      data: paginated.map(notif => {
+        let category = 'All';
+        if(notif.type === 'lease_alert') category = 'Lease alerts';
+        if(notif.type === 'escalation') category = 'Escalations';
+        if(notif.type === 'expiry') category = 'Expiries';
+        if(notif.type === 'system') category = 'System alerts';
 
-      res.json({
-        data: notifications.map(notif => ({
+        return {
           id: notif.id,
           text: notif.message || 'Manage your alerts and updates for lease operations.',
-          read: notif.is_read === 1,
+          read: notif.is_read === true,
           type: notif.type,
-          category: notif.category,
+          category,
           createdAt: notif.created_at
-        })),
-        pagination: {
-          page: parseInt(page),
-          limit: parseInt(limit),
-          total: notifications.length,
-          totalPages: Math.ceil(notifications.length / limit)
-        }
-      });
-    } finally {
-      connection.release();
-    }
+        };
+      }),
+      pagination: {
+        page: parseInt(page), limit: parseInt(limit), total: notifications.length, totalPages: Math.ceil(notifications.length / parseInt(limit))
+      }
+    });
+
   } catch (error) {
-    console.error("Get notifications error:", error);
     res.json({ data: [], pagination: {} });
   }
 };
@@ -428,55 +303,35 @@ exports.getRepNotifications = async (req, res) => {
 /* ================= GET DOCUMENTS ================= */
 exports.getDocuments = async (req, res) => {
   try {
-    const connection = await pool.getConnection();
     const { category, page = 1, limit = 10 } = req.query;
+    
+    let query = supabase.from('documents').select(`
+        *, projects(project_name, project_image), users(first_name, last_name)
+    `).order('created_at', { ascending: false });
 
-    try {
-      // Corrected Query for Polymorphic Relationship
-      let query = `
-        SELECT 
-          d.*,
-          COALESCE(p.project_name, 'N/A') as project_name,
-          p.project_image,
-          CONCAT(u.first_name, ' ', u.last_name) as uploaded_by_name
-        FROM documents d
-        LEFT JOIN projects p ON d.entity_id = p.id AND d.entity_type = 'project'
-        LEFT JOIN users u ON d.uploaded_by = u.id
-        WHERE 1=1
-      `;
+    if (category) query = query.eq('document_type', category);
 
-      const params = [];
+    const { data: documents, error } = await query;
+    if(error) throw error;
 
-      if (category) {
-        query += " AND d.document_type = ?";
-        params.push(category);
+    const startIdx = (parseInt(page) - 1) * parseInt(limit);
+    const paginated = documents.slice(startIdx, startIdx + parseInt(limit));
+
+    res.json({
+      data: paginated.map(doc => ({
+        id: `D-${doc.id}`,
+        projectName: (doc.entity_type === 'project') ? (doc.projects?.project_name || 'N/A') : 'N/A',
+        image: doc.file_path || (doc.projects?.project_image ? `/uploads/${doc.projects?.project_image}` : 'https://images.unsplash.com/photo-1545324418-cc1a3fa10c00?w=50&h=50&fit=crop'),
+        date: doc.created_at ? new Date(doc.created_at).toLocaleDateString('en-US') : 'N/A',
+        uploadedBy: (doc.users?.first_name ? `${doc.users.first_name} ${doc.users.last_name || ''}`.trim() : 'Unknown User'),
+        category: doc.document_type || 'General'
+      })),
+      pagination: {
+        page: parseInt(page), limit: parseInt(limit), total: documents.length, totalPages: Math.ceil(documents.length / parseInt(limit))
       }
+    });
 
-      query += " ORDER BY d.created_at DESC";
-
-      const [documents] = await connection.query(query, params);
-
-      res.json({
-        data: documents.map(doc => ({
-          id: `D-${doc.id}`,
-          projectName: doc.project_name || 'N/A',
-          image: doc.file_path || (doc.project_image ? `/uploads/${doc.project_image}` : 'https://images.unsplash.com/photo-1545324418-cc1a3fa10c00?w=50&h=50&fit=crop'),
-          date: doc.created_at ? new Date(doc.created_at).toLocaleDateString('en-US', { day: '2-digit', month: 'short', year: 'numeric' }) : 'N/A',
-          uploadedBy: doc.uploaded_by_name || 'Unknown User',
-          category: doc.document_type || 'General' // Mapping document_type to category in response
-        })),
-        pagination: {
-          page: parseInt(page),
-          limit: parseInt(limit),
-          total: documents.length,
-          totalPages: Math.ceil(documents.length / limit)
-        }
-      });
-    } finally {
-      connection.release();
-    }
   } catch (error) {
-    console.error("Get documents error:", error);
     res.json({ data: [], pagination: {} });
   }
 };
@@ -484,71 +339,28 @@ exports.getDocuments = async (req, res) => {
 /* ================= GLOBAL SEARCH ================= */
 exports.searchData = async (req, res) => {
   try {
-    const connection = await pool.getConnection();
-    const {
-      project_name,
-      owner_name,
-      tenant_name,
-      unit_number,
-      status,
-      start_date,
-      end_date
-    } = req.query;
+    const { project_name, owner_name, tenant_name, unit_number, status } = req.query;
 
-    try {
-      // Global search across Projects, Units, Leases
-      // We want to return a unified list of "Results"
-      // Project Name, Name/ID, Status, Category
+    const [ { data: pRows }, { data: oRows }, { data: tRows }, { data: uRows } ] = await Promise.all([
+        supabase.from('projects').select('id, project_name, status')
+           .ilike('project_name', project_name ? `%${project_name}%` : '%')
+           .ilike('status', status ? `%${status}%` : '%'),
+        supabase.from('parties').select('id, first_name, last_name, company_name').eq('is_owner', true)
+           .or(owner_name ? `first_name.ilike.%${owner_name}%,last_name.ilike.%${owner_name}%,company_name.ilike.%${owner_name}%` : `id.gt.0`),
+        supabase.from('parties').select('id, first_name, last_name, company_name').eq('is_tenant', true)
+           .or(tenant_name ? `first_name.ilike.%${tenant_name}%,last_name.ilike.%${tenant_name}%,company_name.ilike.%${tenant_name}%` : `id.gt.0`),
+        supabase.from('units').select('id, unit_number, status')
+           .ilike('unit_number', unit_number ? `%${unit_number}%` : '%')
+    ]);
 
-      // 1. Search Projects
-      let projectQuery = `SELECT id, project_name as name, 'Project' as category, status FROM projects WHERE 1=1`;
-      const projectParams = [];
-      if (project_name) { projectQuery += " AND project_name LIKE ?"; projectParams.push(`%${project_name}%`); }
-      if (status) { projectQuery += " AND status LIKE ?"; projectParams.push(`%${status}%`); }
+    const results = [];
+    (pRows||[]).forEach(r => results.push({ id: r.id, name: r.project_name, category: 'Project', status: r.status, project_name: r.project_name, id_label: `#P-${r.id}` }));
+    (oRows||[]).forEach(r => results.push({ id: r.id, name: r.company_name || `${r.first_name} ${r.last_name}`.trim(), category: 'Owner', status: 'Active', project_name: 'N/A', id_label: `#O-${r.id}` }));
+    (tRows||[]).forEach(r => results.push({ id: r.id, name: r.company_name || `${r.first_name} ${r.last_name}`.trim(), category: 'Tenant', status: 'Active', project_name: 'N/A', id_label: `#T-${r.id}` }));
+    (uRows||[]).forEach(r => results.push({ id: r.id, name: r.unit_number, category: 'Unit', status: r.status, project_name: 'N/A', id_label: `#U-${r.id}` }));
 
-      // 2. Search Owners
-      let ownerQuery = `SELECT id, name, 'Owner' as category, 'Active' as status FROM owners WHERE 1=1`;
-      const ownerParams = [];
-      if (owner_name) { ownerQuery += " AND name LIKE ?"; ownerParams.push(`%${owner_name}%`); }
-
-      // 3. Search Tenants
-      let tenantQuery = `SELECT id, company_name as name, 'Tenant' as category, status FROM tenants WHERE 1=1`;
-      const tenantParams = [];
-      if (tenant_name) { tenantQuery += " AND company_name LIKE ?"; tenantParams.push(`%${tenant_name}%`); }
-
-      // 4. Search Units (mapped to Project Name in JS if needed, or join here)
-      // For simplicity in this unified view, we select from units
-      let unitQuery = `SELECT id, unit_number as name, 'Unit' as category, status FROM units WHERE 1=1`;
-      const unitParams = [];
-      if (unit_number) { unitQuery += " AND unit_number LIKE ?"; unitParams.push(`%${unit_number}%`); }
-
-      // Execute based on what fields are present. If all empty, return recent items
-      const results = [];
-
-      // If specific filters are set, only query relevant tables. If "Advanced Filter" is used which basically asks for "Project Name" etc..
-      // The image shows a single table. We can combine results.
-
-      const [pRows] = await connection.query(projectQuery, projectParams);
-      const [oRows] = await connection.query(ownerQuery, ownerParams);
-      const [tRows] = await connection.query(tenantQuery, tenantParams);
-      const [uRows] = await connection.query(unitQuery, unitParams);
-
-      // Add Project Name context to results?
-      // For now, simple mapping
-      pRows.forEach(r => results.push({ ...r, project_name: r.name, id_label: `#P-${r.id}` }));
-      oRows.forEach(r => results.push({ ...r, project_name: 'N/A', id_label: `#O-${r.id}` }));
-      tRows.forEach(r => results.push({ ...r, project_name: 'N/A', id_label: `#T-${r.id}` }));
-      uRows.forEach(r => results.push({ ...r, project_name: 'N/A', id_label: `#U-${r.id}` }));
-
-      // Filter by "Lease dates" if implemented (would require Lease query)
-
-      res.json(results);
-
-    } finally {
-      connection.release();
-    }
+    res.json(results);
   } catch (error) {
-    console.error("Search error:", error);
     res.status(500).json({ error: "Search failed" });
   }
 };
@@ -556,36 +368,19 @@ exports.searchData = async (req, res) => {
 /* ================= UPLOAD DOCUMENT ================= */
 exports.uploadDocument = async (req, res) => {
   try {
-    const connection = await pool.getConnection();
-    const {
-      project_id,
-      category,
-      uploaded_by
-    } = req.body;
+    const { project_id, category, uploaded_by } = req.body;
 
-    if (!req.file) {
-      return res.status(400).json({ message: "No file uploaded" });
-    }
+    if (!req.file) return res.status(400).json({ message: "No file uploaded" });
 
     const file_path = req.file.filename;
 
-    try {
-      // Assuming 'project_id' in body is actually the ID for entity_type='project'
-      const [result] = await connection.query(`
-        INSERT INTO documents 
-        (entity_type, entity_id, document_type, file_path, uploaded_by)
-        VALUES (?, ?, ?, ?, ?)
-      `, ['project', project_id || null, category || 'General', file_path, uploaded_by || 1]);
+    const { data, error } = await supabase.from('documents').insert({
+        entity_type: 'project', entity_id: project_id || null, document_type: category || 'General', file_path, uploaded_by: uploaded_by || 1
+    }).select('id').single();
 
-      res.json({
-        message: "Document uploaded successfully",
-        id: result.insertId
-      });
-    } finally {
-      connection.release();
-    }
+    if (error) throw error;
+    res.json({ message: "Document uploaded successfully", id: data.id });
   } catch (error) {
-    console.error("Upload document error:", error);
     res.status(500).json({ error: "Failed to upload document" });
   }
 };

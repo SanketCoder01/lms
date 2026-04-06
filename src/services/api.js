@@ -49,11 +49,12 @@ export const getProjectLocations = () => API.get("/projects/locations");
 export const getProjectById = (id) => API.get(`/projects/${id}`);
 export const addProject = (data) =>
   API.post("/projects", data, {
-    headers: { "Content-Type": "multipart/form-data" },
+    // Let browser set the Content-Type with boundary for FormData
+    headers: { "Content-Type": undefined },
   });
 export const updateProject = (id, data) =>
   API.put(`/projects/${id}`, data, {
-    headers: { "Content-Type": "multipart/form-data" },
+    headers: { "Content-Type": undefined },
   });
 export const deleteProject = (id) =>
   API.delete(`/projects/${id}`);
@@ -74,7 +75,7 @@ export const ownerAPI = {
   getDocuments: (id) => API.get(`/owners/${id}/documents`),
   uploadDocument: (id, data) =>
     API.post(`/owners/${id}/documents`, data, {
-      headers: { "Content-Type": "multipart/form-data" },
+      headers: { "Content-Type": undefined },
     }),
   addUnits: (id, data) => API.post(`/owners/${id}/units`, data),
   removeUnit: (id, unitId) => API.delete(`/owners/${id}/units/${unitId}`),
@@ -84,14 +85,25 @@ export const ownerAPI = {
 export const unitAPI = {
   getUnits: (params) => API.get("/units", { params }),
   getUnitById: (id) => API.get(`/units/${id}`),
-  createUnit: (data) =>
-    API.post("/units", data, {
-      headers: { "Content-Type": "multipart/form-data" },
-    }),
+  createUnit: (data) => API.post("/units", data),
   updateUnit: (id, data) => API.put(`/units/${id}`, data),
   deleteUnit: (id) => API.delete(`/units/${id}`),
   getUnitsByProject: (projectId, excludeSold = false) =>
     API.get(`/units?projectId=${projectId}${excludeSold ? '&excludeSold=true' : ''}`),
+};
+
+// ---------------- UNIT STRUCTURE (Blocks & Floors) ----------------
+export const structureAPI = {
+  // Blocks
+  getBlocks: (project_id) => API.get('/units/structure/blocks', { params: { project_id } }),
+  addBlock: (data) => API.post('/units/structure/blocks', data),
+  updateBlock: (id, data) => API.put(`/units/structure/blocks/${id}`, data),
+  deleteBlock: (id) => API.delete(`/units/structure/blocks/${id}`),
+  // Floors
+  getFloors: (params) => API.get('/units/structure/floors', { params }),
+  addFloor: (data) => API.post('/units/structure/floors', data),
+  updateFloor: (id, data) => API.put(`/units/structure/floors/${id}`, data),
+  deleteFloor: (id) => API.delete(`/units/structure/floors/${id}`),
 };
 
 // ---------------- TENANTS ----------------
@@ -184,9 +196,9 @@ export const leaseAPI = {
   getLeaseById: (id) =>
     API.get(`/leases/${id}`),
   createLease: (data) =>
-    API.post("/leases", data),
+    API.post("/leases", data, { headers: { "Content-Type": undefined } }),
   updateLease: (id, data) =>
-    API.put(`/leases/${id}`, data),
+    API.put(`/leases/${id}`, data, { headers: { "Content-Type": undefined } }),
   deleteLease: (id) =>
     API.delete(`/leases/${id}`),
   // Dashboard & Stats
@@ -209,6 +221,12 @@ export const leaseAPI = {
   deleteAllNotifications: () =>
     API.delete("/leases/notifications"),
   getLeaseManagerStats: () => API.get("/leases/manager-stats"), // Fixed endpoint to match controller
+  // Issue 38: Get main lessee for sub-lease
+  getMainLesseeForUnit: (unitId) => API.get(`/leases/unit/${unitId}/main-lessee`),
+  // Issue 69: Effective rent as of today
+  getEffectiveRent: (id) => API.get(`/leases/${id}/effective-rent`),
+  // Issue 70: Export CSV
+  exportLeases: (params) => API.get("/leases/export/csv", { params, responseType: "blob" }),
 };
 
 // ---------------- PARTIES (NEW) ----------------
@@ -222,6 +240,7 @@ export const partyAPI = {
 
 // ---------------- OWNERSHIP (NEW) ----------------
 export const ownershipAPI = {
+  getAllOwnerships: (params) => API.get("/ownerships/search", { params }),
   assignOwner: (data) => API.post("/ownerships/assign", data),
   removeOwner: (data) => API.post("/ownerships/remove", data),
   getOwnersByUnit: (unitId) => API.get(`/ownerships/unit/${unitId}`),
@@ -230,7 +249,7 @@ export const ownershipAPI = {
   getDocumentTypes: () => API.get("/ownerships/document-types"),
   addDocumentType: (data) => API.post("/ownerships/document-types", data),
   uploadDocument: (data) => API.post("/ownerships/documents", data, {
-      headers: { "Content-Type": "multipart/form-data" },
+    headers: { "Content-Type": undefined },
   }),
   getDocuments: (unitId, partyId) => API.get(`/ownerships/documents/${unitId}/${partyId}`),
 };
@@ -239,6 +258,7 @@ export const ownershipAPI = {
 export const filterAPI = {
   getFilterOptions: (category) => API.get(`/filters${category ? '?category=' + category : ''}`),
   addFilterOption: (data) => API.post("/filters", data),
+  updateFilterOption: (id, data) => API.put(`/filters/${id}`, data),
   deleteFilterOption: (id) => API.delete(`/filters/${id}`),
 };
 

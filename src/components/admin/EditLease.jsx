@@ -70,7 +70,6 @@ const EditLease = () => {
         rent_free_end_date: '',
         loi_date: '',
         agreement_date: '',
-        deposit_payment_date: '',
         registration_date: '',
         status: 'active',
     });
@@ -153,7 +152,6 @@ const EditLease = () => {
                     rent_free_end_date: formatDate(data.rent_free_end_date),
                     loi_date: formatDate(data.loi_date),
                     agreement_date: formatDate(data.agreement_date),
-                    deposit_payment_date: formatDate(data.deposit_payment_date),
                     registration_date: formatDate(data.registration_date),
                     status: data.status || 'active',
                 }));
@@ -183,26 +181,44 @@ const EditLease = () => {
     }, [id]);
 
     // Handle Unit Logic
-    const handleUnitChange = async (val) => {
+    const handleUnitChange = async (val, currentIsSubLease = isSubLease) => {
         const unitId = parseInt(val);
         setFormData(prev => ({ ...prev, unit_id: val }));
 
         try {
-            const res = await ownershipAPI.getOwnersByUnit(unitId);
-            const owners = res.data || [];
-            const active = owners.find(o => o.ownership_status === 'Active');
+            if (!currentIsSubLease) {
+                const res = await ownershipAPI.getOwnersByUnit(unitId);
+                const owners = res.data || [];
+                const active = owners.find(o => o.ownership_status === 'Active');
 
-            if (active) {
-                setActiveOwner(active);
-                setFormData(prev => ({ ...prev, party_owner_id: active.party_id }));
+                if (active) {
+                    setActiveOwner(active);
+                    setFormData(prev => ({ ...prev, party_owner_id: active.party_id }));
+                } else {
+                    setActiveOwner(null);
+                    setFormData(prev => ({ ...prev, party_owner_id: '' }));
+                }
             } else {
-                setActiveOwner(null);
-                setFormData(prev => ({ ...prev, party_owner_id: '' }));
+                // Sub Lease: Get main lessee for unit
+                const res = await leaseAPI.getMainLesseeForUnit(unitId);
+                if (res.data && res.data.party_tenant_id) {
+                    setFormData(prev => ({ ...prev, party_tenant_id: res.data.party_tenant_id }));
+                } else {
+                    setFormData(prev => ({ ...prev, party_tenant_id: '' }));
+                }
             }
         } catch (e) {
-            console.error("Failed to fetch unit owner", e);
+            console.error("Failed to fetch unit relations", e);
         }
     };
+
+    // When lease type changes, we should re-trigger handleUnitChange or clear
+    useEffect(() => {
+        if (formData.unit_id) {
+            handleUnitChange(formData.unit_id, isSubLease);
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [isSubLease]);
 
     // Load units when project changes
     useEffect(() => {
@@ -290,7 +306,13 @@ const EditLease = () => {
                 escalations: escalations,
             };
 
-            await leaseAPI.updateLease(id, payload);
+            const formDataPayload = new FormData();
+            formDataPayload.append('leaseData', JSON.stringify(payload));
+            if (files.loi_document) formDataPayload.append('loi_document', files.loi_document);
+            if (files.agreement_document) formDataPayload.append('agreement_document', files.agreement_document);
+            if (files.registration_document) formDataPayload.append('registration_document', files.registration_document);
+
+            await leaseAPI.updateLease(id, formDataPayload);
             setSubmitMessage('Lease updated successfully!');
             setTimeout(() => navigate('/admin/leases'), 2000);
 
@@ -377,6 +399,7 @@ const EditLease = () => {
                             addEscalationStep={addEscalationStep}
                             removeEscalationStep={removeEscalationStep}
                             formData={formData}
+                            setFormData={setFormData}
                             rentModel={rentModel}
                         />
                     )}

@@ -194,7 +194,7 @@ const AddTenant = () => {
                                     <input type="text" name="company_name" placeholder="e.g. Acme Corp" style={inputStyle} value={formData.company_name} onChange={handleChange} required />
                                 </div>
                                 <div>
-                                    <label style={labelStyle}>Brand Name</label>
+                                    <label style={labelStyle}>Brand Name/Nickname</label>
                                     <input type="text" name="brand_name" placeholder="e.g. Acme" style={inputStyle} value={formData.brand_name} onChange={handleChange} />
                                 </div>
                                 <div>

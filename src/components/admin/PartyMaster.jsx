@@ -14,6 +14,34 @@ const PartyMaster = () => {
         fetchParties();
     }, []);
 
+    const handleExportCSV = () => {
+        if (parties.length === 0) return;
+        const headers = ["Name/Company Name", "Brand Name/Nickname", "Structure Type", "Party Role", "Phone", "Email", "State", "City"];
+        const rows = filteredParties.map(p => [
+            p.type === 'Company' ? p.company_name : `${p.first_name} ${p.last_name}`,
+            p.brand_name || 'N/A',
+            p.type,
+            p.party_type,
+            p.phone,
+            p.email,
+            p.state || 'N/A',
+            p.city || 'N/A'
+        ]);
+        
+        let csvContent = "data:text/csv;charset=utf-8," 
+            + headers.join(",") + "\n"
+            + rows.map(r => r.map(cell => `"${(cell || '').replace(/"/g, '""')}"`).join(",")).join("\n");
+            
+        const encodedUri = encodeURI(csvContent);
+        const link = document.createElement("a");
+        link.setAttribute("href", encodedUri);
+        link.setAttribute("download", "parties_master.csv");
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    };
+
+
     const fetchParties = async () => {
         try {
             setLoading(true);
@@ -50,13 +78,23 @@ const PartyMaster = () => {
                         <h1>Masters</h1>
                         <p>Manage all individuals and companies (Owners & Tenants).</p>
                     </div>
-                    <Link to="/admin/parties/add" className="primary-btn">
-                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: '8px' }}>
-                            <line x1="12" y1="5" x2="12" y2="19"></line>
-                            <line x1="5" y1="12" x2="19" y2="12"></line>
-                        </svg>
-                        Add Party
-                    </Link>
+                    <div className="header-actions" style={{ display: 'flex', gap: '10px' }}>
+                        <button onClick={handleExportCSV} className="secondary-btn" style={{ background: '#f8f9fa', color: '#333', border: '1px solid #ddd', padding: '8px 16px', borderRadius: '4px', cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ marginRight: '6px' }}>
+                                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                                <polyline points="7 10 12 15 17 10"></polyline>
+                                <line x1="12" y1="15" x2="12" y2="3"></line>
+                            </svg>
+                            Export CSV
+                        </button>
+                        <Link to="/admin/parties/add" className="primary-btn">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: '8px' }}>
+                                <line x1="12" y1="5" x2="12" y2="19"></line>
+                                <line x1="5" y1="12" x2="19" y2="12"></line>
+                            </svg>
+                            Add Party
+                        </Link>
+                    </div>
                 </header>
 
                 <div className="content-card">
@@ -92,9 +130,9 @@ const PartyMaster = () => {
                             <thead>
                                 <tr>
                                     <th>Name / Company</th>
-                                    <th>Type</th>
+                                    <th>Structure Type</th>
                                     <th>Contact Info</th>
-                                    <th>Location</th>
+                                    <th>Tenant or Owner</th>
                                     <th style={{ textAlign: 'right' }}>Actions</th>
                                 </tr>
                             </thead>
@@ -120,8 +158,8 @@ const PartyMaster = () => {
                                                     <div className="party-name">
                                                         {party.type === 'Company' ? party.company_name : `${party.first_name} ${party.last_name}`}
                                                     </div>
-                                                    {party.type === 'Company' && (
-                                                        <div className="sub-text">Contact: {party.first_name} {party.last_name}</div>
+                                                    {party.type === 'Company' && party.brand_name && (
+                                                        <div className="sub-text">Brand: {party.brand_name}</div>
                                                     )}
                                                 </div>
                                             </div>
@@ -143,7 +181,11 @@ const PartyMaster = () => {
                                                 </div>
                                             </div>
                                         </td>
-                                        <td>{party.city || party.address_line1 || 'N/A'}</td>
+                                        <td>
+                                            <span className={`status-badge ${party.party_type ? party.party_type.toLowerCase() : 'neutral'}`}>
+                                                {party.party_type || 'N/A'}
+                                            </span>
+                                        </td>
                                         <td>
                                             <div className="action-icon-wrapper right">
                                                 <Link to={`/admin/parties/edit/${party.id}`} className="action-icon-btn view" title="View Details">

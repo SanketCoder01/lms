@@ -1,27 +1,29 @@
-const pool = require('../config/db');
+const supabase = require('../config/db');
 
 // Get all parties
 exports.getAllParties = async (req, res) => {
     try {
-        const [rows] = await pool.query('SELECT * FROM parties ORDER BY created_at DESC');
-        res.json(rows);
+        const { data, error } = await supabase.from('parties').select('*').order('created_at', { ascending: false });
+        if (error) throw error;
+        res.json(data || []);
     } catch (err) {
-        console.error(err);
-        res.status(500).json({ message: 'Server Error' });
+        console.error("getAllParties Error:", err);
+        res.status(500).json({ message: 'Server Error', error: err.message });
     }
 };
 
 // Get single party by ID
 exports.getPartyById = async (req, res) => {
     try {
-        const [rows] = await pool.query('SELECT * FROM parties WHERE id = ?', [req.params.id]);
-        if (rows.length === 0) {
-            return res.status(404).json({ message: 'Party not found' });
+        const { data, error } = await supabase.from('parties').select('*').eq('id', req.params.id).single();
+        if (error) {
+            if (error.code === 'PGRST116') return res.status(404).json({ message: 'Party not found' });
+            throw error;
         }
-        res.json(rows[0]);
+        res.json(data);
     } catch (err) {
-        console.error(err);
-        res.status(500).json({ message: 'Server Error' });
+        console.error("getPartyById Error:", err);
+        res.status(500).json({ message: 'Server Error', error: err.message });
     }
 };
 
@@ -35,24 +37,20 @@ exports.createParty = async (req, res) => {
     } = req.body;
 
     try {
-        const [result] = await pool.query(
-            `INSERT INTO parties (
-                type, party_type, company_name, brand_name, brand_category, legal_entity_type, title, first_name, last_name,
-                email, phone, alt_phone, identification_type, identification_number,
-                address_line1, address_line2, city, state, postal_code, country,
-                representative_designation, owner_group
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-            [
-                type || 'Individual', party_type || 'Tenant', company_name, brand_name, brand_category, legal_entity_type, title, first_name, last_name,
-                email, phone, alt_phone, identification_type, identification_number,
-                address_line1, address_line2, city, state, postal_code, country,
-                representative_designation, owner_group
-            ]
-        );
-        res.status(201).json({ id: result.insertId, ...req.body });
+        const { data, error } = await supabase.from('parties').insert({
+            type: type || 'Individual', party_type: party_type || 'Tenant', 
+            company_name, brand_name, brand_category, legal_entity_type, title, first_name, last_name,
+            email, phone, alt_phone, identification_type, identification_number,
+            address_line1, address_line2, city, state, postal_code, country,
+            representative_designation, owner_group
+        }).select('id').single();
+
+        if (error) throw error;
+        
+        res.status(201).json({ id: data.id, ...req.body });
     } catch (err) {
-        console.error(err);
-        res.status(500).json({ message: 'Server Error' });
+        console.error("createParty Error:", err);
+        res.status(500).json({ message: 'Server Error', error: err.message });
     }
 };
 
@@ -66,35 +64,34 @@ exports.updateParty = async (req, res) => {
     } = req.body;
 
     try {
-        await pool.query(
-            `UPDATE parties SET
-                type=?, party_type=?, company_name=?, brand_name=?, brand_category=?, legal_entity_type=?, title=?, first_name=?, last_name=?,
-                email=?, phone=?, alt_phone=?, identification_type=?, identification_number=?,
-                address_line1=?, address_line2=?, city=?, state=?, postal_code=?, country=?,
-                representative_designation=?, owner_group=?
-             WHERE id=?`,
-            [
-                type, party_type, company_name, brand_name, brand_category, legal_entity_type, title, first_name, last_name,
-                email, phone, alt_phone, identification_type, identification_number,
-                address_line1, address_line2, city, state, postal_code, country,
-                representative_designation, owner_group,
-                req.params.id
-            ]
-        );
+        const { error } = await supabase.from('parties').update({
+            type, party_type, company_name, brand_name, brand_category, legal_entity_type, title, first_name, last_name,
+            email, phone, alt_phone, identification_type, identification_number,
+            address_line1, address_line2, city, state, postal_code, country,
+            representative_designation, owner_group
+        }).eq('id', req.params.id);
+
+        if (error) throw error;
+        
         res.json({ message: 'Party updated successfully' });
     } catch (err) {
-        console.error(err);
-        res.status(500).json({ message: 'Server Error' });
+        console.error("updateParty Error:", err);
+        res.status(500).json({ message: 'Server Error', error: err.message });
     }
 };
 
 // Delete a party
 exports.deleteParty = async (req, res) => {
     try {
-        await pool.query('DELETE FROM parties WHERE id = ?', [req.params.id]);
+        const { error } = await supabase.from('parties').delete().eq('id', req.params.id);
+        
+        if (error) {
+            if (error.code === '23503') return res.status(400).json({ message: 'Cannot delete party. Associated records exist.' });
+            throw error;
+        }
         res.json({ message: 'Party deleted successfully' });
     } catch (err) {
-        console.error(err);
-        res.status(500).json({ message: 'Server Error' });
+        console.error("deleteParty Error:", err);
+        res.status(500).json({ message: 'Server Error', error: err.message });
     }
 };

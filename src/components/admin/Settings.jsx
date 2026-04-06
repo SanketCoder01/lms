@@ -22,30 +22,43 @@ const Settings = () => {
     const [userId, setUserId] = useState(1); // Default to 1, will update from fetch
 
     /* ============================
-       LOAD USER FROM DB
+       LOAD USER FROM DB / STORAGE
     ============================ */
     useEffect(() => {
-        settingsAPI.getSettings()
-            .then(res => {
-                setUser(res.data);
-                setFormData(res.data);
-                if (res.data.id) setUserId(res.data.id);
-                setLoading(false);
-            })
-            .catch(err => {
-                console.error("Load user error:", err);
-                const mock = {
+        try {
+            const rawUser = localStorage.getItem('user');
+            if (rawUser) {
+                const parsed = JSON.parse(rawUser);
+                setUser({
+                    id: parsed.id || 1,
+                    first_name: parsed.first_name || '',
+                    last_name: parsed.last_name || '',
+                    email: parsed.email || '',
+                    role: parsed.role || 'Admin',
+                    profile_image: parsed.profile_image || null
+                });
+                setFormData({
+                    first_name: parsed.first_name || '',
+                    last_name: parsed.last_name || '',
+                    email: parsed.email || ''
+                });
+                if (parsed.id) setUserId(parsed.id);
+            } else {
+                // Fallback if no user in localStorage
+                setUser({
                     id: 1,
                     first_name: "Admin",
                     last_name: "User",
                     email: "admin@example.com",
                     role: "Super Admin",
                     profile_image: null
-                };
-                setUser(mock);
-                setFormData(mock);
-                setLoading(false);
-            });
+                });
+            }
+        } catch (e) {
+            console.error("Error reading user from localStorage:", e);
+        } finally {
+            setLoading(false);
+        }
     }, []);
 
     /* ============================

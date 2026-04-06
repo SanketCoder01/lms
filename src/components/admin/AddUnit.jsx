@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import Sidebar from './Sidebar';
-import { unitAPI, getProjects, filterAPI } from '../../services/api';
+import { unitAPI, getProjects, filterAPI, structureAPI } from '../../services/api';
 import './AddUnit.css';
 
 const AddUnit = () => {
@@ -73,14 +73,7 @@ const AddUnit = () => {
                     ]);
                 }
                 
-                const blockRes = await filterAPI.getFilterOptions("block_tower");
-                if (blockRes.data?.data?.length > 0) {
-                    setBlocks(blockRes.data.data.map(t => t.option_value));
-                }
-                const floorRes = await filterAPI.getFilterOptions("floor_number");
-                if (floorRes.data?.data?.length > 0) {
-                    setFloors(floorRes.data.data.map(t => t.option_value));
-                }
+                // Floor and Block fetching handled by project selection effect
                 const catRes = await filterAPI.getFilterOptions("unit_category");
                 if (catRes.data?.data?.length > 0) {
                     setUnitCategories(catRes.data.data.map(t => ({ value: t.option_value, label: t.option_value })));
@@ -96,6 +89,27 @@ const AddUnit = () => {
         fetchProjects();
         fetchFilters();
     }, []);
+
+    // Load blocks and floors when project changes
+    useEffect(() => {
+        if (!formData.project_id) {
+            setBlocks([]);
+            setFloors([]);
+            return;
+        }
+        const loadStructure = async () => {
+            try {
+                const bRes = await structureAPI.getBlocks(formData.project_id);
+                setBlocks((bRes.data?.data || []).map(b => b.block_name));
+                const fRes = await structureAPI.getFloors({ project_id: formData.project_id });
+                // If block is selected, filter floors by it? Wait, API can do that if we passed block_id, but here let's just get all project floors. Actually floor_name is what we need.
+                setFloors((fRes.data?.data || []).map(f => f.floor_name));
+            } catch (err) {
+                console.error("Failed to load unit structure", err);
+            }
+        };
+        loadStructure();
+    }, [formData.project_id]);
 
     // State for the unit input suffix (e.g., "101")
     const [unitSuffix, setUnitSuffix] = useState('');
@@ -506,7 +520,20 @@ const AddUnit = () => {
                                             <span className="upload-hint">PNG, JPG up to 10MB</span>
                                         </div>
                                     </div>
-                                    {images.length > 0 && <div style={{ marginTop: 5 }}>{images.length} files selected</div>}
+                                    {images.length > 0 && (
+                                        <div style={{ marginTop: 15, display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+                                            {images.map((img, index) => (
+                                                <div key={index} style={{ position: 'relative', width: '80px', height: '80px', borderRadius: '4px', overflow: 'hidden', border: '1px solid #e2e8f0' }}>
+                                                    <img src={URL.createObjectURL(img)} alt={`preview-${index}`} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                                                    <button type="button" onClick={() => {
+                                                        const newImages = [...images];
+                                                        newImages.splice(index, 1);
+                                                        setImages(newImages);
+                                                    }} style={{ position: 'absolute', top: '2px', right: '2px', background: 'rgba(0,0,0,0.5)', color: 'white', border: 'none', borderRadius: '50%', width: '20px', height: '20px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '12px' }}>&times;</button>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
                                 </div>
                             </section>
 

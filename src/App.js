@@ -25,6 +25,7 @@ import AddUnit from "./components/admin/AddUnit";
 import EditUnit from "./components/admin/EditUnit";
 import UnitDetails from "./components/admin/UnitDetails";
 import AdminNotifications from "./components/admin/AdminNotifications"; // Imported
+import UnitStructure from "./components/admin/UnitStructure";
 import LeaseDashboard from "./components/lease-management/LeaseDashboard";
 import LeaseReports from "./components/lease-management/LeaseReports";
 import ReviewCenter from "./components/lease-management/ReviewCenter";
@@ -103,6 +104,7 @@ function App() {
         <Route path="/admin/add-unit" element={<AddUnit />} />
         <Route path="/admin/edit-unit/:id" element={<EditUnit />} />
         <Route path="/admin/view-unit/:id" element={<UnitDetails />} />
+        <Route path="/admin/unit-structure" element={<UnitStructure />} />
         <Route path="/admin/leases" element={<Leases />} />
         <Route path="/admin/add-lease" element={<AddLease />} />
         <Route path="/admin/edit-lease/:id" element={<EditLease />} />

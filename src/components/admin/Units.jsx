@@ -55,8 +55,10 @@ const Units = () => {
                 const mappedUnits = data.map(unit => ({
                     id: unit.id,
                     unitNo: unit.unit_number || 'N/A',
-                    building: unit.building || 'N/A',
+                    building: unit.building || unit.projects?.project_name || 'N/A',
                     blockTower: unit.block_tower || '-',
+                    ownerName: unit.owner_name || 'N/A',
+                    tenantName: unit.tenant_name || unit.leases?.[0]?.party_name || (unit.status === 'occupied' ? 'Active Tenant' : '-'),
                     area: unit.chargeable_area || 'N/A',
                     status: unit.status || 'unknown',
                     statusType: unit.status || 'unknown',
@@ -161,10 +163,9 @@ const Units = () => {
                             </div>
                             <div className="dropdown-filter">
                                 <select value={selectedUnitType} onChange={handleUnitTypeChange}>
-                                    <option value="All">All Status</option>
+                                    <option value="">All Status</option>
                                     <option value="vacant">Vacant</option>
                                     <option value="occupied">Leased</option>
-                                    <option value="maintenance">Maintenance</option>
                                 </select>
                                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
                             </div>
@@ -182,7 +183,8 @@ const Units = () => {
                                 <tr>
                                     <th>Unit No</th>
                                     <th>Building/Project</th>
-                                    <th>Block/Tower</th>
+                                    <th>Owner Name</th>
+                                    <th>Tenant Name</th>
                                     <th>Area (SQ FT)</th>
                                     <th>Status</th>
                                     <th>Actions</th>
@@ -191,16 +193,17 @@ const Units = () => {
                             <tbody>
                                 {units.length === 0 ? (
                                     <tr>
-                                        <td colSpan="6" style={{ textAlign: 'center', padding: '20px' }}>No units found.</td>
+                                        <td colSpan="7" style={{ textAlign: 'center', padding: '20px' }}>No units found.</td>
                                     </tr>
                                 ) : (
                                     units.map((unit) => (
                                         <tr key={unit.id}>
                                             <td className="unit-id">{unit.unitNo}</td>
                                             <td>{unit.building}</td>
-                                            <td>{unit.blockTower}</td>
+                                            <td>{unit.ownerName}</td>
+                                            <td>{unit.tenantName}</td>
                                             <td>{unit.area}</td>
-                                            <td><span className={`status-badge ${unit.status}`}>{unit.status === 'occupied' ? 'leased' : unit.status}</span></td>
+                                            <td><span className={`status-badge ${unit.status}`}>{unit.status === 'occupied' ? 'Leased' : unit.status === 'vacant' ? 'Vacant' : unit.status}</span></td>
                                             <td>
                                                 <div className="action-icon-wrapper">
                                                     <Link to={`/admin/view-unit/${unit.id}`} className="action-icon-btn view" title="View">

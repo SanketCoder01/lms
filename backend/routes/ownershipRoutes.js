@@ -11,6 +11,7 @@ router.post('/documents', upload.single('document'), ownershipController.uploadO
 
 router.get('/test', (req, res) => res.json({ message: 'Ownership API working' }));
 
+router.get('/search', ownershipController.getAllOwnerships);
 router.post('/assign', ownershipController.assignOwner);
 router.post('/remove', ownershipController.removeOwner);
 router.get('/unit/:unitId', ownershipController.getOwnersByUnit);

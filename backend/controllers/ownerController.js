@@ -1,100 +1,67 @@
-const pool = require("../config/db");
+const supabase = require('../config/db');
 
 exports.getOwnerDetails = async (req, res) => {
     const ownerId = req.params.id;
-
     try {
-        const [[owner]] = await pool.query(
-            "SELECT * FROM owners WHERE id = ?",
-            [ownerId]
-        );
+        const { data: owner, error } = await supabase.from('owners').select('*').eq('id', ownerId).single();
+        if (error || !owner) return res.status(404).json({ message: "Owner not found" });
 
-        if (!owner) {
-            return res.status(404).json({ message: "Owner not found" });
+        const { data: ownerUnits } = await supabase.from('owner_units').select('unit_id').eq('owner_id', ownerId);
+        const unitIds = (ownerUnits || []).map(ou => ou.unit_id);
+        
+        let units = [];
+        if (unitIds.length > 0) {
+            const { data: uData } = await supabase.from('units').select('*').in('id', unitIds);
+            units = uData || [];
         }
-
-        const [units] = await pool.query(`
-            SELECT u.*
-            FROM units u
-            JOIN owner_units ou ON ou.unit_id = u.id
-            WHERE ou.owner_id = ?
-        `, [ownerId]);
 
         res.json({ owner, units });
     } catch (err) {
-        console.error(err);
-        res.status(500).json({ message: "Server error" });
+        console.error("GET OWNER DETAILS ERROR:", err);
+        res.status(500).json({ message: "Server error", error: err.message });
     }
 };
 
-/* =========================
-   GET ALL OWNERS
-========================= */
-/* =========================
-   GET ALL OWNERS
-========================= */
 exports.getOwners = async (req, res) => {
     try {
-        const { search, location } = req.query; // Added location
-        let query = `
-            SELECT 
-                o.id,
-                o.name,
-                o.email,
-                o.phone,
-                o.gst_number,
-                o.total_owned_area,
-                o.kyc_status,
-                o.created_at,
-                (SELECT document_path FROM owner_documents WHERE owner_id = o.id ORDER BY uploaded_at DESC LIMIT 1) as document_path
-            FROM owners o
-        `;
+        const { search, location } = req.query;
 
-        const params = [];
-        const conditions = [];
-
-        if (search) {
-            conditions.push("(o.name LIKE ? OR o.email LIKE ? OR o.phone LIKE ?)");
-            params.push(`%${search}%`, `%${search}%`, `%${search}%`);
-        }
+        let query = supabase.from('owners').select(`
+            id, name, email, phone, gst_number, total_owned_area, kyc_status, created_at, address,
+            owner_documents(document_path)
+        `).order('created_at', { ascending: false });
 
         if (location && location !== 'All') {
-            conditions.push("o.address LIKE ?"); // Assuming location filtering is based on address city/area
-            params.push(`%${location}%`);
+            query = query.ilike('address', `%${location}%`);
+        }
+        if (search) {
+            query = query.or(`name.ilike.%${search}%,email.ilike.%${search}%,phone.ilike.%${search}%`);
         }
 
-        if (conditions.length > 0) {
-            query += " WHERE " + conditions.join(" AND ");
-        }
+        const { data: rows, error } = await query;
+        if (error) throw error;
 
-        query += ` ORDER BY o.created_at DESC`;
+        const formattedRows = rows.map(r => {
+            const docPaths = Array.isArray(r.owner_documents) ? r.owner_documents : [];
+            const latestDoc = docPaths.length > 0 ? docPaths[docPaths.length - 1].document_path : null;
+            return {
+                ...r,
+                document_path: latestDoc
+            };
+        });
 
-        const [rows] = await pool.query(query, params);
-
-        res.json(rows);
+        res.json(formattedRows);
     } catch (err) {
         console.error("GET OWNERS ERROR:", err);
-        res.status(500).json({
-            message: "Failed to fetch owners",
-            error: err.message
-        });
+        res.status(500).json({ message: "Failed to fetch owners", error: err.message });
     }
 };
 
-/* =========================
-   GET OWNER LOCATIONS
-========================= */
 exports.getOwnerLocations = async (req, res) => {
     try {
-        // Extract distinct cities/locations from addresses
-        // This is a simple implementation; ideally address would be structured or we'd have a separate location column
-        const [rows] = await pool.query("SELECT DISTINCT address FROM owners WHERE address IS NOT NULL AND address != ''");
-
-        // Simple heuristic to get "London" from "123 St, London, UK" if needed, 
-        // but for now let's just return unique address strings or you might want to extract city.
-        // Given the prompt "location bar should work... as dropdown", we'll just return full addresses or cities if possible.
-        // Let's assume the user wants unique addresses for now as "Locations".
-        const locations = rows.map(r => r.address);
+        const { data, error } = await supabase.from('owners').select('address').not('address', 'is', null);
+        if (error) throw error;
+        const locations = [...new Set(data.map(d => d.address).filter(a => a.trim() !== ''))].sort();
         res.json(locations);
     } catch (err) {
         console.error("GET OWNER LOCATIONS ERROR:", err);
@@ -102,219 +69,95 @@ exports.getOwnerLocations = async (req, res) => {
     }
 };
 
-/* =========================
-   EXPORT OWNERS REPORT
-========================= */
 exports.exportOwners = async (req, res) => {
     try {
-        const [rows] = await pool.query(`
-            SELECT 
-                id,
-                name,
-                email,
-                phone,
-                representative_name,
-                gst_number,
-                total_owned_area,
-                address,
-                kyc_status,
-                created_at
-            FROM owners
-            ORDER BY created_at DESC
-        `);
+        const { data: rows, error } = await supabase.from('owners').select(`
+            id, name, email, phone, representative_name, gst_number, total_owned_area, address, kyc_status, created_at
+        `).order('created_at', { ascending: false });
 
-        console.log("Exporting owners, found:", rows.length);
+        if (error) throw error;
 
-        // Manual CSV Generation
-        const fields = [
-            'id', 'name', 'email', 'phone',
-            'representative_name', 'gst_number', 'total_owned_area',
-            'address', 'kyc_status', 'created_at'
-        ];
-        const csvRows = [];
+        const fields = ['id', 'name', 'email', 'phone', 'representative_name', 'gst_number', 'total_owned_area', 'address', 'kyc_status', 'created_at'];
+        const csvRows = [fields.join(',')];
 
-        // Header
-        csvRows.push(fields.join(','));
-
-        // Data
         for (const row of rows) {
             const values = fields.map(field => {
                 const val = row[field];
-                // Escape quotes and wrap in quotes if necessary
                 if (val === null || val === undefined) return '';
-                // Handle date formatting if needed, but string is fine
                 const str = String(val).replace(/"/g, '""');
                 return `"${str}"`;
             });
             csvRows.push(values.join(','));
         }
 
-        const csv = csvRows.join('\n');
-
         res.header('Content-Type', 'text/csv');
         res.attachment('kyc_report.csv');
-        return res.send(csv);
-
+        return res.send(csvRows.join('\n'));
     } catch (err) {
         console.error("EXPORT OWNERS ERROR:", err);
         res.status(500).json({ message: "Failed to export owners" });
     }
 };
 
-/* =========================
-   GET OWNER BY ID  ✅ (FIXED)
-========================= */
-exports.getOwnerById = async (req, res) => {
-    const ownerId = req.params.id;
+exports.getOwnerById = exports.getOwnerDetails; // Alias already fixed
 
-    try {
-        const [[owner]] = await pool.query(
-            "SELECT * FROM owners WHERE id = ?",
-            [ownerId]
-        );
-
-        if (!owner) {
-            return res.status(404).json({ message: "Owner not found" });
-        }
-
-        const [units] = await pool.query(`
-            SELECT u.*
-            FROM units u
-            JOIN owner_units ou ON ou.unit_id = u.id
-            WHERE ou.owner_id = ?
-        `, [ownerId]);
-
-        res.json({ owner, units });
-    } catch (err) {
-        console.error(err);
-        res.status(500).json({ message: "Server error" });
-    }
-};
-
-/* =========================
-   CREATE OWNER (UPDATED)
-========================= */
 exports.createOwner = async (req, res) => {
-    const {
-        name,
-        email,
-        phone,
-        alternative_contact,
-        representative_name,
-        representative_phone,
-        representative_email,
-        address,
-        unit_ids
-    } = req.body;
-
-    const conn = await pool.getConnection();
-
     try {
-        await conn.beginTransaction();
+        const {
+            name, email, phone, alternative_contact, representative_name,
+            representative_phone, representative_email, address, unit_ids
+        } = req.body;
 
         let totalOwnedArea = 0;
-
-        // 1️⃣ Calculate Area if units are provided
         if (unit_ids && unit_ids.length > 0) {
-            const [units] = await conn.query(
-                "SELECT id, chargeable_area FROM units WHERE id IN (?)",
-                [unit_ids]
-            );
-            if (units.length > 0) {
-                totalOwnedArea = units.reduce(
-                    (sum, u) => sum + Number(u.chargeable_area),
-                    0
-                );
+            const { data: units } = await supabase.from('units').select('chargeable_area').in('id', unit_ids);
+            if (units) {
+                totalOwnedArea = units.reduce((sum, u) => sum + Number(u.chargeable_area || 0), 0);
             }
         }
 
-        // 2️⃣ Insert owner
-        const [ownerResult] = await conn.query(
-            `INSERT INTO owners
-            (name, email, phone, alternative_contact,
-             representative_name, representative_phone, representative_email, address,
-             total_owned_area, gst_number, kyc_status)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-            [
-                name,
-                email,
-                phone,
-                alternative_contact || null,
-                representative_name || null,
-                representative_phone || null,
-                representative_email || null,
-                address || null,
-                totalOwnedArea,
-                null,
-                "pending"
-            ]
-        );
+        const { data: owner, error: oError } = await supabase.from('owners').insert({
+            name, email, phone, alternative_contact, representative_name,
+            representative_phone, representative_email, address, total_owned_area: totalOwnedArea,
+            kyc_status: "pending"
+        }).select('id').single();
 
-        const ownerId = ownerResult.insertId;
+        if (oError) throw oError;
+        const ownerId = owner.id;
 
-        // 3️⃣ Owner-unit mapping (only if units provided)
         if (unit_ids && unit_ids.length > 0) {
-            const ownerUnits = unit_ids.map(unitId => [ownerId, unitId]);
-            await conn.query(
-                "INSERT INTO owner_units (owner_id, unit_id) VALUES ?",
-                [ownerUnits]
-            );
-
-            // 4️⃣ Mark units occupied
-            await conn.query(
-                "UPDATE units SET status='occupied' WHERE id IN (?)",
-                [unit_ids]
-            );
+            const ownerUnits = unit_ids.map(u => ({ owner_id: ownerId, unit_id: u }));
+            await supabase.from('owner_units').insert(ownerUnits);
+            await supabase.from('units').update({ status: 'occupied' }).in('id', unit_ids);
         }
 
-        await conn.commit();
         res.json({ message: "Owner created successfully" });
-
     } catch (err) {
-        await conn.rollback();
         console.error("CREATE OWNER ERROR:", err);
-        console.error("SQL Message:", err.sqlMessage);
         res.status(500).json({ message: "Failed to add owner: " + err.message });
-    } finally {
-        conn.release();
     }
 };
 
-/* =========================
-   UPDATE OWNER (UPDATED)
-========================= */
 exports.updateOwner = async (req, res) => {
-    const ownerId = req.params.id;
-    const updates = req.body;
-
-    // Allowed fields to prevent SQL injection or unwanted updates (e.g. id)
-    const allowedFields = [
-        'name', 'email', 'phone', 'representative_name',
-        'representative_phone', 'representative_email',
-        'address', 'gst_number', 'kyc_status'
-    ];
-
     try {
-        const fieldsToUpdate = [];
-        const values = [];
-
+        const ownerId = req.params.id;
+        const updates = req.body;
+        
+        const allowedFields = ['name', 'email', 'phone', 'representative_name', 'representative_phone', 'representative_email', 'address', 'gst_number', 'kyc_status'];
+        const updateData = {};
+        
         for (const [key, value] of Object.entries(updates)) {
             if (allowedFields.includes(key) && value !== undefined) {
-                fieldsToUpdate.push(`${key} = ?`);
-                values.push(value);
+                updateData[key] = value;
             }
         }
 
-        if (fieldsToUpdate.length === 0) {
+        if (Object.keys(updateData).length === 0) {
             return res.status(400).json({ message: "No valid fields to update" });
         }
 
-        values.push(ownerId);
-
-        await pool.query(
-            `UPDATE owners SET ${fieldsToUpdate.join(', ')} WHERE id = ?`,
-            values
-        );
+        const { error } = await supabase.from('owners').update(updateData).eq('id', ownerId);
+        if (error) throw error;
 
         res.json({ message: "Owner updated successfully" });
     } catch (err) {
@@ -323,86 +166,42 @@ exports.updateOwner = async (req, res) => {
     }
 };
 
-/* =========================
-   DELETE OWNER
-========================= */
 exports.deleteOwner = async (req, res) => {
-    const ownerId = req.params.id;
-    const conn = await pool.getConnection();
-
     try {
-        await conn.beginTransaction();
-
-        // 1️⃣ Get units linked to owner
-        const [rows] = await conn.query(
-            "SELECT unit_id FROM owner_units WHERE owner_id = ?",
-            [ownerId]
-        );
-
-        const unitIds = rows.map(r => r.unit_id);
-
-        // 2️⃣ Mark units as vacant
-        if (unitIds.length > 0) {
-            await conn.query(
-                "UPDATE units SET status='vacant' WHERE id IN (?)",
-                [unitIds]
-            );
+        const ownerId = req.params.id;
+        
+        const { data: myUnits } = await supabase.from('owner_units').select('unit_id').eq('owner_id', ownerId);
+        if (myUnits && myUnits.length > 0) {
+            const unitIds = myUnits.map(u => u.unit_id);
+            await supabase.from('units').update({ status: 'vacant' }).in('id', unitIds);
         }
+        
+        // Supabase has ON DELETE CASCADE for owner_units and owner_documents and owner_messages!
+        // But for leases we might need to manually set owner_id to null if the table exists
+        // Wait, leases schema: party_owner_id INT REFERENCES parties(id) => Doesn't reference legacy `owners`
+        // But let's handle just in case 'owner_id' column exists
+        // (It doesn't in supabase_schema.sql, but we can bypass)
+        
+        const { error } = await supabase.from('owners').delete().eq('id', ownerId);
+        if (error) throw error;
 
-        // 2.5 Unlink owner from leases (prevent FK error)
-        await conn.query(
-            "UPDATE leases SET owner_id = NULL WHERE owner_id = ?",
-            [ownerId]
-        );
-
-        // 3️⃣ Delete owner_units mapping
-        await conn.query(
-            "DELETE FROM owner_units WHERE owner_id = ?",
-            [ownerId]
-        );
-
-        // 4️⃣ Delete owner
-        await conn.query(
-            "DELETE FROM owners WHERE id = ?",
-            [ownerId]
-        );
-
-        await conn.commit();
         res.json({ message: "Owner deleted successfully" });
-
     } catch (err) {
-        await conn.rollback();
         console.error("DELETE OWNER ERROR:", err);
         res.status(500).json({ message: err.message });
-    } finally {
-        conn.release();
     }
 };
 
-
-/* =========================
-   ADD UNITS TO OWNER
-========================= */
 exports.addUnitsToOwner = async (req, res) => {
-    const { unit_ids } = req.body;
-    const ownerId = req.params.id;
-
-    if (!unit_ids || unit_ids.length === 0) {
-        return res.status(400).json({ message: "No units selected" });
-    }
-
-    const values = unit_ids.map(u => [ownerId, u]);
-
     try {
-        await pool.query(
-            "INSERT INTO owner_units (owner_id, unit_id) VALUES ?",
-            [values]
-        );
+        const { unit_ids } = req.body;
+        const ownerId = req.params.id;
 
-        await pool.query(
-            "UPDATE units SET status='occupied' WHERE id IN (?)",
-            [unit_ids]
-        );
+        if (!unit_ids || unit_ids.length === 0) return res.status(400).json({ message: "No units selected" });
+
+        const ownerUnits = unit_ids.map(u => ({ owner_id: ownerId, unit_id: u }));
+        await supabase.from('owner_units').insert(ownerUnits);
+        await supabase.from('units').update({ status: 'occupied' }).in('id', unit_ids);
 
         res.json({ message: "Units added successfully" });
     } catch (err) {
@@ -410,67 +209,43 @@ exports.addUnitsToOwner = async (req, res) => {
     }
 };
 
-/* =========================
-   REMOVE UNIT FROM OWNER
-========================= */
 exports.removeUnitFromOwner = async (req, res) => {
-    const { id, unitId } = req.params;
-
     try {
-        await pool.query(
-            "DELETE FROM owner_units WHERE owner_id=? AND unit_id=?",
-            [id, unitId]
-        );
-
-        await pool.query(
-            "UPDATE units SET status='vacant' WHERE id=?",
-            [unitId]
-        );
-
+        const { id, unitId } = req.params;
+        await supabase.from('owner_units').delete().eq('owner_id', id).eq('unit_id', unitId);
+        await supabase.from('units').update({ status: 'vacant' }).eq('id', unitId);
         res.json({ message: "Unit removed successfully" });
     } catch (err) {
         res.status(500).json({ message: "Failed to remove unit" });
     }
 };
 
-/* =========================
-   GET KYC STATS
-========================= */
 exports.getKycStats = async (req, res) => {
     try {
-        const [total] = await pool.query(`SELECT COUNT(*) as count FROM owners`);
-        const [pending] = await pool.query(`SELECT COUNT(*) as count FROM owners WHERE kyc_status = 'pending' OR kyc_status IS NULL`);
-        const [verified] = await pool.query(`SELECT COUNT(*) as count FROM owners WHERE kyc_status = 'verified'`);
-        const [rejected] = await pool.query(`SELECT COUNT(*) as count FROM owners WHERE kyc_status = 'rejected'`);
+        const [{ count: total }, { count: pending }, { count: verified }, { count: rejected }] = await Promise.all([
+            supabase.from('owners').select('*', { count: 'exact', head: true }),
+            supabase.from('owners').select('*', { count: 'exact', head: true }).or('kyc_status.eq.pending,kyc_status.is.null'),
+            supabase.from('owners').select('*', { count: 'exact', head: true }).eq('kyc_status', 'verified'),
+            supabase.from('owners').select('*', { count: 'exact', head: true }).eq('kyc_status', 'rejected')
+        ]);
 
-        res.json({
-            total: total[0].count,
-            pending: pending[0].count,
-            verified: verified[0].count,
-            rejected: rejected[0].count
-        });
+        res.json({ total, pending, verified, rejected });
     } catch (err) {
         res.status(500).json({ message: "Failed to fetch KYC stats" });
     }
 };
 
-/* =========================
-   OWNER DOCUMENTS APIs
-========================= */
 exports.getOwnerDocuments = async (req, res) => {
     try {
-        const [rows] = await pool.query(
-            "SELECT * FROM owner_documents WHERE owner_id = ? ORDER BY uploaded_at DESC",
-            [req.params.id]
-        );
-        res.json(rows);
+        const { data, error } = await supabase.from('owner_documents').select('*').eq('owner_id', req.params.id).order('uploaded_at', { ascending: false });
+        if (error) throw error;
+        res.json(data);
     } catch (err) {
         res.status(500).json({ message: "Failed to get documents" });
     }
 };
 
 exports.uploadDocument = async (req, res) => {
-    // Assuming multer middleware handles file upload and puts it in req.file
     try {
         const ownerId = req.params.id;
         const { document_type } = req.body;
@@ -478,10 +253,10 @@ exports.uploadDocument = async (req, res) => {
 
         if (!filePath) return res.status(400).json({ message: "No file uploaded" });
 
-        await pool.query(
-            "INSERT INTO owner_documents (owner_id, document_type, document_path) VALUES (?, ?, ?)",
-            [ownerId, document_type || "General", filePath]
-        );
+        const { error } = await supabase.from('owner_documents').insert({
+            owner_id: ownerId, document_type: document_type || "General", document_path: filePath
+        });
+        if (error) throw error;
 
         res.json({ message: "Document uploaded successfully" });
     } catch (err) {
@@ -489,18 +264,15 @@ exports.uploadDocument = async (req, res) => {
     }
 };
 
-/* =========================
-   OWNER MESSAGES APIs
-========================= */
 exports.sendMessage = async (req, res) => {
     try {
         const ownerId = req.params.id;
         const { subject, message } = req.body;
 
-        await pool.query(
-            "INSERT INTO owner_messages (owner_id, subject, message) VALUES (?, ?, ?)",
-            [ownerId, subject || "No Subject", message]
-        );
+        const { error } = await supabase.from('owner_messages').insert({
+            owner_id: ownerId, subject: subject || "No Subject", message
+        });
+        if (error) throw error;
 
         res.json({ message: "Message sent successfully" });
     } catch (err) {

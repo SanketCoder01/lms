@@ -68,8 +68,8 @@ const UnitDetails = () => {
 
                             <p className="subtitle">
                                 Project: {unit.project_name}
-                                &nbsp;&nbsp; UnitNo:{unit.unit_number}
-                                &nbsp;&nbsp; Floor:{unit.floor_number ?? "-"}
+                                &nbsp;&nbsp; Unit No: {unit.unit_number}
+                                &nbsp;&nbsp; Owner: {activeOwner ? (activeOwner.company_name || `${activeOwner.first_name} ${activeOwner.last_name}`) : 'Unassigned'}
                             </p>
                         </div>
 

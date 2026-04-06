@@ -112,7 +112,7 @@ const ProjectDetails = () => {
                     <h3>Property Stats</h3>
                     <div className="stat-row">
                         <span>Total Floors:</span>
-                        <strong>{project.actual_total_floors || 0}</strong>
+                        <strong>{project.total_floors || project.actual_total_floors || 0}</strong>
                     </div>
                     <div className="stat-row">
                         <span>Total Units:</span>

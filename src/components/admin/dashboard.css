@@ -682,3 +682,132 @@ table .action-btn.delete:hover,
 .action-btn.delete:hover {
     background-color: #dc2626 !important;
 }
+
+/* ═══════════════════════════════════════
+   COMPREHENSIVE MOBILE-FIRST RESPONSIVE
+   Applies to all modules (sidebar = overlay on mobile)
+═══════════════════════════════════════ */
+
+@media (max-width: 1024px) {
+    .main-content,
+    .role-content,
+    .lease-content,
+    .owners-content,
+    .units-content,
+    .tenants-content,
+    .parties-content,
+    .activity-content,
+    .settings-content,
+    .management-content {
+        margin-left: 0 !important;
+        width: 100% !important;
+        padding-top: 72px !important;
+        padding-left: 24px !important;
+        padding-right: 24px !important;
+        box-sizing: border-box !important;
+    }
+}
+
+@media (max-width: 768px) {
+    .main-content,
+    .role-content,
+    .lease-content,
+    .owners-content,
+    .units-content,
+    .tenants-content,
+    .parties-content,
+    .activity-content,
+    .settings-content,
+    .management-content {
+        padding: 72px 16px 32px !important;
+    }
+
+    .dashboard-header, .page-header, .role-header {
+        flex-direction: column !important;
+        align-items: stretch !important;
+        gap: 12px !important;
+        margin-bottom: 20px !important;
+    }
+    .page-header .header-text h1,
+    .header-text h1 {
+        font-size: 1.3rem !important;
+    }
+    .search-bar-container { width: 100% !important; }
+    .search-bar { width: 100% !important; box-sizing: border-box !important; }
+    .header-actions {
+        width: 100% !important;
+        justify-content: space-between !important;
+        flex-wrap: wrap !important;
+        gap: 8px !important;
+    }
+    .primary-btn, .create-user-btn, .add-project-btn, .add-btn {
+        flex: 1 !important;
+        text-align: center !important;
+        min-width: 120px !important;
+    }
+    .stats-grid-top, .stats-grid-middle {
+        grid-template-columns: repeat(2, 1fr) !important;
+    }
+    .section-header {
+        flex-direction: column !important;
+        align-items: flex-start !important;
+        gap: 8px !important;
+    }
+    .chart-legend { flex-wrap: wrap !important; }
+    .table-responsive {
+        overflow-x: auto !important;
+        -webkit-overflow-scrolling: touch !important;
+    }
+    .table-responsive table, .projects-table {
+        min-width: 560px !important;
+    }
+    .form-row { grid-template-columns: 1fr !important; }
+    .action-icon-btn {
+        min-width: 36px !important;
+        min-height: 36px !important;
+        padding: 6px 10px !important;
+        font-size: 0.78rem !important;
+    }
+    .filters-bar {
+        flex-direction: column !important;
+        gap: 10px !important;
+    }
+    .search-wrapper {
+        min-width: 100% !important;
+        max-width: 100% !important;
+    }
+    .filter-actions {
+        width: 100% !important;
+        overflow-x: auto !important;
+    }
+}
+
+@media (max-width: 480px) {
+    .main-content,
+    .role-content,
+    .lease-content {
+        padding: 68px 12px 28px !important;
+    }
+
+    .stats-grid-top, .stats-grid-middle, .stats-grid-3,
+    .stats-grid-5, .stats-grid {
+        grid-template-columns: 1fr !important;
+    }
+    .stat-card { padding: 14px 12px !important; }
+    .stat-value { font-size: 1.3rem !important; }
+    .list-card { padding: 14px !important; }
+    .content-card { padding: 14px !important; border-radius: 10px !important; }
+
+    .modal-overlay { align-items: flex-end !important; padding: 0 !important; }
+    .modal-content, .premium-modal {
+        width: 100% !important;
+        max-width: 100% !important;
+        border-radius: 16px 16px 0 0 !important;
+        max-height: 90dvh !important;
+        overflow-y: auto !important;
+    }
+    .create-user-btn, .add-project-btn, .add-btn, .primary-btn {
+        width: 100% !important;
+    }
+    .page-header .header-text h1 { font-size: 1.15rem !important; }
+}

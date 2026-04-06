@@ -1,8 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import Sidebar from './Sidebar';
 import './EditUnit.css';
-import { unitAPI, getProjectById, filterAPI } from '../../services/api';
+import { unitAPI, getProjectById, filterAPI, structureAPI } from '../../services/api';
 
 const EditUnit = () => {
     const { id } = useParams();
@@ -24,6 +24,12 @@ const EditUnit = () => {
 
     const [message, setMessage] = useState('');
     const [error, setError] = useState('');
+    const [isSubmitting, setIsSubmitting] = useState(false);
+
+    // Image states
+    const [images, setImages] = useState([]);
+    const [existingImages, setExistingImages] = useState([]);
+    const fileInputRef = useRef(null);
 
     const [project, setProject] = useState(null);
     const [rentPerSqft, setRentPerSqft] = useState('');
@@ -40,6 +46,8 @@ const EditUnit = () => {
     ]);
     const [unitCategories, setUnitCategories] = useState([]);
     const [unitZoningTypes, setUnitZoningTypes] = useState([]);
+    const [blocks, setBlocks] = useState([]);
+    const [floors, setFloors] = useState([]);
 
     useEffect(() => {
         const fetchUnitAndProject = async () => {
@@ -61,6 +69,12 @@ const EditUnit = () => {
                     unit_zoning_type: data.unit_zoning_type || '',
                     project_id: data.project_id
                 });
+                
+                if (data.unit_images && data.unit_images.length > 0) {
+                    setExistingImages(data.unit_images.map(img => img.image_path));
+                } else if (data.unit_image) {
+                    setExistingImages([{ image_path: data.unit_image }]);
+                }
 
                 // Calculate initial rent per sqft if rent exists
                 if (data.projected_rent > 0 && data.chargeable_area > 0) { // Default to super area for initial display if needed, or just let it recalculate
@@ -103,6 +117,21 @@ const EditUnit = () => {
     }, [id]);
 
     useEffect(() => {
+        if (!formData.project_id) return;
+        const loadStructure = async () => {
+            try {
+                const bRes = await structureAPI.getBlocks(formData.project_id);
+                setBlocks((bRes.data?.data || []).map(b => b.block_name));
+                const fRes = await structureAPI.getFloors({ project_id: formData.project_id });
+                setFloors((fRes.data?.data || []).map(f => f.floor_name));
+            } catch (err) {
+                console.error("Failed to load unit structure", err);
+            }
+        };
+        loadStructure();
+    }, [formData.project_id]);
+
+    useEffect(() => {
         if (!project || !rentPerSqft) return;
 
         const calcType = project.calculation_type || 'Chargeable Area';
@@ -134,13 +163,33 @@ const EditUnit = () => {
         });
     };
 
+    const handleImageChange = (e) => {
+        if (e.target.files) {
+            setImages([...images, ...Array.from(e.target.files)]);
+        }
+    };
+
+    const handleUploadClick = () => {
+        fileInputRef.current.click();
+    };
+
     const handleUpdate = async (e) => {
         e.preventDefault();
         setMessage('');
         setError('');
+        setIsSubmitting(true);
 
         try {
-            await unitAPI.updateUnit(id, formData);
+            const data = new FormData();
+            Object.keys(formData).forEach(key => {
+                data.append(key, formData[key] === null ? '' : formData[key]);
+            });
+
+            images.forEach(img => {
+                data.append("images", img);
+            });
+
+            await unitAPI.updateUnit(id, data);
 
             setMessage("✅ Unit updated successfully");
 
@@ -151,6 +200,8 @@ const EditUnit = () => {
         } catch (err) {
             console.error(err);
             setError("❌ Failed to update unit");
+        } finally {
+            setIsSubmitting(false);
         }
     };
 
@@ -205,9 +256,7 @@ const EditUnit = () => {
                                                 onChange={handleChange}
                                             >
                                                 <option value="vacant">Vacant</option>
-                                                <option value="occupied">Occupied</option>
-                                                <option value="reserved">Reserved</option>
-                                                <option value="under_maintenance">Under Maintenance</option>
+                                                <option value="occupied">Leased</option>
                                             </select>
                                         </div>
                                     </div>
@@ -215,21 +264,43 @@ const EditUnit = () => {
                                 <div className="form-row">
                                     <div className="form-group">
                                         <label>Block / Tower</label>
-                                        <input
-                                            type="text"
-                                            name="block_tower"
-                                            value={formData.block_tower}
-                                            onChange={handleChange}
-                                        />
+                                        {blocks.length > 0 ? (
+                                            <div className="select-wrapper">
+                                                <select name="block_tower" value={formData.block_tower} onChange={handleChange}>
+                                                    <option value="">Select Block/Tower</option>
+                                                    {blocks.map(b => (
+                                                        <option key={b} value={b}>{b}</option>
+                                                    ))}
+                                                </select>
+                                            </div>
+                                        ) : (
+                                            <input
+                                                type="text"
+                                                name="block_tower"
+                                                value={formData.block_tower}
+                                                onChange={handleChange}
+                                            />
+                                        )}
                                     </div>
                                     <div className="form-group">
                                         <label>Floor Number</label>
-                                        <input
-                                            type="text"
-                                            name="floor_number"
-                                            value={formData.floor_number}
-                                            onChange={handleChange}
-                                        />
+                                        {floors.length > 0 ? (
+                                            <div className="select-wrapper">
+                                                <select name="floor_number" value={formData.floor_number} onChange={handleChange}>
+                                                    <option value="">Select Floor</option>
+                                                    {floors.map(f => (
+                                                        <option key={f} value={f}>{f}</option>
+                                                    ))}
+                                                </select>
+                                            </div>
+                                        ) : (
+                                            <input
+                                                type="text"
+                                                name="floor_number"
+                                                value={formData.floor_number}
+                                                onChange={handleChange}
+                                            />
+                                        )}
                                     </div>
                                 </div>
                                 <div className="form-group">
@@ -317,7 +388,7 @@ const EditUnit = () => {
                                         </select>
                                     </div>
                                 </div>
-                                <div className="form-group">
+                                <div className="form-row">
                                     <div className="form-group">
                                         <label>Premium on Lease</label>
                                         <select name="plc" value={formData.plc} onChange={handleChange}>
@@ -328,12 +399,50 @@ const EditUnit = () => {
                                         </select>
                                     </div>
                                 </div>
+                                <div className="form-group">
+                                    <label>Unit Images</label>
+                                    <div className="upload-box dashed" onClick={handleUploadClick} style={{ border: '2px dashed #cbd5e1', padding: '20px', textAlign: 'center', borderRadius: '8px', cursor: 'pointer', marginBottom: '10px' }}>
+                                        <input
+                                            ref={fileInputRef}
+                                            type="file"
+                                            multiple
+                                            accept="image/*"
+                                            onChange={handleImageChange}
+                                            style={{ display: 'none' }}
+                                        />
+                                        <div className="upload-content">
+                                            <span>Upload a file or drag and drop</span>
+                                            <div className="upload-hint" style={{ fontSize: '12px', color: '#64748b' }}>PNG, JPG up to 10MB</div>
+                                        </div>
+                                    </div>
+                                    
+                                    {(images.length > 0 || existingImages.length > 0) && (
+                                        <div style={{ marginTop: 15, display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+                                            {existingImages.map((imgUrl, index) => (
+                                                <div key={`existing-${index}`} style={{ position: 'relative', width: '80px', height: '80px', borderRadius: '4px', overflow: 'hidden', border: '1px solid #e2e8f0' }}>
+                                                    <img src={imgUrl.image_path || imgUrl} alt={`preview-existing-${index}`} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                                                    <div style={{ position: 'absolute', bottom: '0', width: '100%', background: 'rgba(0,0,0,0.6)', color: 'white', fontSize: '10px', textAlign: 'center', padding: '2px 0' }}>Saved</div>
+                                                </div>
+                                            ))}
+                                            {images.map((img, index) => (
+                                                <div key={`new-${index}`} style={{ position: 'relative', width: '80px', height: '80px', borderRadius: '4px', overflow: 'hidden', border: '1px solid #e2e8f0' }}>
+                                                    <img src={URL.createObjectURL(img)} alt={`preview-${index}`} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                                                    <button type="button" onClick={() => {
+                                                        const newImages = [...images];
+                                                        newImages.splice(index, 1);
+                                                        setImages(newImages);
+                                                    }} style={{ position: 'absolute', top: '2px', right: '2px', background: 'rgba(0,0,0,0.5)', color: 'white', border: 'none', borderRadius: '50%', width: '20px', height: '20px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '12px' }}>&times;</button>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
                             </section>
 
                             <div className="form-footer">
                                 <Link to="/admin/units" className="cancel-btn">Cancel</Link>
-                                <button type="submit" className="update-btn">
-                                    Update Unit
+                                <button type="submit" className="update-btn" disabled={isSubmitting}>
+                                    {isSubmitting ? 'Updating...' : 'Update Unit'}
                                 </button>
                             </div>
 

@@ -1,4 +1,35 @@
-const pool = require('../config/db');
+const supabase = require('../config/db');
+
+// Assign parties as owners to a unit (Joint Owners)
+exports.getAllOwnerships = async (req, res) => {
+    try {
+        const { search } = req.query;
+        let query = supabase.from('unit_ownerships')
+            .select('*, units(unit_number, projects(project_name)), parties(first_name, last_name, company_name)')
+            .eq('ownership_status', 'Active')
+            .order('created_at', { ascending: false });
+        
+        const { data, error } = await query;
+        if (error) throw error;
+        
+        let filtered = data || [];
+        if (search) {
+            const s = search.toLowerCase();
+            filtered = filtered.filter(row => 
+                (row.parties?.first_name?.toLowerCase() || '').includes(s) ||
+                (row.parties?.last_name?.toLowerCase() || '').includes(s) ||
+                (row.parties?.company_name?.toLowerCase() || '').includes(s) ||
+                (row.units?.unit_number?.toLowerCase() || '').includes(s) ||
+                (row.units?.projects?.project_name?.toLowerCase() || '').includes(s)
+            );
+        }
+
+        res.json(filtered);
+    } catch (err) {
+        console.error("getAllOwnerships Error:", err);
+        res.status(500).json({ message: 'Server Error', error: err.message });
+    }
+};
 
 // Assign parties as owners to a unit (Joint Owners)
 exports.assignOwner = async (req, res) => {
@@ -13,41 +44,35 @@ exports.assignOwner = async (req, res) => {
         return res.status(400).json({ message: 'Total share percentage must be exactly 100%.' });
     }
 
-    const conn = await pool.getConnection();
     try {
-        await conn.beginTransaction();
+        const assignDate = start_date || new Date().toISOString();
 
-        // Optional: Ensure all existing active are removed or just check?
-        // Let's rely on removeOwner to remove previous owners.
-        
         // Check if any of these parties is already an active owner
-        for (const owner of owners) {
-            const [existing] = await conn.query(
-                'SELECT * FROM unit_ownerships WHERE unit_id = ? AND party_id = ? AND ownership_status = "Active"',
-                [unit_id, owner.party_id]
-            );
-            if (existing.length > 0) {
-                await conn.rollback();
-                return res.status(400).json({ message: 'One or more parties is already an active owner.' });
-            }
+        const partyIds = owners.map(o => o.party_id);
+        const { data: existing, error: eErr } = await supabase.from('unit_ownerships')
+            .select('party_id').eq('unit_id', unit_id).eq('ownership_status', 'Active').in('party_id', partyIds);
+            
+        if (eErr) throw eErr;
+        
+        if (existing && existing.length > 0) {
+            return res.status(400).json({ message: 'One or more parties is already an active owner.' });
         }
 
-        const assignDate = start_date || new Date();
-        for (const owner of owners) {
-            await conn.query(
-                'INSERT INTO unit_ownerships (unit_id, party_id, start_date, ownership_status, share_percentage) VALUES (?, ?, ?, "Active", ?)',
-                [unit_id, owner.party_id, assignDate, owner.share_percentage]
-            );
-        }
+        const inserts = owners.map(o => ({
+            unit_id,
+            party_id: o.party_id,
+            start_date: assignDate,
+            ownership_status: 'Active',
+            share_percentage: o.share_percentage
+        }));
 
-        await conn.commit();
+        const { error: iErr } = await supabase.from('unit_ownerships').insert(inserts);
+        if (iErr) throw iErr;
+
         res.status(201).json({ message: 'Owners assigned successfully' });
     } catch (err) {
-        await conn.rollback();
-        console.error(err);
-        res.status(500).json({ message: 'Server Error' });
-    } finally {
-        conn.release();
+        console.error("assignOwner Error:", err);
+        res.status(500).json({ message: 'Server Error', error: err.message });
     }
 };
 
@@ -56,61 +81,153 @@ exports.removeOwner = async (req, res) => {
     const { unit_id, party_id, end_date, status } = req.body; // status can be 'Inactive' or 'Sold'
 
     try {
-        await pool.query(
-            'UPDATE unit_ownerships SET ownership_status = ?, end_date = ? WHERE unit_id = ? AND party_id = ? AND ownership_status = "Active"',
-            [status || 'Inactive', end_date || new Date(), unit_id, party_id]
-        );
+        const endDate = end_date || new Date().toISOString();
+        const { error } = await supabase.from('unit_ownerships')
+            .update({ ownership_status: status || 'Inactive', end_date: endDate })
+            .eq('unit_id', unit_id)
+            .eq('party_id', party_id)
+            .eq('ownership_status', 'Active');
+
+        if (error) throw error;
 
         res.json({ message: 'Owner removed/updated successfully' });
     } catch (err) {
-        console.error(err);
-        res.status(500).json({ message: 'Server Error' });
+        console.error("removeOwner Error:", err);
+        res.status(500).json({ message: 'Server Error', error: err.message });
     }
 };
 
 // Get owners for a unit
 exports.getOwnersByUnit = async (req, res) => {
     try {
-        const [rows] = await pool.query(
-            `SELECT uo.*, p.first_name, p.last_name, p.company_name, p.type 
-             FROM unit_ownerships uo 
-             JOIN parties p ON uo.party_id = p.id 
-             WHERE uo.unit_id = ? ORDER BY uo.ownership_status ASC, uo.start_date DESC`,
-            [req.params.unitId]
-        );
-        res.json(rows);
+        const { data, error } = await supabase.from('unit_ownerships')
+            .select('*, parties(first_name, last_name, company_name, type)')
+            .eq('unit_id', req.params.unitId)
+            .order('ownership_status', { ascending: true })
+            .order('start_date', { ascending: false });
+
+        if (error) throw error;
+
+        const formatted = data.map(d => ({
+            ...d,
+            first_name: d.parties?.first_name,
+            last_name: d.parties?.last_name,
+            company_name: d.parties?.company_name,
+            type: d.parties?.type
+        }));
+
+        res.json(formatted);
     } catch (err) {
-        console.error(err);
-        res.status(500).json({ message: 'Server Error' });
+        console.error("getOwnersByUnit Error:", err);
+        res.status(500).json({ message: 'Server Error', error: err.message });
     }
 };
 
 // Get units owned by a party
 exports.getUnitsByParty = async (req, res) => {
     try {
-        const [rows] = await pool.query(
-            `SELECT uo.*, u.unit_number, pr.project_name 
-             FROM unit_ownerships uo 
-             JOIN units u ON uo.unit_id = u.id 
-             JOIN projects pr ON u.project_id = pr.id
-             WHERE uo.party_id = ?`,
-            [req.params.partyId]
-        );
-        res.json(rows);
+        const { data, error } = await supabase.from('unit_ownerships')
+            .select('*, units(unit_number, project_id, projects(project_name))')
+            .eq('party_id', req.params.partyId);
+
+        if (error) throw error;
+
+        const formatted = data.map(d => ({
+            ...d,
+            unit_number: d.units?.unit_number,
+            project_name: d.units?.projects?.project_name
+        }));
+
+        res.json(formatted);
     } catch (err) {
-        console.error(err);
-        res.status(500).json({ message: 'Server Error' });
+        console.error("getUnitsByParty Error:", err);
+        res.status(500).json({ message: 'Server Error', error: err.message });
     }
 };
 
-// Get all ownership document types
+// Upload an ownership document
+exports.uploadOwnershipDocument = async (req, res) => {
+    try {
+        const { unit_id, party_id, document_type_id, document_date } = req.body;
+        
+        if (!req.file || !req.file.buffer) {
+            return res.status(400).json({ message: 'No file uploaded' });
+        }
+
+        const fileExt = req.file.originalname.split('.').pop();
+        const fileName = `ownership/unit_${unit_id}_party_${party_id}_${Date.now()}.${fileExt}`;
+
+        // Upload to Supabase Storage
+        const { data: uploadData, error: uploadError } = await supabase.storage
+            .from('lms-storage')
+            .upload(fileName, req.file.buffer, {
+                contentType: req.file.mimetype,
+                upsert: true
+            });
+
+        if (uploadError) throw uploadError;
+
+        // Get Public URL
+        const { data: publicUrlData } = supabase.storage
+            .from('lms-storage')
+            .getPublicUrl(fileName);
+
+        const filePath = publicUrlData.publicUrl;
+
+        const { error } = await supabase.from('unit_ownership_documents').insert({
+            unit_id,
+            party_id,
+            document_type_id,
+            document_date: document_date || null,
+            file_path: filePath
+        });
+
+        if (error) throw error;
+
+        res.status(201).json({ message: 'Document uploaded successfully', file_path: filePath });
+    } catch (err) {
+        console.error("uploadOwnershipDocument Error:", err);
+        res.status(500).json({ message: 'Server Error', error: err.message });
+    }
+};
+
+// Get documents for an ownership association
+exports.getOwnershipDocuments = async (req, res) => {
+    try {
+        const { unitId, partyId } = req.params;
+        let query = supabase.from('unit_ownership_documents')
+            .select('*, ownership_document_types(name)')
+            .order('created_at', { ascending: false });
+
+        if (unitId) query = query.eq('unit_id', unitId);
+        if (partyId) query = query.eq('party_id', partyId);
+
+        const { data, error } = await query;
+        if (error) throw error;
+
+        const formatted = data.map(d => ({
+            ...d,
+            document_type_name: d.ownership_document_types?.name
+        }));
+
+        res.json(formatted);
+    } catch (err) {
+        console.error("getOwnershipDocuments Error:", err);
+        res.status(500).json({ message: 'Server Error', error: err.message });
+    }
+};
+
+// Get all document types
 exports.getDocumentTypes = async (req, res) => {
     try {
-        const [rows] = await pool.query('SELECT * FROM ownership_document_types WHERE is_active = TRUE');
-        res.json(rows);
+        const { data, error } = await supabase.from('ownership_document_types')
+            .select('*').eq('is_active', true).order('name', { ascending: true });
+            
+        if (error) throw error;
+        res.json(data);
     } catch (err) {
-        console.error(err);
-        res.status(500).json({ message: 'Server Error' });
+        console.error("getDocumentTypes Error:", err);
+        res.status(500).json({ message: 'Server Error', error: err.message });
     }
 };
 
@@ -118,60 +235,14 @@ exports.getDocumentTypes = async (req, res) => {
 exports.addDocumentType = async (req, res) => {
     try {
         const { name } = req.body;
-        await pool.query('INSERT INTO ownership_document_types (name) VALUES (?)', [name]);
-        res.status(201).json({ message: 'Document type added successfully' });
+        if (!name) return res.status(400).json({ message: 'Document type name is required' });
+
+        const { data, error } = await supabase.from('ownership_document_types').insert({ name }).select('*').single();
+        if (error) throw error;
+
+        res.status(201).json(data);
     } catch (err) {
-        if (err.code === 'ER_DUP_ENTRY') {
-            return res.status(400).json({ message: 'Document type already exists' });
-        }
-        console.error(err);
-        res.status(500).json({ message: 'Server Error' });
-    }
-};
-
-// Upload an ownership document
-exports.uploadOwnershipDocument = async (req, res) => {
-    try {
-        console.log("Upload Request Body:", req.body);
-        console.log("Upload Request File:", req.file);
-
-        const { unit_id, party_id, document_type_id, document_date } = req.body || {};
-        const file_path = req.file ? `/uploads/${req.file.filename}` : null;
-
-        if (!file_path) {
-            console.error("Upload Error: No file found in request");
-            return res.status(400).json({ message: 'No file uploaded' });
-        }
-
-        await pool.query(
-            `INSERT INTO unit_ownership_documents 
-            (unit_id, party_id, document_type_id, document_date, file_path) 
-            VALUES (?, ?, ?, ?, ?)`,
-            [unit_id, party_id, document_type_id, document_date, file_path]
-        );
-
-        res.status(201).json({ message: 'Document uploaded successfully', file_path });
-    } catch (err) {
-        console.error("Upload Controller Error:", err);
-        res.status(500).json({ message: 'Server Error: ' + err.message });
-    }
-};
-
-// Get documents for a specific ownership (unit + party)
-exports.getOwnershipDocuments = async (req, res) => {
-    try {
-        const { unitId, partyId } = req.params;
-        const [rows] = await pool.query(
-            `SELECT uod.*, odt.name as document_type_name 
-             FROM unit_ownership_documents uod
-             LEFT JOIN ownership_document_types odt ON uod.document_type_id = odt.id
-             WHERE uod.unit_id = ? AND uod.party_id = ?
-             ORDER BY uod.document_date ASC`,
-            [unitId, partyId]
-        );
-        res.json(rows);
-    } catch (err) {
-        console.error(err);
-        res.status(500).json({ message: 'Server Error' });
+        console.error("addDocumentType Error:", err);
+        res.status(500).json({ message: 'Server Error', error: err.message });
     }
 };

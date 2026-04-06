@@ -47,16 +47,8 @@ app.use((req, res, next) => {
 app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 
 /* =========================
-   DATABASE CHECK
+   DATABASE CHECK DEPRECATED (See config/db.js)
 ========================= */
-pool.getConnection()
-  .then((connection) => {
-    console.log("✅ Database connected successfully!");
-    connection.release();
-  })
-  .catch((err) => {
-    console.error("❌ Database connection failed:", err.message);
-  });
 
 /* =========================
    DEVTOOLS CHECK (Silence 404)
@@ -94,6 +86,7 @@ app.use("/api/dashboard", dashboardRoutes);
 app.use("/api/parties", partyRoutes);
 app.use("/api/ownerships", ownershipRoutes);
 app.use("/api/filters", filterOptionsRoutes);
+app.use("/api/locations", require("./routes/locationRoutes"));
 // Ownership routes registered - Restart Trigger 7 (Path Fix)
 
 /* =========================

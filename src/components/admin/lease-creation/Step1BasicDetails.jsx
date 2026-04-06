@@ -118,6 +118,11 @@ const Step1BasicDetails = ({
                             </option>
                         ))}
                     </select>
+                    {units.length === 0 && formData.project_id && (
+                        <small className="error-text" style={{ color: '#ef4444', marginTop: '4px', display: 'block' }}>
+                            No units available. Please go to Projects &gt; Add Unit to create units first.
+                        </small>
+                    )}
                 </div>
             </div>
 

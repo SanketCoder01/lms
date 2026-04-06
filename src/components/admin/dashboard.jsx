@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Sidebar from './Sidebar';
 import { getDashboardStats, getProjects, tenantAPI, unitAPI } from '../../services/api';
+import { supabase } from '../../services/supabase';
 import './dashboard.css';
 
 const initialStats = {
@@ -37,6 +38,23 @@ const initialStats = {
     }
 };
 
+// Utility: format date as "Saturday, 5 April 2026"
+const formatDate = (date) => {
+    const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+    const months = ['January', 'February', 'March', 'April', 'May', 'June',
+        'July', 'August', 'September', 'October', 'November', 'December'];
+    return `${days[date.getDay()]}, ${date.getDate()} ${months[date.getMonth()]} ${date.getFullYear()}`;
+};
+
+// Utility: format time as "09:26 AM"
+const formatTime = (date) => {
+    let h = date.getHours();
+    const m = String(date.getMinutes()).padStart(2, '0');
+    const ampm = h >= 12 ? 'PM' : 'AM';
+    h = h % 12 || 12;
+    return `${h}:${m} ${ampm}`;
+};
+
 const Dashboard = () => {
     const navigate = useNavigate();
     const [stats, setStats] = useState(initialStats);
@@ -44,11 +62,20 @@ const Dashboard = () => {
     const [projectsList, setProjectsList] = useState([]);
     const [selectedProject, setSelectedProject] = useState('All');
 
+    // Live Clock State — auto-picks current system date/time
+    const [now, setNow] = useState(new Date());
+
     // Search State
     const [searchTerm, setSearchTerm] = useState("");
     const [searchResults, setSearchResults] = useState([]);
     const [showResults, setShowResults] = useState(false);
     const [isSearching, setIsSearching] = useState(false);
+
+    // Tick every 60 seconds to keep date/time current
+    useEffect(() => {
+        const timer = setInterval(() => setNow(new Date()), 60000);
+        return () => clearInterval(timer);
+    }, []);
 
     useEffect(() => {
         const delayDebounceFn = setTimeout(async () => {
@@ -99,23 +126,68 @@ const Dashboard = () => {
         fetchProjects();
     }, []);
 
-    useEffect(() => {
-        const fetchStats = async () => {
-            setLoading(true);
-            try {
-                const params = selectedProject !== 'All' ? { project_id: selectedProject } : undefined;
-                const response = await getDashboardStats(params);
-                if (response.data) {
-                    setStats(response.data);
-                }
-            } catch (error) {
-                console.error("Error fetching dashboard stats:", error);
-                // Keep initialStats if error occurs
-            } finally {
-                setLoading(false);
+    const fetchStats = async () => {
+        setLoading(true);
+        try {
+            const params = selectedProject !== 'All' ? { project_id: selectedProject } : undefined;
+            const response = await getDashboardStats(params);
+            if (response.data) {
+                setStats(response.data);
             }
-        };
+        } catch (error) {
+            console.error("Error fetching dashboard stats:", error);
+            // Keep initialStats if error occurs
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    useEffect(() => {
         fetchStats();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [selectedProject]);
+
+    // Realtime Subscriptions
+    useEffect(() => {
+        const channels = supabase.channel('custom-all-channel')
+            .on(
+                'postgres_changes',
+                { event: '*', schema: 'public', table: 'projects' },
+                (payload) => {
+                    console.log('Realtime update (projects)', payload);
+                    fetchStats();
+                }
+            )
+            .on(
+                'postgres_changes',
+                { event: '*', schema: 'public', table: 'units' },
+                (payload) => {
+                    console.log('Realtime update (units)', payload);
+                    fetchStats();
+                }
+            )
+            .on(
+                'postgres_changes',
+                { event: '*', schema: 'public', table: 'leases' },
+                (payload) => {
+                    console.log('Realtime update (leases)', payload);
+                    fetchStats();
+                }
+            )
+            .on(
+                'postgres_changes',
+                { event: '*', schema: 'public', table: 'unit_ownerships' },
+                (payload) => {
+                    console.log('Realtime update (unit_ownerships)', payload);
+                    fetchStats();
+                }
+            )
+            .subscribe();
+
+        return () => {
+            supabase.removeChannel(channels);
+        };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [selectedProject]);
 
     // Helper Card Component
@@ -136,55 +208,97 @@ const Dashboard = () => {
 
             <main className="main-content">
                 {/* HEADER */}
-                <header className="dashboard-header">
-                    <div className="search-bar-container">
-                        <div className="search-bar">
-                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
-                            <input
-                                type="text"
-                                placeholder="Search properties, tenants, units..."
-                                value={searchTerm}
-                                onChange={(e) => setSearchTerm(e.target.value)}
-                                onFocus={() => searchTerm.length > 1 && setShowResults(true)}
-                                onBlur={() => setTimeout(() => setShowResults(false), 200)}
-                            />
+                <header className="dashboard-header" style={{ flexDirection: 'column', alignItems: 'stretch', gap: '16px' }}>
+                    {/* Top Row: Title + Live Date */}
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <div>
+                            <h2 style={{ margin: 0, fontSize: '1.4rem', fontWeight: '700', color: '#111827' }}>
+                                Admin Dashboard
+                            </h2>
+                            <p style={{ margin: '2px 0 0', fontSize: '0.85rem', color: '#6B7280' }}>
+                                Overview of your portfolio performance
+                            </p>
                         </div>
-                        {showResults && (
-                            <div className="search-results-dropdown">
-                                {isSearching ? (
-                                    <div className="no-results">Searching...</div>
-                                ) : searchResults.length > 0 ? (
-                                    searchResults.map((item, idx) => (
-                                        <div key={idx} className="search-result-item" onClick={() => handleSearchSelect(item.link)}>
-                                            <div className="search-result-info">
-                                                <span className="search-result-label">{item.label}</span>
-                                                <span className="search-result-type">{item.type}</span>
-                                            </div>
-                                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#9CA3AF" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>
-                                        </div>
-                                    ))
-                                ) : (
-                                    <div className="no-results">No results found for "{searchTerm}"</div>
-                                )}
+                        {/* Live Date Badge — automatically shows current system date */}
+                        <div style={{
+                            display: 'flex', alignItems: 'center', gap: '10px',
+                            background: '#EBF2FF', borderRadius: '12px',
+                            padding: '10px 18px', border: '1px solid #C7D9FF'
+                        }}>
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#2E66FF" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+                                <line x1="16" y1="2" x2="16" y2="6"></line>
+                                <line x1="8" y1="2" x2="8" y2="6"></line>
+                                <line x1="3" y1="10" x2="21" y2="10"></line>
+                            </svg>
+                            <div>
+                                <div style={{ fontSize: '0.75rem', color: '#2E66FF', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                                    Today
+                                </div>
+                                <div style={{ fontSize: '0.95rem', fontWeight: '700', color: '#1e40af', lineHeight: 1.2 }}>
+                                    {formatDate(now)}
+                                </div>
                             </div>
-                        )}
+                            <div style={{ borderLeft: '1px solid #C7D9FF', paddingLeft: '12px', marginLeft: '4px' }}>
+                                <div style={{ fontSize: '0.75rem', color: '#6B7280', textAlign: 'center' }}>Time</div>
+                                <div style={{ fontSize: '1rem', fontWeight: '700', color: '#111827' }}>
+                                    {formatTime(now)}
+                                </div>
+                            </div>
+                        </div>
                     </div>
 
-                    <div className="header-actions" style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
-                        <select 
-                            className="form-select" 
-                            style={{ minWidth: '220px', backgroundColor: '#f9fafb', border: '1px solid #e5e7eb', borderRadius: '6px', padding: '8px 12px', fontSize: '14px', color: '#374151' }}
-                            value={selectedProject}
-                            onChange={(e) => setSelectedProject(e.target.value)}
-                        >
-                            <option value="All">All Projects</option>
-                            {projectsList.map((p) => (
-                                <option key={p.id} value={p.id}>{p.project_name}</option>
-                            ))}
-                        </select>
-                        <button className="icon-btn" onClick={() => navigate('/admin/notifications')} title="Notifications">
-                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.73 21a2 2 0 0 1-3.46 0"></path></svg>
-                        </button>
+                    {/* Bottom Row: Search + Project Filter + Notification */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '15px', justifyContent: 'space-between' }}>
+                        <div className="search-bar-container">
+                            <div className="search-bar">
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+                                <input
+                                    type="text"
+                                    placeholder="Search properties, tenants, units..."
+                                    value={searchTerm}
+                                    onChange={(e) => setSearchTerm(e.target.value)}
+                                    onFocus={() => searchTerm.length > 1 && setShowResults(true)}
+                                    onBlur={() => setTimeout(() => setShowResults(false), 200)}
+                                />
+                            </div>
+                            {showResults && (
+                                <div className="search-results-dropdown">
+                                    {isSearching ? (
+                                        <div className="no-results">Searching...</div>
+                                    ) : searchResults.length > 0 ? (
+                                        searchResults.map((item, idx) => (
+                                            <div key={idx} className="search-result-item" onClick={() => handleSearchSelect(item.link)}>
+                                                <div className="search-result-info">
+                                                    <span className="search-result-label">{item.label}</span>
+                                                    <span className="search-result-type">{item.type}</span>
+                                                </div>
+                                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#9CA3AF" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>
+                                            </div>
+                                        ))
+                                    ) : (
+                                        <div className="no-results">No results found for "{searchTerm}"</div>
+                                    )}
+                                </div>
+                            )}
+                        </div>
+
+                        <div className="header-actions" style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
+                            <select
+                                className="form-select"
+                                style={{ minWidth: '220px', backgroundColor: '#f9fafb', border: '1px solid #e5e7eb', borderRadius: '6px', padding: '8px 12px', fontSize: '14px', color: '#374151' }}
+                                value={selectedProject}
+                                onChange={(e) => setSelectedProject(e.target.value)}
+                            >
+                                <option value="All">All Projects</option>
+                                {projectsList.map((p) => (
+                                    <option key={p.id} value={p.id}>{p.project_name}</option>
+                                ))}
+                            </select>
+                            <button className="icon-btn" onClick={() => navigate('/admin/notifications')} title="Notifications">
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.73 21a2 2 0 0 1-3.46 0"></path></svg>
+                            </button>
+                        </div>
                     </div>
                 </header>
 

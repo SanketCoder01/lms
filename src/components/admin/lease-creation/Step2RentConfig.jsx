@@ -134,7 +134,7 @@ const Step2RentConfig = ({
                             </div>
                         </div>
                         <div className="form-group">
-                            <label>1) Minimum Guarantee</label>
+                            <label>MG Amount (INR)</label>
                             <div className="currency-input">
                                 <span className="currency-symbol">₹</span>
                                 <input
@@ -147,116 +147,80 @@ const Step2RentConfig = ({
                                 <span className="currency-code">INR</span>
                             </div>
                         </div>
+                    </div>
+                    <div className="form-row" style={{ marginTop: '15px' }}>
                         <div className="form-group">
-                            <label>2) Monthly NET SALE</label>
-                            <div className="currency-input">
-                                <span className="currency-symbol">₹</span>
-                                <input
-                                    type="number"
-                                    placeholder="Enter net sale"
-                                    className="form-control"
-                                    value={formData.monthly_net_sales}
-                                    onChange={(e) => setFormData({ ...formData, monthly_net_sales: e.target.value })}
-                                />
-                                <span className="currency-code">INR</span>
-                            </div>
-                        </div>
-                        <div className="form-group">
-                            <label>3) Revenue Share Percentage (%)</label>
+                            <label>Revenue Share Percentage (%)</label>
                             <div className="input-with-suffix" style={{ display: 'flex', alignItems: 'center' }}>
                                 <input
                                     type="number"
                                     placeholder="e.g. 10"
                                     className="form-control"
-                                    value={formData.revenue_share_percentage}
+                                    value={formData.revenue_share_percentage || ''}
                                     onChange={(e) => setFormData({ ...formData, revenue_share_percentage: e.target.value })}
                                 />
                                 <span style={{ marginLeft: '10px' }}>%</span>
                             </div>
                         </div>
                         <div className="form-group">
-                            <label>4) Revenue Share Amount</label>
-                            <div className="currency-input">
-                                <span className="currency-symbol">₹</span>
-                                <input
-                                    type="number"
-                                    placeholder="0.00"
-                                    readOnly
-                                    style={{ backgroundColor: '#e0f2fe' }}
-                                    value={
-                                        (formData.monthly_net_sales && formData.revenue_share_percentage)
-                                            ? ((parseFloat(formData.monthly_net_sales) * parseFloat(formData.revenue_share_percentage)) / 100).toFixed(2)
-                                            : '0.00'
-                                    }
-                                />
-                                <span className="currency-code">INR</span>
-                            </div>
-                            <small style={{ color: '#666', fontSize: '0.8em' }}>(NET SALE × %)</small>
-                        </div>
-                        <div className="form-group">
-                            <label>5) Total</label>
-                            <div className="currency-input">
-                                <span className="currency-symbol">₹</span>
-                                <input
-                                    type="number"
-                                    placeholder="0.00"
-                                    readOnly
-                                    style={{ backgroundColor: '#e0f2fe' }}
-                                    value={
-                                        (() => {
-                                            const mg = parseFloat(rentModel === 'Hybrid' ? (formData.minimum_guarantee || 0) : (formData.monthly_rent || 0));
-                                            const rsAmount = (formData.monthly_net_sales && formData.revenue_share_percentage)
-                                                ? ((parseFloat(formData.monthly_net_sales) * parseFloat(formData.revenue_share_percentage)) / 100)
-                                                : 0;
-                                            return (mg + rsAmount).toFixed(2);
-                                        })()
-                                    }
-                                />
-                                <span className="currency-code">INR</span>
-                            </div>
-                            <small style={{ color: '#666', fontSize: '0.8em' }}>(Min Guarantee + Rev Share)</small>
-                        </div>
-                    </div>
-                    <div className="form-row" style={{ marginTop: '15px' }}>
-                        <div className="form-group">
-                            <label>6) Final Payable (Higher Value)</label>
-                            <div className="currency-input">
-                                <span className="currency-symbol">₹</span>
-                                <input
-                                    type="number"
-                                    placeholder="0.00"
-                                    readOnly
-                                    style={{ backgroundColor: '#dcfce7', fontWeight: 'bold' }}
-                                    value={
-                                        (() => {
-                                            const mg = parseFloat(rentModel === 'Hybrid' ? (formData.minimum_guarantee || 0) : (formData.monthly_rent || 0));
-                                            const rsAmount = (formData.monthly_net_sales && formData.revenue_share_percentage)
-                                                ? ((parseFloat(formData.monthly_net_sales) * parseFloat(formData.revenue_share_percentage)) / 100)
-                                                : 0;
-                                            return Math.max(mg, rsAmount).toFixed(2);
-                                        })()
-                                    }
-                                />
-                                <span className="currency-code">INR</span>
-                            </div>
-                            <small style={{ color: '#166534', fontSize: '0.8em' }}>Pays higher of MG vs Revenue Share Amount</small>
-                        </div>
-                    </div>
-                    <div className="form-row" style={{ marginTop: '15px' }}>
-                        <div className="form-group">
                             <label>Applicable On</label>
                             <select
                                 className="form-control"
-                                value={formData.revenue_share_applicable_on}
+                                value={formData.revenue_share_applicable_on || 'Net Sales'}
                                 onChange={(e) => setFormData({ ...formData, revenue_share_applicable_on: e.target.value })}
                             >
-                                <option>Net Sales</option>
-                                <option>Gross Sales</option>
+                                <option value="Net Sales">Net Sales</option>
+                                <option value="Gross Sales">Gross Sales</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div className="form-row" style={{ marginTop: '15px' }}>
+                        <div className="form-group">
+                            <label>Rent Calculation Method</label>
+                            <select
+                                className="form-control"
+                                value={formData.rent_calculation_method || ''}
+                                onChange={(e) => setFormData({ ...formData, rent_calculation_method: e.target.value })}
+                            >
+                                <option value="">Select Calculation Method</option>
+                                <option value="Option A">Option A: Total of MG and Revenue Share</option>
+                                <option value="Option B">Option B: Higher of MG or Revenue Share</option>
                             </select>
                         </div>
                     </div>
                 </div>
             )}
+
+            {/* SECURITY DEPOSIT (Relocated from Documents Step) */}
+            <hr style={{ margin: '30px 0', border: '0', borderTop: '1px dashed #cbd5e1' }} />
+            <div className="rent-block">
+                <h4>Security Deposit</h4>
+                <div className="form-row">
+                    <div className="form-group">
+                        <label>Deposit Amount</label>
+                        <div className="currency-input">
+                            <span className="currency-symbol">₹</span>
+                            <input
+                                type="number"
+                                placeholder="0.00"
+                                className="form-control"
+                                value={formData.deposit_amount || ''}
+                                onChange={(e) => setFormData({ ...formData, deposit_amount: e.target.value })}
+                            />
+                            <span className="currency-code">INR</span>
+                        </div>
+                    </div>
+                    <div className="form-group">
+                        <label>Deposit Payment Date</label>
+                        <input
+                            type="date"
+                            className="form-control"
+                            value={formData.deposit_payment_date || ''}
+                            onChange={(e) => setFormData({ ...formData, deposit_payment_date: e.target.value })}
+                        />
+                    </div>
+                </div>
+            </div>
         </div>
     );
 };

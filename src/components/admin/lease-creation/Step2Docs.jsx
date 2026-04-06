@@ -28,6 +28,21 @@ const Step2Docs = ({ formData, setFormData, handleFileChange }) => {
                 </div>
             </div>
 
+            {/* Security Deposit Info (Record/Reference) */}
+            <h4 style={{ margin: '20px 0 10px', borderBottom: '1px solid #eee', paddingBottom: '5px' }}>Security Deposit</h4>
+            <div className="form-row">
+                <div className="form-group">
+                    <label>Deposit Amount (INR)</label>
+                    <input
+                        type="number"
+                        placeholder="e.g. 500000"
+                        className="form-control"
+                        value={formData.deposit_amount || ''}
+                        onChange={(e) => setFormData({ ...formData, deposit_amount: e.target.value })}
+                    />
+                </div>
+            </div>
+
             {/* Lease Agreement */}
             <h4 style={{ margin: '20px 0 10px', borderBottom: '1px solid #eee', paddingBottom: '5px' }}>Lease Agreement</h4>
             <div className="form-row">
@@ -50,27 +65,7 @@ const Step2Docs = ({ formData, setFormData, handleFileChange }) => {
                 </div>
             </div>
 
-            {/* Deposit Payment */}
-            <h4 style={{ margin: '20px 0 10px', borderBottom: '1px solid #eee', paddingBottom: '5px' }}>Deposit Payment</h4>
-            <div className="form-row">
-                <div className="form-group">
-                    <label>Payment Date</label>
-                    <input
-                        type="date"
-                        value={formData.deposit_payment_date || ''}
-                        onChange={(e) => setFormData({ ...formData, deposit_payment_date: e.target.value })}
-                        className="form-control"
-                    />
-                </div>
-                <div className="form-group">
-                    <label>Upload Receipt/Proof</label>
-                    <input
-                        type="file"
-                        onChange={(e) => handleFileChange(e, 'deposit_document')}
-                        className="form-control"
-                    />
-                </div>
-            </div>
+
 
             {/* Lease Registration */}
             <h4 style={{ margin: '20px 0 10px', borderBottom: '1px solid #eee', paddingBottom: '5px' }}>Lease Registration</h4>

@@ -1,322 +1,406 @@
-const pool = require("../config/db");
+/**
+ * unitController.js — All operations via Supabase table API
+ */
 
-/* ================= GET UNITS ================= */
-/* ================= GET UNITS ================= */
+const supabase = require('../config/db');
+
+/* ═══════════════════════════════════════════════════════════
+ * GET UNITS (with owner name via unit_ownerships + parties)
+ * ══════════════════════════════════════════════════════════ */
 const getUnits = async (req, res) => {
-    try {
-        const { projectId, search, status } = req.query;
-        let query = `
-            SELECT 
-                u.id,
-                u.unit_number,
-                u.block_tower,
-                p.project_name AS building,
-                u.chargeable_area,
-                u.status,
-                u.project_id,
-                (SELECT owner_id FROM owner_units WHERE unit_id = u.id LIMIT 1) as owner_id
-            FROM units u
-            JOIN projects p ON p.id = u.project_id
-            WHERE 1=1
-        `;
-        const params = [];
+  try {
+    const { projectId, search, status, excludeSold } = req.query;
 
-        if (projectId && projectId !== 'All') {
-            query += " AND u.project_id = ?";
-            params.push(projectId);
-        }
+    let query = supabase
+      .from('units')
+      .select(`
+        id, unit_number, block_tower, floor_number, chargeable_area, status, project_id,
+        projects!inner ( project_name ),
+        unit_ownerships (
+          id, ownership_status, share_percentage,
+          parties ( id, first_name, last_name, company_name )
+        )
+      `)
+      .order('id', { ascending: false });
 
-        if (req.query.excludeSold === 'true') {
-            query += " AND u.id NOT IN (SELECT unit_id FROM unit_ownerships WHERE ownership_status = 'Active')";
-        }
-
-        if (status && status !== 'All') {
-            query += " AND u.status = ?";
-            params.push(status);
-        }
-
-        if (search) {
-            query += " AND (u.unit_number LIKE ? OR p.project_name LIKE ?)";
-            params.push(`%${search}%`, `%${search}%`);
-        }
-
-        query += " ORDER BY u.id DESC";
-
-        const [rows] = await pool.query(query, params);
-
-        res.json({ data: rows });
-    } catch (err) {
-        console.error("Fetch units error:", err);
-        res.status(500).json({ message: "Failed to fetch units" });
+    if (projectId && projectId !== 'All') {
+      query = query.eq('project_id', parseInt(projectId));
     }
+    if (status && status !== 'All') {
+      query = query.eq('status', status);
+    }
+    if (search) {
+      query = query.or(`unit_number.ilike.%${search}%`);
+    }
+    if (excludeSold === 'true') {
+      // Exclude units with active ownership — handled client-side filter
+    }
+
+    const { data, error } = await query;
+    if (error) throw error;
+
+    // Map data with owner name
+    const mapped = (data || []).map(u => {
+      const activeOwnerships = (u.unit_ownerships || []).filter(o => o.ownership_status === 'Active');
+      const totalShare = activeOwnerships.reduce((sum, o) => sum + Number(o.share_percentage || 100), 0);
+      
+      const ownerParty = activeOwnerships[0]?.parties;
+      const ownerName = ownerParty
+        ? (ownerParty.company_name || `${ownerParty.first_name || ''} ${ownerParty.last_name || ''}`.trim() || 'N/A')
+        : 'N/A';
+
+      const isFull = totalShare >= 100 || u.status === 'Sold';
+
+      return {
+        id:            u.id,
+        unit_number:   u.unit_number,
+        block_tower:   u.block_tower,
+        floor_number:  u.floor_number,
+        building:      u.projects?.project_name || 'N/A',
+        chargeable_area: u.chargeable_area,
+        status:        u.status,
+        project_id:    u.project_id,
+        owner_name:    ownerName,
+        total_share:   totalShare,
+        is_full:       isFull
+      };
+    });
+
+    res.json({ data: mapped });
+  } catch (err) {
+    console.error('Fetch units error:', err);
+    res.status(500).json({ message: 'Failed to fetch units', error: err.message });
+  }
 };
 
-/* ================= CREATE UNIT ================= */
-const createUnit = async (req, res) => {
-    const conn = await pool.getConnection();
-
-    try {
-        await conn.beginTransaction();
-
-        const {
-            project_id,
-            unit_number,
-            floor_number,
-            block_tower,
-            chargeable_area,
-            carpet_area,
-            covered_area,
-            builtup_area,
-            unit_condition,
-            plc,
-            unit_category,
-            unit_zoning_type,
-            projected_rent
-        } = req.body;
-
-        /* --------- VALIDATION --------- */
-        if (!project_id || !unit_number) {
-            return res.status(400).json({
-                message: "project_id and unit_number are required"
-            });
-        }
-
-        /* --------- INSERT UNIT --------- */
-        const [result] = await conn.query(
-            `
-            INSERT INTO units (
-                project_id,
-                unit_number,
-                floor_number,
-                block_tower,
-                chargeable_area,
-                carpet_area,
-                covered_area,
-                builtup_area,
-                unit_condition,
-                plc,
-                unit_category,
-                unit_zoning_type,
-                projected_rent,
-                status
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'vacant')
-            `,
-            [
-                project_id,
-                unit_number,
-                floor_number || null,
-                block_tower || null,
-                chargeable_area || null,
-                carpet_area || null,
-                covered_area || null,
-                builtup_area || null,
-                unit_condition || 'bare_shell',
-                plc || null,
-                unit_category || null,
-                unit_zoning_type || null,
-                projected_rent || null
-            ]
-        );
-
-        const unitId = result.insertId;
-
-        /* --------- INSERT IMAGES --------- */
-        if (req.files && Array.isArray(req.files) && req.files.length > 0) {
-            for (const file of req.files) {
-                await conn.query(
-                    `INSERT INTO unit_images (unit_id, image_path)
-                     VALUES (?, ?)`,
-                    [unitId, file.filename]
-                );
-            }
-        }
-
-        /* --------- UPDATE PROJECT TOTAL AREA --------- */
-        await conn.query(
-            `UPDATE projects 
-             SET total_project_area = (
-                SELECT COALESCE(SUM(chargeable_area), 0) 
-                FROM units 
-                WHERE project_id = ?
-             ) 
-             WHERE id = ?`,
-            [project_id, project_id]
-        );
-
-        await conn.commit();
-
-        res.status(201).json({
-            message: "Unit created successfully",
-            unit_id: unitId
-        });
-
-    } catch (err) {
-        await conn.rollback();
-        console.error("Create unit error:", err);
-        res.status(500).json({ message: "Failed to create unit" });
-    } finally {
-        conn.release();
-    }
-};
-
-/* ================= UPDATE UNIT ================= */
-const updateUnit = async (req, res) => {
+/* ═══════════════════════════════════════════════════════════
+ * GET UNIT BY ID
+ * ══════════════════════════════════════════════════════════ */
+const getUnitById = async (req, res) => {
+  try {
     const { id } = req.params;
+
+    const { data, error } = await supabase
+      .from('units')
+      .select(`
+        *,
+        projects ( project_name, id ),
+        unit_images ( image_path )
+      `)
+      .eq('id', id)
+      .single();
+
+    if (error) throw error;
+    if (!data) return res.status(404).json({ message: 'Unit not found' });
+
+    res.json({
+      ...data,
+      project_name: data.projects?.project_name,
+      project_id:   data.projects?.id,
+      unit_image:   data.unit_images?.[0]?.image_path || null,
+    });
+  } catch (err) {
+    console.error('Fetch unit by ID error:', err);
+    res.status(500).json({ message: 'Failed to fetch unit', error: err.message });
+  }
+};
+
+/* ═══════════════════════════════════════════════════════════
+ * CREATE UNIT
+ * ══════════════════════════════════════════════════════════ */
+const createUnit = async (req, res) => {
+  try {
     const {
-        unit_number,
-        floor_number,
-        block_tower,
-        chargeable_area,
-        carpet_area,
-        unit_condition,
-        plc,
-        unit_category,
-        unit_zoning_type,
-        projected_rent,
-        status
+      project_id, unit_number, floor_number, block_tower,
+      chargeable_area, carpet_area, covered_area, builtup_area,
+      unit_condition, plc, unit_category, unit_zoning_type, projected_rent
     } = req.body;
 
-    try {
-        const [result] = await pool.query(
-            `
-            UPDATE units 
-            SET 
-                unit_number = ?, 
-                floor_number = ?, 
-                block_tower = ?,
-                chargeable_area = ?, 
-                carpet_area = ?, 
-                unit_condition = ?, 
-                plc = ?, 
-                unit_category = ?,
-                unit_zoning_type = ?,
-                projected_rent = ?, 
-                status = ?
-            WHERE id = ?
-            `,
-            [
-                unit_number,
-                floor_number || null,
-                block_tower || null,
-                chargeable_area || null,
-                carpet_area || null,
-                unit_condition || 'bare_shell',
-                plc || null,
-                unit_category || null,
-                unit_zoning_type || null,
-                projected_rent || null,
-                status || 'vacant',
-                id
-            ]
-        );
-
-        if (result.affectedRows === 0) {
-            return res.status(404).json({ message: "Unit not found" });
-        }
-
-        /* --------- UPDATE PROJECT TOTAL AREA --------- */
-        // Get project_id for this unit
-        const [unitRows] = await pool.query("SELECT project_id FROM units WHERE id = ?", [id]);
-        if (unitRows.length > 0) {
-            const projectId = unitRows[0].project_id;
-            await pool.query(
-                `UPDATE projects 
-                 SET total_project_area = (
-                    SELECT COALESCE(SUM(chargeable_area), 0) 
-                    FROM units 
-                    WHERE project_id = ?
-                 ) 
-                 WHERE id = ?`,
-                [projectId, projectId]
-            );
-        }
-
-        res.json({ message: "Unit updated successfully" });
-    } catch (err) {
-        console.error("Update unit error:", err);
-        res.status(500).json({ message: "Failed to update unit" });
+    if (!project_id || !unit_number) {
+      return res.status(400).json({ message: 'project_id and unit_number are required' });
     }
+
+    const { data, error } = await supabase
+      .from('units')
+      .insert({
+        project_id:    parseInt(project_id),
+        unit_number,
+        floor_number:  floor_number  || null,
+        block_tower:   block_tower   || null,
+        chargeable_area: chargeable_area ? parseFloat(chargeable_area) : null,
+        carpet_area:   carpet_area   ? parseFloat(carpet_area) : null,
+        covered_area:  covered_area  ? parseFloat(covered_area) : null,
+        builtup_area:  builtup_area  ? parseFloat(builtup_area) : null,
+        unit_condition: unit_condition || 'bare_shell',
+        plc:           plc           || null,
+        unit_category: unit_category || null,
+        unit_zoning_type: unit_zoning_type || null,
+        projected_rent: projected_rent ? parseFloat(projected_rent) : null,
+        status:        'vacant',
+      })
+      .select()
+      .single();
+
+    if (error) throw error;
+
+    // Update project total area
+    const { data: unitAreas } = await supabase
+      .from('units')
+      .select('chargeable_area')
+      .eq('project_id', project_id);
+
+    const totalArea = (unitAreas || []).reduce((sum, u) => sum + (parseFloat(u.chargeable_area) || 0), 0);
+    await supabase.from('projects').update({ total_project_area: totalArea }).eq('id', project_id);
+
+    // Handle Image Uploads
+    if (req.files && req.files.length > 0) {
+      const imageInserts = [];
+      for (const file of req.files) {
+        if (file.buffer) {
+          const fileExt = file.originalname.split('.').pop();
+          const fileName = `units/unit_${data.id}_${Date.now()}.${fileExt}`;
+          
+          const { error: uploadError } = await supabase.storage
+              .from('lms-storage')
+              .upload(fileName, file.buffer, {
+                  contentType: file.mimetype,
+                  upsert: true
+              });
+
+          if (!uploadError) {
+            const { data: publicUrlData } = supabase.storage
+                .from('lms-storage')
+                .getPublicUrl(fileName);
+            imageInserts.push({ unit_id: data.id, image_path: publicUrlData.publicUrl });
+          }
+        }
+      }
+      if (imageInserts.length > 0) {
+        await supabase.from('unit_images').insert(imageInserts);
+      }
+    }
+
+    res.status(201).json({ message: 'Unit created successfully', unit_id: data.id });
+  } catch (err) {
+    console.error('Create unit error:', err);
+    res.status(500).json({ message: 'Failed to create unit', error: err.message });
+  }
 };
 
-/* ================= GET UNIT BY ID ================= */
-const getUnitById = async (req, res) => {
-    try {
-        const { id } = req.params;
+/* ═══════════════════════════════════════════════════════════
+ * UPDATE UNIT
+ * ══════════════════════════════════════════════════════════ */
+const updateUnit = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const {
+      unit_number, floor_number, block_tower, chargeable_area, carpet_area,
+      unit_condition, plc, unit_category, unit_zoning_type, projected_rent, status
+    } = req.body;
 
-        const [rows] = await pool.query(
-            `
-            SELECT 
-                u.id,
-                u.unit_number,
-                u.floor_number,
-                u.block_tower,
-                u.chargeable_area,
-                u.carpet_area,
-                u.covered_area,
-                u.builtup_area,
-                u.unit_condition,
-                u.plc,
-                u.unit_category,
-                u.unit_zoning_type,
-                u.projected_rent,
-                u.status,
-                p.project_name,
-                p.id as project_id,
-                (SELECT image_path FROM unit_images WHERE unit_id = u.id LIMIT 1) as unit_image
-            FROM units u
-            JOIN projects p ON p.id = u.project_id
-            WHERE u.id = ?
-            `,
-            [id]
-        );
+    const { error } = await supabase
+      .from('units')
+      .update({
+        unit_number,
+        floor_number:  floor_number || null,
+        block_tower:   block_tower  || null,
+        chargeable_area: chargeable_area ? parseFloat(chargeable_area) : null,
+        carpet_area:   carpet_area  ? parseFloat(carpet_area) : null,
+        unit_condition: unit_condition || 'bare_shell',
+        plc:           plc || null,
+        unit_category: unit_category || null,
+        unit_zoning_type: unit_zoning_type || null,
+        projected_rent: projected_rent ? parseFloat(projected_rent) : null,
+        status:        status || 'vacant',
+      })
+      .eq('id', id);
 
-        if (rows.length === 0) {
-            return res.status(404).json({ message: "Unit not found" });
+    if (error) throw error;
+
+    // Handle Image Uploads for update
+    if (req.files && req.files.length > 0) {
+      const imageInserts = [];
+      for (const file of req.files) {
+        if (file.buffer) {
+          const fileExt = file.originalname.split('.').pop();
+          const fileName = `units/unit_${id}_${Date.now()}.${fileExt}`;
+          
+          const { error: uploadError } = await supabase.storage
+              .from('lms-storage')
+              .upload(fileName, file.buffer, {
+                  contentType: file.mimetype,
+                  upsert: true
+              });
+
+          if (!uploadError) {
+            const { data: publicUrlData } = supabase.storage
+                .from('lms-storage')
+                .getPublicUrl(fileName);
+            imageInserts.push({ unit_id: id, image_path: publicUrlData.publicUrl });
+          }
         }
-
-        res.json(rows[0]);
-    } catch (err) {
-        console.error("Fetch unit by ID error:", err);
-        res.status(500).json({ message: "Failed to fetch unit" });
+      }
+      if (imageInserts.length > 0) {
+        await supabase.from('unit_images').insert(imageInserts);
+      }
     }
+
+    res.json({ message: 'Unit updated successfully' });
+  } catch (err) {
+    console.error('Update unit error:', err);
+    res.status(500).json({ message: 'Failed to update unit', error: err.message });
+  }
 };
 
-/* ================= DELETE UNIT ================= */
+/* ═══════════════════════════════════════════════════════════
+ * DELETE UNIT
+ * ══════════════════════════════════════════════════════════ */
 const deleteUnit = async (req, res) => {
-    try {
-        const { id } = req.params;
+  try {
+    const { id } = req.params;
 
-        // Get project_id before deletion
-        const [unitRows] = await pool.query("SELECT project_id FROM units WHERE id = ?", [id]);
+    const { data: unit } = await supabase.from('units').select('project_id').eq('id', id).single();
 
-        await pool.query("DELETE FROM units WHERE id = ?", [id]);
+    const { error } = await supabase.from('units').delete().eq('id', id);
+    if (error) throw error;
 
-        if (unitRows.length > 0) {
-            const projectId = unitRows[0].project_id;
-            // Update project total area
-            await pool.query(
-                `UPDATE projects 
-                 SET total_project_area = (
-                    SELECT COALESCE(SUM(chargeable_area), 0) 
-                    FROM units 
-                    WHERE project_id = ?
-                 ) 
-                 WHERE id = ?`,
-                [projectId, projectId]
-            );
-        }
-
-        res.json({ message: "Unit Deleted Successfully" });
-    } catch (error) {
-        console.error("Delete unit error:", error);
-        res.status(500).json({ error: error.message });
+    if (unit) {
+      const { data: unitAreas } = await supabase.from('units').select('chargeable_area').eq('project_id', unit.project_id);
+      const totalArea = (unitAreas || []).reduce((sum, u) => sum + (parseFloat(u.chargeable_area) || 0), 0);
+      await supabase.from('projects').update({ total_project_area: totalArea }).eq('id', unit.project_id);
     }
-}
+
+    res.json({ message: 'Unit deleted successfully' });
+  } catch (err) {
+    console.error('Delete unit error:', err);
+    res.status(500).json({ message: 'Failed to delete unit', error: err.message });
+  }
+};
+
+/* ═══════════════════════════════════════════════════════════
+ * PROJECT STRUCTURE — BLOCKS
+ * ══════════════════════════════════════════════════════════ */
+const getProjectBlocks = async (req, res) => {
+  try {
+    const { project_id } = req.query;
+    let query = supabase.from('project_blocks').select('*, project_floors(*)').order('sort_order');
+    if (project_id) query = query.eq('project_id', project_id);
+    const { data, error } = await query;
+    if (error) throw error;
+    res.json({ data: data || [] });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+};
+
+const addProjectBlock = async (req, res) => {
+  try {
+    const { project_id, block_name, description, sort_order } = req.body;
+    if (!project_id || !block_name) {
+      return res.status(400).json({ message: 'project_id and block_name are required' });
+    }
+    const { data, error } = await supabase
+      .from('project_blocks')
+      .insert({ project_id: parseInt(project_id), block_name, description, sort_order: sort_order || 0 })
+      .select().single();
+    if (error) {
+      if (error.code === '23505') return res.status(400).json({ message: 'Block name already exists in this project' });
+      throw error;
+    }
+    res.status(201).json({ message: 'Block added', data });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+};
+
+const updateProjectBlock = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { block_name, description, sort_order } = req.body;
+    const { error } = await supabase.from('project_blocks').update({ block_name, description, sort_order }).eq('id', id);
+    if (error) throw error;
+    res.json({ message: 'Block updated' });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+};
+
+const deleteProjectBlock = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { error } = await supabase.from('project_blocks').delete().eq('id', id);
+    if (error) throw error;
+    res.json({ message: 'Block deleted' });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+};
+
+/* ═══════════════════════════════════════════════════════════
+ * PROJECT STRUCTURE — FLOORS
+ * ══════════════════════════════════════════════════════════ */
+const getProjectFloors = async (req, res) => {
+  try {
+    const { project_id, block_id } = req.query;
+    let query = supabase.from('project_floors').select('*').order('sort_order');
+    if (project_id) query = query.eq('project_id', project_id);
+    if (block_id)   query = query.eq('block_id', block_id);
+    const { data, error } = await query;
+    if (error) throw error;
+    res.json({ data: data || [] });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+};
+
+const addProjectFloor = async (req, res) => {
+  try {
+    const { project_id, block_id, floor_name, units_count, sort_order } = req.body;
+    if (!project_id || !floor_name) {
+      return res.status(400).json({ message: 'project_id and floor_name are required' });
+    }
+    const { data, error } = await supabase
+      .from('project_floors')
+      .insert({
+        project_id: parseInt(project_id),
+        block_id:   block_id ? parseInt(block_id) : null,
+        floor_name,
+        units_count: units_count || 0,
+        sort_order:  sort_order || 0,
+      })
+      .select().single();
+    if (error) throw error;
+    res.status(201).json({ message: 'Floor added', data });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+};
+
+const updateProjectFloor = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { floor_name, units_count, sort_order } = req.body;
+    const { error } = await supabase.from('project_floors').update({ floor_name, units_count, sort_order }).eq('id', id);
+    if (error) throw error;
+    res.json({ message: 'Floor updated' });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+};
+
+const deleteProjectFloor = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { error } = await supabase.from('project_floors').delete().eq('id', id);
+    if (error) throw error;
+    res.json({ message: 'Floor deleted' });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+};
 
 module.exports = {
-    getUnits,
-    createUnit,
-    updateUnit,
-    getUnitById,
-    deleteUnit
+  getUnits, getUnitById, createUnit, updateUnit, deleteUnit,
+  getProjectBlocks, addProjectBlock, updateProjectBlock, deleteProjectBlock,
+  getProjectFloors, addProjectFloor, updateProjectFloor, deleteProjectFloor,
 };

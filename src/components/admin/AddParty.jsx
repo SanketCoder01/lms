@@ -1,15 +1,21 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import Sidebar from './Sidebar';
 import { filterAPI, partyAPI } from '../../services/api';
-import { indianStates, getCitiesByState } from '../../utils/indianLocations';
+import { supabase } from '../../services/supabase';
+import axios from 'axios';
 import { isValidPhone, isValidPAN, isValidAadhaar, isValidCIN } from '../../utils/validators';
 import './PartyForm.css';
 
 const AddParty = () => {
     const navigate = useNavigate();
     const [loading, setLoading] = useState(false);
+
     const [brandCategories, setBrandCategories] = useState([]);
+    const [partyTypes, setPartyTypes] = useState(['Tenant', 'Owner', 'Lessor', 'Sub-Lessee']); // Fallback if admin has not set them
+    const [ownerGroupings, setOwnerGroupings] = useState([]);
+    const [statesList, setStatesList] = useState([]);
+    const [citiesList, setCitiesList] = useState([]);
 
     // Form State
     const [formData, setFormData] = useState({
@@ -37,22 +43,73 @@ const AddParty = () => {
         owner_group: ''
     });
 
-    React.useEffect(() => {
+    useEffect(() => {
         const fetchFilters = async () => {
             try {
-                const bcRes = await filterAPI.getFilterOptions("brand_category");
-                setBrandCategories(bcRes.data.data || []);
+                // Fetch dynamic filters mapping
+                const [bcRes, ptRes, ogRes, statesRes] = await Promise.all([
+                    filterAPI.getFilterOptions("brand_category").catch(() => ({ data: { data: [] } })),
+                    filterAPI.getFilterOptions("Party Type").catch(() => ({ data: { data: [] } })),
+                    filterAPI.getFilterOptions("Owner Grouping").catch(() => ({ data: { data: [] } })),
+                    axios.get('http://localhost:5000/api/locations/states').catch(() => ({ data: [] }))
+                ]);
+
+                if (bcRes.data.data?.length > 0) setBrandCategories(bcRes.data.data);
+                if (ptRes.data.data?.length > 0) setPartyTypes(ptRes.data.data.map(d => d.option_value));
+                if (ogRes.data.data?.length > 0) setOwnerGroupings(ogRes.data.data);
+                if (statesRes.data?.length > 0) setStatesList(statesRes.data);
+
             } catch (e) {
                 console.error(e);
             }
         };
         fetchFilters();
+
+        const channel = supabase.channel('locations-channel')
+            .on(
+                'postgres_changes',
+                { event: '*', schema: 'public', table: 'states' },
+                () => {
+                    axios.get('http://localhost:5000/api/locations/states').then(res => setStatesList(res.data)).catch(console.error);
+                }
+            )
+            .subscribe();
+
+        return () => supabase.removeChannel(channel);
     }, []);
+
+    const fetchCities = async (stateName) => {
+        try {
+            const stateObj = statesList.find(s => s.name === stateName);
+            if (!stateObj) {
+                setCitiesList([]);
+                return;
+            }
+            const citiesRes = await axios.get(`http://localhost:5000/api/locations/cities/${stateObj.id}`);
+            setCitiesList(citiesRes.data || []);
+        } catch (e) {
+            console.error("Failed to fetch cities", e);
+            setCitiesList([]);
+        }
+    };
+
+    // Sub to cities changing for the selected state
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    useEffect(() => {
+        if (!formData.state) return;
+        const channel = supabase.channel('cities-channel')
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'cities' }, () => {
+                fetchCities(formData.state);
+            }).subscribe();
+        return () => supabase.removeChannel(channel);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [formData.state, statesList]);
 
     const handleChange = (e) => {
         const { name, value } = e.target;
         if (name === 'state') {
             setFormData({ ...formData, state: value, city: '' });
+            fetchCities(value);
         } else {
             setFormData({ ...formData, [name]: value });
         }
@@ -119,17 +176,16 @@ const AddParty = () => {
                         </div>
                         <div className="form-row">
                             <div className="form-group" style={{ maxWidth: '300px' }}>
-                                <label>Party Role *</label>
+                                <label>Party Type *</label>
                                 <select
                                     className="form-select"
                                     name="party_type"
                                     value={formData.party_type}
                                     onChange={handleChange}
                                 >
-                                    <option value="Tenant">Tenant</option>
-                                    <option value="Owner">Owner</option>
-                                    <option value="Lessor">Lessor</option>
-                                    <option value="Sub-Lessee">Sub-Lessee</option>
+                                    {partyTypes.map((pt, i) => (
+                                        <option key={i} value={pt}>{pt}</option>
+                                    ))}
                                 </select>
                             </div>
                             <div className="form-group" style={{ maxWidth: '300px' }}>
@@ -166,7 +222,7 @@ const AddParty = () => {
                                     />
                                 </div>
                                 <div className="form-group">
-                                    <label>Brand Name</label>
+                                    <label>Brand Name/Nickname</label>
                                     <input
                                         className="form-input"
                                         name="brand_name"
@@ -176,7 +232,7 @@ const AddParty = () => {
                                     />
                                 </div>
                                 <div className="form-group">
-                                    <label>Brand Category</label>
+                                    <label>Brand/Investor Category</label>
                                     <select
                                         className="form-select"
                                         name="brand_category"
@@ -220,7 +276,7 @@ const AddParty = () => {
                         {formData.type === 'Company' && (
                             <div className="form-row" style={{ marginBottom: '15px' }}>
                                 <div className="form-group">
-                                    <label>Rep in the capacity of</label>
+                                    <label>Designation of Company Representative</label>
                                     <input
                                         className="form-input"
                                         name="representative_designation"
@@ -317,19 +373,23 @@ const AddParty = () => {
                             <div className="form-row">
                                 <div className="form-group" style={{ maxWidth: '400px' }}>
                                     <label>Grouping of Owners</label>
-                                    <input
-                                        className="form-input"
+                                    <select
+                                        className="form-select"
                                         name="owner_group"
                                         value={formData.owner_group}
                                         onChange={handleChange}
-                                        placeholder="Enter Owner Group (Optional)"
-                                    />
+                                    >
+                                        <option value="">Select Grouping (Optional)</option>
+                                        {ownerGroupings.map((og) => (
+                                            <option key={og.id} value={og.option_value}>{og.option_value}</option>
+                                        ))}
+                                    </select>
                                 </div>
                             </div>
                         </div>
                     )}
 
-                    {/* IDENTIFICATION */}
+                    {/* IDENTIFICATION -> Party Details */}
                     <div className="form-section">
                         <div className="section-header">
                             <h3>Party Details</h3>
@@ -402,8 +462,8 @@ const AddParty = () => {
                                     onChange={handleChange}
                                 >
                                     <option value="">Select State</option>
-                                    {indianStates.map((state, index) => (
-                                        <option key={index} value={state}>{state}</option>
+                                    {statesList.map((state) => (
+                                        <option key={state.id} value={state.name}>{state.name}</option>
                                     ))}
                                 </select>
                             </div>
@@ -414,10 +474,11 @@ const AddParty = () => {
                                     name="city"
                                     value={formData.city}
                                     onChange={handleChange}
+                                    disabled={!formData.state}
                                 >
                                     <option value="">Select City</option>
-                                    {getCitiesByState(formData.state).map((city, index) => (
-                                        <option key={index} value={city}>{city}</option>
+                                    {citiesList.map((city) => (
+                                        <option key={city.id} value={city.name}>{city.name}</option>
                                     ))}
                                 </select>
                             </div>

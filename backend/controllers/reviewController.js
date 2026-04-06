@@ -1,20 +1,28 @@
-const pool = require("../config/db");
+const supabase = require("../config/db");
 
 // Get Review Stats (Counts for tabs)
 exports.getReviewStats = async (req, res) => {
     try {
-        const [projects] = await pool.query("SELECT COUNT(*) as count FROM projects WHERE status = 'pending'");
-        const [units] = await pool.query("SELECT COUNT(*) as count FROM units WHERE status = 'under_maintenance'"); // Example criteria
-        const [owners] = await pool.query("SELECT COUNT(*) as count FROM owners WHERE status = 'inactive'"); // Example criteria
-        const [tenants] = await pool.query("SELECT COUNT(*) as count FROM tenants WHERE status = 'inactive'"); // Example criteria
-        const [leases] = await pool.query("SELECT COUNT(*) as count FROM leases WHERE status = 'draft'");
+        const [
+            { count: projectsCount },
+            { count: unitsCount },
+            { count: ownersCount },
+            { count: tenantsCount },
+            { count: leasesCount }
+        ] = await Promise.all([
+            supabase.from('projects').select('*', { count: 'exact', head: true }).eq('status', 'pending'),
+            supabase.from('units').select('*', { count: 'exact', head: true }).eq('status', 'under_maintenance'),
+            supabase.from('parties').select('*', { count: 'exact', head: true }).eq('is_owner', true).eq('status', 'inactive'),
+            supabase.from('parties').select('*', { count: 'exact', head: true }).eq('is_tenant', true).eq('status', 'inactive'),
+            supabase.from('leases').select('*', { count: 'exact', head: true }).eq('status', 'draft')
+        ]);
 
         res.json({
-            projects: projects[0].count,
-            units: units[0].count,
-            owners: owners[0].count,
-            tenants: tenants[0].count,
-            leases: leases[0].count
+            projects: projectsCount || 0,
+            units: unitsCount || 0,
+            owners: ownersCount || 0,
+            tenants: tenantsCount || 0,
+            leases: leasesCount || 0
         });
     } catch (err) {
         console.error("Review stats error:", err);
@@ -25,26 +33,30 @@ exports.getReviewStats = async (req, res) => {
 // Get Pending Items by Type
 exports.getPendingItems = async (req, res) => {
     try {
-        const { type } = req.query; // 'lease', 'project', etc.
-        let query = "";
+        const { type } = req.query;
 
         switch (type) {
             case 'lease':
-                query = `
-                    SELECT l.id, t.company_name as tenant_name, l.monthly_rent, l.lease_start, l.lease_end, l.created_at
-                    FROM leases l
-                    JOIN tenants t ON l.tenant_id = t.id
-                    WHERE l.status = 'draft'
-                    ORDER BY l.created_at DESC
-                `;
-                break;
-            // Add other cases as needed
+                const { data, error } = await supabase.from('leases').select(`
+                    id, monthly_rent, lease_start, lease_end, created_at,
+                    tenant:parties!leases_party_tenant_id_fkey(company_name, first_name, last_name)
+                `).eq('status', 'draft').order('created_at', { ascending: false });
+
+                if (error) throw error;
+
+                const mapped = data.map(l => ({
+                    id: l.id,
+                    tenant_name: l.tenant?.company_name || `${l.tenant?.first_name || ''} ${l.tenant?.last_name || ''}`.trim(),
+                    monthly_rent: l.monthly_rent,
+                    lease_start: l.lease_start,
+                    lease_end: l.lease_end,
+                    created_at: l.created_at
+                }));
+                return res.json(mapped);
+                
             default:
                 return res.json([]);
         }
-
-        const [rows] = await pool.query(query);
-        res.json(rows);
     } catch (err) {
         console.error("Pending items error:", err);
         res.status(500).json({ message: "Server error" });
