@@ -2,7 +2,7 @@ import React, { useEffect, useState, useRef } from "react";
 import Sidebar from "./Sidebar";
 import "./RoleManagement.css";
 // import api from services
-import { userAPI } from "../../services/api";
+import { userAPI, roleAPI } from "../../services/api";
 
 const RoleManagement = () => {
   const [users, setUsers] = useState([]);
@@ -25,9 +25,29 @@ const RoleManagement = () => {
   });
 
   // UI State
+  const [roles, setRoles] = useState([]);
+  const [roleLoading, setRoleLoading] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
   const [toast, setToast] = useState({ show: false, message: "", type: "success" }); // type: success | error
   const [activeActionMenu, setActiveActionMenu] = useState(null); // ID of user whose menu is open
   const actionMenuRef = useRef(null);
+
+  const fetchRoles = () => {
+    setRoleLoading(true);
+    roleAPI.getRoles()
+      .then(res => {
+        const data = res.data.data || res.data;
+        if (Array.isArray(data)) {
+          setRoles(data);
+          // Set default role if available and not already set
+          if (data.length > 0 && !formData.role_name) {
+            setFormData(prev => ({ ...prev, role_name: data[0].role_name }));
+          }
+        }
+      })
+      .catch(err => console.error("Failed to load roles", err))
+      .finally(() => setRoleLoading(false));
+  };
 
   const fetchUsers = () => {
     setLoading(true);
@@ -61,6 +81,7 @@ const RoleManagement = () => {
   ============================== */
   useEffect(() => {
     fetchUsers();
+    fetchRoles();
 
     // Click outside to close action menu
     const handleClickOutside = (event) => {
@@ -84,11 +105,12 @@ const RoleManagement = () => {
       last_name: "",
       email: "",
       password: "",
-      role_name: "User",
+      role_name: roles.length > 0 ? roles[0].role_name : "Admin",
       status: "active"
     });
     setIsEditing(false);
     setCurrentUserId(null);
+    setSubmitting(false);
   };
 
   const handleOpenCreate = () => {
@@ -126,6 +148,7 @@ const RoleManagement = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    setSubmitting(true);
     try {
       if (isEditing) {
         // Update User
@@ -144,9 +167,11 @@ const RoleManagement = () => {
       resetForm();
       fetchUsers();
     } catch (error) {
-      console.error(error);
+      console.error("Submission Error:", error);
       const msg = error.response?.data?.message || (isEditing ? "Failed to update user" : "Failed to create user");
       showToast(msg, "error");
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -263,11 +288,12 @@ const RoleManagement = () => {
                     className="premium-select"
                     value={formData.role_name}
                     onChange={e => setFormData({ ...formData, role_name: e.target.value })}
+                    disabled={roleLoading}
                   >
-                    <option value="User">User</option>
-                    <option value="Admin">Admin</option>
-                    <option value="Lease Manager">Lease Manager</option>
-                    <option value="Manager">Manager</option>
+                    {roles.length === 0 && <option value="">Loading roles...</option>}
+                    {roles.map(r => (
+                      <option key={r.id} value={r.role_name}>{r.role_name}</option>
+                    ))}
                   </select>
                 </div>
 
@@ -286,8 +312,10 @@ const RoleManagement = () => {
                 )}
 
                 <div className="modal-actions">
-                  <button type="button" className="btn-secondary" onClick={() => setShowModal(false)}>Cancel</button>
-                  <button type="submit" className="btn-primary">{isEditing ? "Save Changes" : "Create User"}</button>
+                  <button type="button" className="btn-secondary" onClick={() => setShowModal(false)} disabled={submitting}>Cancel</button>
+                  <button type="submit" className="btn-primary" disabled={submitting}>
+                    {submitting ? (isEditing ? "Saving..." : "Creating...") : (isEditing ? "Save Changes" : "Create User")}
+                  </button>
                 </div>
               </form>
             </div>

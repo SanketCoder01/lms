@@ -42,20 +42,40 @@ const createUser = async (req, res) => {
     try {
         const { first_name, last_name, email, password, role_name } = req.body;
 
-        const { data: existing } = await supabase.from('users').select('id').eq('email', email);
-        if (existing && existing.length > 0) return res.status(400).json({ message: "User already exists" });
+        if (!email || !password) {
+            return res.status(400).json({ message: "Email and password are required" });
+        }
 
+        // 1. Check if user already exists in public.users
+        const { data: existing } = await supabase.from('users').select('id').eq('email', email);
+        if (existing && existing.length > 0) {
+            return res.status(400).json({ message: "User with this email already exists in the system." });
+        }
+
+        // 2. Fetch Role ID correctly
         let roleId = null;
         const requestedRole = role_name || 'User';
         const { data: roleResult } = await supabase.from('roles').select('id').eq('role_name', requestedRole).single();
 
-        if (roleResult) roleId = roleResult.id;
-        else {
-            const { data: anyRole } = await supabase.from('roles').select('id').limit(1).single();
-            if (anyRole) roleId = anyRole.id;
+        if (roleResult) {
+            roleId = roleResult.id;
+        } else {
+            // Fallback: try to find any default role if specified role name doesn't exist
+            const { data: fallbackRole } = await supabase.from('roles')
+                .select('id')
+                .or(`role_name.ilike.User,role_name.ilike.Viewer`)
+                .limit(1)
+                .single();
+            
+            if (fallbackRole) roleId = fallbackRole.id;
+            else {
+                // Last resort fallback
+                const { data: anyRole } = await supabase.from('roles').select('id').limit(1).single();
+                if (anyRole) roleId = anyRole.id;
+            }
         }
 
-        // 1. Create User in Supabase Auth
+        // 3. Create User in Supabase Auth (admin-level bypasses confirmation)
         const { data: authData, error: authError } = await supabase.auth.admin.createUser({
             email,
             password,
@@ -68,15 +88,17 @@ const createUser = async (req, res) => {
         });
 
         if (authError) {
-            return res.status(400).json({ message: authError.message });
+            console.error("Supabase Admin Auth Error:", authError);
+            // Return specific auth errors (e.g. user already exists in Auth but not Public table)
+            return res.status(400).json({ message: `Authentication Error: ${authError.message}` });
         }
 
-        // 2. Hash password placeholder (Supabase manages the real password)
+        // 4. Hash password for local storage (redundant if using Auth only, but schema has it)
         const salt = await bcrypt.genSalt(10);
         const hashedPassword = await bcrypt.hash(password, salt);
 
-        // 3. Insert into public.users
-        const { data: result, error } = await supabase.from('users').insert({
+        // 5. Insert into public.users
+        const { data: result, error: insertError } = await supabase.from('users').insert({
             first_name: first_name || '', 
             last_name: last_name || '', 
             email, 
@@ -85,15 +107,26 @@ const createUser = async (req, res) => {
             status: 'active'
         }).select('id').single();
 
-        if (error) throw error;
+        if (insertError) {
+            console.error("Public Profile Create Error:", insertError);
+            // If this fails, we have an orphaned auth user, but better to report the error
+            throw insertError;
+        }
 
-        const performingUser = req.user ? req.user.id : null;
-        await logActivity(performingUser, "Created User", "User Management", `Created user ${first_name} ${last_name} (${email})`);
+        const performingUser = req.user ? (req.user.id || req.user.email) : 'System Admin';
+        await logActivity(performingUser, "Created User", "User Management", `User ${first_name} ${last_name} (${email}) created with role ${requestedRole}`);
 
-        res.status(201).json({ message: "User created successfully", id: result.id });
+        res.status(201).json({ 
+            success: true,
+            message: "User created successfully", 
+            id: result.id 
+        });
     } catch (error) {
-        console.error("Create user error:", error);
-        res.status(500).json({ message: error.message, error: error.message });
+        console.error("Create user catch error:", error);
+        res.status(500).json({ 
+            message: error.message || "An unexpected error occurred during user creation", 
+            error: error.message 
+        });
     }
 };
 

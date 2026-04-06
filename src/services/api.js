@@ -7,7 +7,8 @@ import axios from "axios";
  */
 const getBaseUrl = () => {
   // Default to local backend with /api prefix if environmental variable is not set
-  let url = process.env.REACT_APP_API_URL || "https://lms-sepia-mu.vercel.app/api";
+  // Default to relative /api when hosted on same origin (Vercel)
+  let url = process.env.REACT_APP_API_URL || "/api";
   // Remove trailing slash if present to avoid double slashes later
   return url.endsWith('/') ? url.slice(0, -1) : url;
 };
