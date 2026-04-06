@@ -76,7 +76,9 @@ const ProjectDetails = () => {
                     <div className="project-image-container">
                         {project.project_image && !imageError ? (
                             <img
-                                src={`${FILE_BASE_URL}/uploads/${project.project_image}`}
+                                src={project.project_image && project.project_image.startsWith('http') 
+                                    ? project.project_image 
+                                    : `${FILE_BASE_URL}/uploads/${project.project_image}`}
                                 alt={project.project_name}
                                 className="project-main-image"
                                 onError={() => setImageError(true)}

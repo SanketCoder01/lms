@@ -3,18 +3,11 @@ const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
 
-// Configure Multer for File Uploads
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    const dir = "uploads";
-    if (!fs.existsSync(dir)) fs.mkdirSync(dir);
-    cb(null, dir);
-  },
-  filename: (req, file, cb) => {
-    cb(null, Date.now() + path.extname(file.originalname));
-  }
+// Configure Multer for File Uploads (VERCEL-SAFE)
+const upload = multer({ 
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 10 * 1024 * 1024 } // 10MB
 });
-const upload = multer({ storage });
 exports.upload = upload;
 
 /* ================= EXPORT REPORTS CSV ================= */
@@ -81,7 +74,9 @@ exports.getRepReports = async (req, res) => {
     let formatted = reports.map(r => ({
       id: `L-${r.id}`,
       name: `${r.projects?.project_name || 'N/A'} - ${r.tenant?.company_name || String(r.tenant?.first_name || '') + ' ' + String(r.tenant?.last_name || '')}`.trim() || 'No Tenant',
-      image: r.projects?.project_image ? `/uploads/${r.projects.project_image}` : 'https://images.unsplash.com/photo-1545324418-cc1a3fa10c00?w=50&h=50&fit=crop',
+      image: r.projects?.project_image 
+        ? (r.projects.project_image.startsWith('http') ? r.projects.project_image : `/uploads/${r.projects.project_image}`)
+        : 'https://images.unsplash.com/photo-1545324418-cc1a3fa10c00?w=50&h=50&fit=crop',
       date: r.lease_start ? new Date(r.lease_start).toLocaleDateString('en-GB') : 'N/A',
       type: r.lease_type,
       status: r.status,
@@ -321,7 +316,11 @@ exports.getDocuments = async (req, res) => {
       data: paginated.map(doc => ({
         id: `D-${doc.id}`,
         projectName: (doc.entity_type === 'project') ? (doc.projects?.project_name || 'N/A') : 'N/A',
-        image: doc.file_path || (doc.projects?.project_image ? `/uploads/${doc.projects?.project_image}` : 'https://images.unsplash.com/photo-1545324418-cc1a3fa10c00?w=50&h=50&fit=crop'),
+        image: doc.file_path 
+          ? (doc.file_path.startsWith('http') ? doc.file_path : `/uploads/${doc.file_path}`)
+          : (doc.projects?.project_image 
+              ? (doc.projects.project_image.startsWith('http') ? doc.projects.project_image : `/uploads/${doc.projects.project_image}`)
+              : 'https://images.unsplash.com/photo-1545324418-cc1a3fa10c00?w=50&h=50&fit=crop'),
         date: doc.created_at ? new Date(doc.created_at).toLocaleDateString('en-US') : 'N/A',
         uploadedBy: (doc.users?.first_name ? `${doc.users.first_name} ${doc.users.last_name || ''}`.trim() : 'Unknown User'),
         category: doc.document_type || 'General'
@@ -365,22 +364,48 @@ exports.searchData = async (req, res) => {
   }
 };
 
-/* ================= UPLOAD DOCUMENT ================= */
+/* ================= UPLOAD DOCUMENT (SUPABASE) ================= */
 exports.uploadDocument = async (req, res) => {
   try {
     const { project_id, category, uploaded_by } = req.body;
 
-    if (!req.file) return res.status(400).json({ message: "No file uploaded" });
+    if (!req.file || !req.file.buffer) {
+      return res.status(400).json({ message: "No file uploaded" });
+    }
 
-    const file_path = req.file.filename;
+    const fileExt = path.extname(req.file.originalname).slice(1) || 'pdf';
+    const fileName = `documents/doc_${Date.now()}.${fileExt}`;
 
+    // 1. Upload to Supabase Storage
+    const { error: uploadError } = await supabase.storage
+        .from('lms-storage')
+        .upload(fileName, req.file.buffer, {
+            contentType: req.file.mimetype,
+            upsert: true
+        });
+
+    if (uploadError) throw uploadError;
+
+    // 2. Get Public URL
+    const { data: publicUrlData } = supabase.storage
+        .from('lms-storage')
+        .getPublicUrl(fileName);
+
+    const publicUrl = publicUrlData.publicUrl;
+
+    // 3. Save to Database
     const { data, error } = await supabase.from('documents').insert({
-        entity_type: 'project', entity_id: project_id || null, document_type: category || 'General', file_path, uploaded_by: uploaded_by || 1
+        entity_type: 'project', 
+        entity_id: project_id || null, 
+        document_type: category || 'General', 
+        file_path: publicUrl, 
+        uploaded_by: uploaded_by || null
     }).select('id').single();
 
     if (error) throw error;
-    res.json({ message: "Document uploaded successfully", id: data.id });
+    res.json({ message: "Document uploaded successfully", id: data.id, url: publicUrl });
   } catch (error) {
-    res.status(500).json({ error: "Failed to upload document" });
+    console.error("Document Upload failed:", error);
+    res.status(500).json({ error: "Failed to upload document: " + error.message });
   }
 };

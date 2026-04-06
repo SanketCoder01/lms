@@ -7,30 +7,19 @@ const fs = require("fs");
 const bcrypt = require("bcryptjs");
 
 /* ===============================
-   MULTER CONFIG (SAFE)
+   MULTER CONFIG (VERCEL-SAFE)
 ================================ */
-const storage = multer.diskStorage({
-    destination: (req, file, cb) => {
-        const dir = "uploads";
-        if (!fs.existsSync(dir)) {
-            fs.mkdirSync(dir);
-        }
-        cb(null, dir);
-    },
-    filename: (req, file, cb) => {
-        cb(null, Date.now() + path.extname(file.originalname));
-    }
-});
+const storage = multer.memoryStorage();
 
 const fileFilter = (req, file, cb) => {
-    const allowed = /jpeg|jpg|png/;
+    const allowed = /jpeg|jpg|png|webp/;
     const ext = allowed.test(path.extname(file.originalname).toLowerCase());
     const mime = allowed.test(file.mimetype);
     if (ext && mime) cb(null, true);
     else cb(new Error("Only images allowed"));
 };
 
-const upload = multer({ storage, fileFilter });
+const upload = multer({ storage, fileFilter, limits: { fileSize: 5 * 1024 * 1024 } });
 
 /* ===============================
    GET CURRENT USER PROFILE (Default)
@@ -87,7 +76,7 @@ router.get("/:id", async (req, res) => {
     try {
         const { data, error } = await supabase.from('users').select('id, first_name, last_name, email, phone, job_title, location, profile_image').eq('id', req.params.id).single();
         
-        if (error || !data) return res.status(404).json({ message: "User not found" });
+        if (error || !data) return res.status(404).json({ message: "User found" });
         res.json(data);
     } catch (err) {
         console.error(err);
@@ -122,21 +111,41 @@ router.put("/:id", async (req, res) => {
 });
 
 /* ===============================
-   UPLOAD PROFILE PHOTO
+   UPLOAD PROFILE PHOTO (SUPABASE)
 ================================ */
 router.post("/:id/photo", upload.single("photo"), async (req, res) => {
-    if (!req.file) return res.status(400).json({ message: "No file uploaded" });
+    if (!req.file || !req.file.buffer) return res.status(400).json({ message: "No file uploaded" });
 
-    const imagePath = `/uploads/${req.file.filename}`;
+    const userId = req.params.id;
+    const fileExt = path.extname(req.file.originalname).slice(1) || 'png';
+    const fileName = `avatars/user_${userId}_${Date.now()}.${fileExt}`;
 
     try {
-        const { error } = await supabase.from('users').update({ profile_image: imagePath }).eq('id', req.params.id);
+        // 1. Upload to Supabase Storage
+        const { error: uploadError } = await supabase.storage
+            .from('lms-storage')
+            .upload(fileName, req.file.buffer, {
+                contentType: req.file.mimetype,
+                upsert: true
+            });
+
+        if (uploadError) throw uploadError;
+
+        // 2. Get Public URL
+        const { data: publicUrlData } = supabase.storage
+            .from('lms-storage')
+            .getPublicUrl(fileName);
+
+        const imagePath = publicUrlData.publicUrl;
+
+        // 3. Update Database
+        const { error } = await supabase.from('users').update({ profile_image: imagePath }).eq('id', userId);
         if (error) throw error;
 
         res.json({ image: imagePath });
     } catch (err) {
-        console.error(err);
-        res.status(500).json({ message: "Photo upload failed" });
+        console.error("Supabase Profile Photo Upload error:", err);
+        res.status(500).json({ message: "Photo upload failed: " + err.message });
     }
 });
 
