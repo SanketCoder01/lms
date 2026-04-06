@@ -53,6 +53,13 @@
   color: var(--bg-dark);
 }
 
+.brand-logo span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .logo-placeholder {
   width: 44px;
   height: 44px;
@@ -189,7 +196,7 @@
 .input-wrapper input,
 .role-select {
   width: 100%;
-  padding: 14px 16px 14px 48px;
+  padding: 14px 16px 14px 56px;
   /* Left padding clears icon area */
   border: 1.5px solid var(--border-color);
   border-radius: 10px;
@@ -402,7 +409,7 @@
   
   .input-wrapper input,
   .role-select {
-    padding: 14px 16px 14px 44px;
+    padding: 14px 16px 14px 52px;
     font-size: 0.95rem;
   }
   
@@ -423,6 +430,13 @@
   .name-row {
     flex-direction: column;
     gap: 16px;
+  }
+  
+  .brand-logo {
+    font-size: 1.1rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 }
 
@@ -474,7 +488,7 @@
   
   .input-wrapper input,
   .role-select {
-    padding: 12px 14px 12px 42px;
+    padding: 12px 14px 12px 50px;
     font-size: 0.9rem;
     border-radius: 8px;
   }
@@ -493,8 +507,8 @@
   }
   
   .input-icon svg {
-    width: 18px;
-    height: 18px;
+    width: 16px;
+    height: 16px;
   }
   
   .password-toggle {
