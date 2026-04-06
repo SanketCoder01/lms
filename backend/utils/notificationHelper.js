@@ -1,4 +1,4 @@
-const pool = require('../config/db');
+const supabase = require('../config/db');
 
 /**
  * Create a new notification
@@ -11,17 +11,23 @@ exports.createNotification = async (userId, title, message, type = 'info') => {
     try {
         // Note: 'type' column not present in schema, using title prefix
         let finalTitle = title;
-        // if (type === 'urgent' || type === 'error') finalTitle = `⚠️ ${title}`;
-        // if (type === 'success') finalTitle = `✅ ${title}`;
 
         // Ensure title is not too long
         if (finalTitle.length > 255) finalTitle = finalTitle.substring(0, 252) + '...';
 
-        await pool.query(
-            "INSERT INTO notifications (user_id, title, message) VALUES (?, ?, ?)",
-            [userId || 1, finalTitle, message] // Defaulting to user 1 (Admin) if null
-        );
-        console.log(`[Notification] Created: ${finalTitle}`);
+        const { error } = await supabase
+            .from('notifications')
+            .insert({
+                user_id: userId || 1,
+                title: finalTitle,
+                message: message
+            });
+
+        if (error) {
+            console.error("[Notification] Creation Failed:", error.message);
+        } else {
+            console.log(`[Notification] Created: ${finalTitle}`);
+        }
     } catch (error) {
         console.error("[Notification] Creation Failed:", error.message);
     }

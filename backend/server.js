@@ -1,9 +1,14 @@
 const express = require("express");
 const cors = require("cors");
-require("dotenv").config();
+const path = require('path');
 
-// Database
-const pool = require("./config/db");
+// Load .env only in local development (Vercel loads env vars automatically)
+if (process.env.NODE_ENV !== 'production') {
+  require("dotenv").config({ path: path.join(__dirname, '.env') });
+}
+
+// Database (Supabase client)
+const supabase = require("./config/db");
 
 // Routes
 const authRoutes = require("./routes/authRoutes");
@@ -29,13 +34,23 @@ const PORT = process.env.PORT || 5000;
 /* =========================
    MIDDLEWARE
 ========================= */
-app.use(cors());
+// CORS - Allow all origins for Vercel deployment
+app.use(cors({
+  origin: '*',
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
+  credentials: true
+}));
+
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
-const path = require('path');
 
-// Explicitly set CSP to allow connections and prevent "default-src 'none'" errors
+// CSP Headers - Allow all necessary resources
 app.use((req, res, next) => {
+  // Skip CSP for API routes to avoid interference
+  if (req.path.startsWith('/api')) {
+    return next();
+  }
   res.setHeader(
     "Content-Security-Policy",
     "default-src 'self' 'unsafe-inline' 'unsafe-eval' blob: data: https:; connect-src * 'unsafe-inline'; style-src 'self' 'unsafe-inline' https:; font-src 'self' data: https:; img-src 'self' data: https: blob:;"

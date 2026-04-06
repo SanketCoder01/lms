@@ -47,7 +47,7 @@ const SearchFilters = () => {
     try {
       const query = new URLSearchParams(formData).toString();
       // We added /search to management routes, so it's /api/management/search
-      const response = await fetch(`${process.env.REACT_APP_API_URL || 'https://lms-sepia-mu.vercel.app/api'}/management/search?${query}`);
+      const response = await fetch(`${process.env.REACT_APP_API_URL || 'https://lms-iac2-git-master-sanketg367-gmailcoms-projects.vercel.app/api'}/management/search?${query}`);
       const data = await response.json();
       setResults(Array.isArray(data) ? data : []);
     } catch (error) {
