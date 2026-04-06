@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import Sidebar from '../Sidebar';
-import { filterAPI } from '../../../services/api';
+import { filterAPI, handleApiError } from '../../../services/api';
 import '../Master.css';
 
 const FilterOptionsMaster = () => {
@@ -52,7 +52,7 @@ const FilterOptionsMaster = () => {
             setNewOption('');
             fetchOptions();
         } catch (error) {
-            alert("Failed to add option: " + (error.response?.data?.error || error.message));
+            alert("Failed to add option: " + handleApiError(error));
         }
     };
 
@@ -62,7 +62,7 @@ const FilterOptionsMaster = () => {
                 await filterAPI.deleteFilterOption(id);
                 fetchOptions();
             } catch (error) {
-                alert("Failed to delete option");
+                alert("Failed to delete option: " + handleApiError(error));
             }
         }
     };
@@ -84,7 +84,7 @@ const FilterOptionsMaster = () => {
             setEditingId(null);
             fetchOptions();
         } catch (error) {
-            alert("Failed to update option: " + (error.response?.data?.error || error.message));
+            alert("Failed to update option: " + handleApiError(error));
         }
     };
 

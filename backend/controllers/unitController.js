@@ -3,6 +3,7 @@
  */
 
 const supabase = require('../config/db');
+const { handleDbError } = require('../utils/errorHandler');
 
 /* ═══════════════════════════════════════════════════════════
  * GET UNITS (with owner name via unit_ownerships + parties)
@@ -180,10 +181,10 @@ const createUnit = async (req, res) => {
       }
     }
 
-    res.status(201).json({ message: 'Unit created successfully', unit_id: data.id });
+    res.status(201).json({ success: true, message: 'Unit created successfully', unit_id: data.id });
   } catch (err) {
     console.error('Create unit error:', err);
-    res.status(500).json({ message: 'Failed to create unit', error: err.message });
+    res.status(500).json({ success: false, message: 'Failed to create unit', error: err.message });
   }
 };
 

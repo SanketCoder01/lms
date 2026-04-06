@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import Sidebar from './Sidebar';
-import { unitAPI, getProjects, filterAPI, structureAPI } from '../../services/api';
+import { unitAPI, getProjects, filterAPI, structureAPI, handleApiError } from '../../services/api';
 import './AddUnit.css';
 
 const AddUnit = () => {
@@ -265,7 +265,7 @@ const AddUnit = () => {
 
         } catch (error) {
             console.error("Create unit failed:", error);
-            setSubmitMessage('Failed to create unit. ' + (error.response?.data?.message || 'Please try again.'));
+            setSubmitMessage('Failed to create unit. ' + handleApiError(error));
         } finally {
             setIsSubmitting(false);
         }

@@ -6,7 +6,7 @@ import Step2TermsFinalization from './lease-creation/Step2TermsFinalization';
 import Step3RentConfig from './lease-creation/Step3RentConfig';
 import Step4Escalations from './lease-creation/Step4Escalations';
 import Step5DocsExecute from './lease-creation/Step5DocsExecute';
-import { leaseAPI, getProjects, unitAPI, partyAPI, ownershipAPI } from '../../services/api';
+import { leaseAPI, getProjects, unitAPI, partyAPI, ownershipAPI, handleApiError } from '../../services/api';
 import './AddLease.css';
 import './dashboard.css';
 
@@ -334,7 +334,7 @@ const AddLease = () => {
 
         } catch (error) {
             console.error(error);
-            alert("Failed to create lease: " + (error.response?.data?.error || error.response?.data?.message || error.message));
+            alert("Failed to create lease: " + handleApiError(error));
         } finally {
             setIsSubmitting(false);
         }

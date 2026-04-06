@@ -1,5 +1,6 @@
 // Vercel Serverless Function Entry Point
+const express = require('express');
 const app = require('../backend/server');
 
-// Export the Express app
+// Explicitly export the Express app for Vercel's scanner
 module.exports = app;

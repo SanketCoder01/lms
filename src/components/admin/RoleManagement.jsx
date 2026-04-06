@@ -2,7 +2,7 @@ import React, { useEffect, useState, useRef } from "react";
 import Sidebar from "./Sidebar";
 import "./RoleManagement.css";
 // import api from services
-import { userAPI, roleAPI } from "../../services/api";
+import { userAPI, roleAPI, handleApiError } from "../../services/api";
 
 const RoleManagement = () => {
   const [users, setUsers] = useState([]);
@@ -140,7 +140,7 @@ const RoleManagement = () => {
         showToast("User deleted successfully", "success");
         fetchUsers();
       } catch (error) {
-        showToast("Failed to delete user", "error");
+        showToast("Failed to delete user: " + handleApiError(error), "error");
       }
       setActiveActionMenu(null);
     }
@@ -168,7 +168,7 @@ const RoleManagement = () => {
       fetchUsers();
     } catch (error) {
       console.error("Submission Error:", error);
-      const msg = error.response?.data?.message || (isEditing ? "Failed to update user" : "Failed to create user");
+      const msg = handleApiError(error);
       showToast(msg, "error");
     } finally {
       setSubmitting(false);

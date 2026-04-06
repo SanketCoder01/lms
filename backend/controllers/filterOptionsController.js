@@ -4,6 +4,7 @@
  */
 
 const supabase = require('../config/db');
+const { handleDbError } = require('../utils/errorHandler');
 
 // GET /api/filters?category=xxx
 exports.getFilterOptions = async (req, res) => {
@@ -24,12 +25,12 @@ exports.getFilterOptions = async (req, res) => {
 
     if (error) {
       console.error('[FilterOptions GET]', error);
-      return res.status(500).json({ success: false, error: error.message });
+      return res.status(500).json(handleDbError(error));
     }
 
     res.json({ success: true, data: data || [] });
   } catch (err) {
-    console.error('[FilterOptions GET catch]', err.message);
+    console.error('[FilterOptions GET catch]', err);
     res.status(500).json({ success: false, error: err.message });
   }
 };
@@ -46,25 +47,16 @@ exports.addFilterOption = async (req, res) => {
     const { data, error } = await supabase
       .from('filter_options')
       .insert({ category: category.trim(), option_value: option_value.trim(), status: 'active' })
-      .select()
-      .single();
+      .select();
 
     if (error) {
       console.error('[FilterOptions POST]', error);
-      // Unique constraint violation
-      if (error.code === '23505') {
-        return res.status(400).json({ success: false, error: 'This option already exists in this category' });
-      }
-      // Table doesn't exist yet
-      if (error.code === '42P01') {
-        return res.status(500).json({ success: false, error: 'Table "filter_options" not found. Please run supabase_schema.sql in your Supabase SQL Editor first.' });
-      }
-      return res.status(500).json({ success: false, error: error.message });
+      return res.status(error.code === '23505' ? 400 : 500).json(handleDbError(error));
     }
 
-    res.status(201).json({ success: true, id: data.id, message: 'Filter option added' });
+    res.status(201).json({ success: true, id: data[0]?.id, message: 'Filter option added' });
   } catch (err) {
-    console.error('[FilterOptions POST catch]', err.message);
+    console.error('[FilterOptions POST catch]', err);
     res.status(500).json({ success: false, error: err.message });
   }
 };

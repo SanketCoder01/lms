@@ -40,6 +40,30 @@ API.interceptors.response.use(
   }
 );
 
+/**
+ * Extracts a human-readable error message from an Axios error object.
+ * Prevents [object Object] from showing up in alerts.
+ */
+export const handleApiError = (error) => {
+  const data = error.response?.data;
+  
+  if (data) {
+    // Priority 1: Our standardized { success: false, message: "..." }
+    if (data.message && typeof data.message === 'string') return data.message;
+    
+    // Priority 2: Generic { error: "..." } string
+    if (data.error && typeof data.error === 'string') return data.error;
+    
+    // Priority 3: Supabase/PostgreSQL style { error: { message: "..." } }
+    if (data.error?.message && typeof data.error.message === 'string') return data.error.message;
+
+    // Fallback: If it's an object but we can't find a string, stringify it or return generic
+    return data.error ? JSON.stringify(data.error) : "An unexpected backend error occurred.";
+  }
+
+  return error.message || "Network error. Please try again.";
+};
+
 // ---------------- AUTH ----------------
 export const login = (data) => API.post("/auth/login", data);
 export const register = (data) => API.post("/auth/register", data);

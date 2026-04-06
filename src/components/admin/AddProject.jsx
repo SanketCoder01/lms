@@ -1,7 +1,7 @@
 import { Link, useNavigate } from "react-router-dom";
 import { useState, useEffect } from "react";
 import Sidebar from "./Sidebar";
-import { addProject, filterAPI } from "../../services/api";
+import { addProject, filterAPI, handleApiError } from "../../services/api";
 import { indianStates, getCitiesByState } from "../../utils/indianLocations";
 import "./AddProject.css";
 
@@ -101,7 +101,7 @@ const AddProject = () => {
       setTimeout(() => navigate("/admin/projects"), 2000);
     } catch (error) {
       console.error("Add project error:", error);
-      const errorMessage = error.response?.data?.error || error.message || "Failed to add project";
+      const errorMessage = handleApiError(error);
       alert(`Failed to add project: ${errorMessage}`);
       setIsSubmitting(false);
     }

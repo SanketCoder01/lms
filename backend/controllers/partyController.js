@@ -1,4 +1,5 @@
 const supabase = require('../config/db');
+const { handleDbError } = require('../utils/errorHandler');
 
 // Get all parties
 exports.getAllParties = async (req, res) => {
@@ -45,12 +46,12 @@ exports.createParty = async (req, res) => {
             representative_designation, owner_group
         }).select('id').single();
 
-        if (error) throw error;
+        if (error) return res.status(500).json(handleDbError(error));
         
-        res.status(201).json({ id: data.id, ...req.body });
+        res.status(201).json({ success: true, id: data.id, ...req.body });
     } catch (err) {
         console.error("createParty Error:", err);
-        res.status(500).json({ message: 'Server Error', error: err.message });
+        res.status(500).json({ success: false, message: 'Server Error', error: err.message });
     }
 };
 
@@ -71,12 +72,12 @@ exports.updateParty = async (req, res) => {
             representative_designation, owner_group
         }).eq('id', req.params.id);
 
-        if (error) throw error;
+        if (error) return res.status(500).json(handleDbError(error));
         
-        res.json({ message: 'Party updated successfully' });
+        res.json({ success: true, message: 'Party updated successfully' });
     } catch (err) {
         console.error("updateParty Error:", err);
-        res.status(500).json({ message: 'Server Error', error: err.message });
+        res.status(500).json({ success: false, message: 'Server Error', error: err.message });
     }
 };
 
@@ -85,13 +86,11 @@ exports.deleteParty = async (req, res) => {
     try {
         const { error } = await supabase.from('parties').delete().eq('id', req.params.id);
         
-        if (error) {
-            if (error.code === '23503') return res.status(400).json({ message: 'Cannot delete party. Associated records exist.' });
-            throw error;
-        }
-        res.json({ message: 'Party deleted successfully' });
+        if (error) return res.status(500).json(handleDbError(error));
+        
+        res.json({ success: true, message: 'Party deleted successfully' });
     } catch (err) {
         console.error("deleteParty Error:", err);
-        res.status(500).json({ message: 'Server Error', error: err.message });
+        res.status(500).json({ success: false, message: 'Server Error', error: err.message });
     }
 };

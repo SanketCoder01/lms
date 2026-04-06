@@ -1,4 +1,5 @@
 const supabase = require("../config/db");
+const { handleDbError } = require('../utils/errorHandler');
 const { createNotification } = require('../utils/notificationHelper');
 
 const getDateStrs = () => {
@@ -40,7 +41,7 @@ const getLeaseDashboardStats = async (req, res) => {
         });
     } catch (err) {
         console.error("Dashboard Stats Error:", err);
-        res.status(500).json({ message: "Server error" });
+        res.status(500).json({ success: false, message: "Server error", error: err.message });
     }
 };
 
@@ -141,28 +142,28 @@ const getPendingLeases = async (req, res) => {
 const approveLease = async (req, res) => {
     try {
         const { error } = await supabase.from('leases').update({ status: 'approved' }).eq('id', req.params.id);
-        if (error) throw error;
+        if (error) return res.status(500).json(handleDbError(error));
         await createNotification(1, "Lease Approved", `Lease #${req.params.id} has been approved.`, "success");
-        res.json({ message: "Lease approved" });
+        res.json({ success: true, message: "Lease approved" });
     } catch (err) {
         console.error("approveLease", err);
-        res.status(500).json({ message: "Server error" });
+        res.status(500).json({ success: false, message: "Server error", error: err.message });
     }
 };
 
 const rejectLease = async (req, res) => {
     try {
         const { reason } = req.body;
-        if (!reason) return res.status(400).json({ message: "Rejection reason is required" });
+        if (!reason) return res.status(400).json({ success: false, message: "Rejection reason is required" });
 
         const { error } = await supabase.from('leases').update({ status: 'rejected' }).eq('id', req.params.id);
-        if (error) throw error;
+        if (error) return res.status(500).json(handleDbError(error));
 
         await createNotification(1, "Lease Rejected", `Lease #${req.params.id} was rejected. Reason: ${reason}`, "error");
-        res.json({ message: "Lease rejected" });
+        res.json({ success: true, message: "Lease rejected" });
     } catch (err) {
         console.error("rejectLease", err);
-        res.status(500).json({ message: "Server error" });
+        res.status(500).json({ success: false, message: "Server error", error: err.message });
     }
 };
 
@@ -420,7 +421,7 @@ const createLease = async (req, res) => {
         const { data: lease, error: lErr } = await supabase.from('leases').insert(dbPayload).select('id').single();
         if (lErr) {
             console.error("Supabase insert error:", lErr);
-            return res.status(500).json({ message: 'Failed to create lease', error: lErr.message || JSON.stringify(lErr) });
+            return res.status(500).json(handleDbError(lErr));
         }
 
         if (Array.isArray(payload.escalations) && payload.escalations.length > 0) {

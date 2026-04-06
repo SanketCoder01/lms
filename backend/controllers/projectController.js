@@ -1,4 +1,5 @@
 const supabase = require("../config/db");
+const { handleDbError } = require('../utils/errorHandler');
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
@@ -51,13 +52,13 @@ const addProject = async (req, res) => {
       .select('id')
       .single();
 
-    if (error) throw error;
+    if (error) return res.status(500).json(handleDbError(error));
 
     await createNotification(1, "New Project Added", `Project "${project_name}" has been created in ${location}.`, "success");
-    res.status(201).json({ message: "Project Added Successfully", id: result.id });
+    res.status(201).json({ success: true, message: "Project Added Successfully", id: result.id });
   } catch (error) {
     console.error("Add project error:", error);
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ success: false, message: error.message });
   }
 };
 
@@ -233,12 +234,12 @@ const updateProject = async (req, res) => {
     if (imageUrl) updateData.project_image = imageUrl;
 
     const { error } = await supabase.from('projects').update(updateData).eq('id', req.params.id);
-    if (error) throw error;
+    if (error) return res.status(500).json(handleDbError(error));
 
-    res.json({ message: "Project Updated Successfully" });
+    res.json({ success: true, message: "Project updated successfully" });
   } catch (error) {
     console.error("Update project error:", error);
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ success: false, message: error.message });
   }
 };
 

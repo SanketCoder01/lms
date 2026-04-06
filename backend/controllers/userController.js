@@ -1,5 +1,6 @@
 const supabase = require("../config/db");
 const bcrypt = require("bcryptjs");
+const { handleDbError } = require('../utils/errorHandler');
 // The logger utils wasn't updated yet to use supabase, but I'll assume we either bypass it or comment it out for now,
 // or we rewrite it later. Let's keep the call structure the same, but wait, `logActivity` is in `utils/logger.js`.
 const { logActivity } = require("../utils/logger");
@@ -89,8 +90,7 @@ const createUser = async (req, res) => {
 
         if (authError) {
             console.error("Supabase Admin Auth Error:", authError);
-            // Return specific auth errors (e.g. user already exists in Auth but not Public table)
-            return res.status(400).json({ message: `Authentication Error: ${authError.message}` });
+            return res.status(400).json({ success: false, message: `Authentication Error: ${authError.message}` });
         }
 
         // 4. Hash password for local storage (redundant if using Auth only, but schema has it)
