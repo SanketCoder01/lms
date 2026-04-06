@@ -164,12 +164,12 @@ const UnitDetails = () => {
                                     <div className="image-placeholder main-placeholder">
                                         {unit.unit_image ? (
                                             <img
-                                                src={`http://localhost:5000/uploads/units/${unit.unit_image}`}
+                                                src={`https://lms-sepia-mu.vercel.app/uploads/units/${unit.unit_image}`}
                                                 alt={`Unit ${unit.unit_number}`}
                                                 style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '8px' }}
                                                 onError={(e) => {
                                                     e.target.onerror = null;
-                                                    e.target.src = `http://localhost:5000/uploads/${unit.unit_image}`;
+                                                    e.target.src = `https://lms-sepia-mu.vercel.app/uploads/${unit.unit_image}`;
                                                 }}
                                             />
                                         ) : (

@@ -51,7 +51,7 @@ const AddParty = () => {
                     filterAPI.getFilterOptions("brand_category").catch(() => ({ data: { data: [] } })),
                     filterAPI.getFilterOptions("Party Type").catch(() => ({ data: { data: [] } })),
                     filterAPI.getFilterOptions("Owner Grouping").catch(() => ({ data: { data: [] } })),
-                    axios.get('http://localhost:5000/api/locations/states').catch(() => ({ data: [] }))
+                    axios.get('https://lms-sepia-mu.vercel.app/api/locations/states').catch(() => ({ data: [] }))
                 ]);
 
                 if (bcRes.data.data?.length > 0) setBrandCategories(bcRes.data.data);
@@ -70,7 +70,7 @@ const AddParty = () => {
                 'postgres_changes',
                 { event: '*', schema: 'public', table: 'states' },
                 () => {
-                    axios.get('http://localhost:5000/api/locations/states').then(res => setStatesList(res.data)).catch(console.error);
+                    axios.get('https://lms-sepia-mu.vercel.app/api/locations/states').then(res => setStatesList(res.data)).catch(console.error);
                 }
             )
             .subscribe();
@@ -85,7 +85,7 @@ const AddParty = () => {
                 setCitiesList([]);
                 return;
             }
-            const citiesRes = await axios.get(`http://localhost:5000/api/locations/cities/${stateObj.id}`);
+            const citiesRes = await axios.get(`https://lms-sepia-mu.vercel.app/api/locations/cities/${stateObj.id}`);
             setCitiesList(citiesRes.data || []);
         } catch (e) {
             console.error("Failed to fetch cities", e);

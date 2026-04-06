@@ -91,7 +91,7 @@ npm install
 
 3. Create a `.env` file in the root directory:
 ```env
-REACT_APP_API_URL=http://localhost:5000/api
+REACT_APP_API_URL=https://lms-sepia-mu.vercel.app/api
 ```
 
 4. Start the development server:

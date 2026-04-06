@@ -95,7 +95,7 @@ const SubmissionDetails = () => {
                             </h3>
                             <div style={{ display: 'flex', gap: '16px' }}>
                                 {project.image_url ? (
-                                    <img src={`http://localhost:5000${project.image_url}`} alt="Project" style={{ width: '100px', height: '100px', objectFit: 'cover', borderRadius: '8px' }} />
+                                    <img src={`https://lms-sepia-mu.vercel.app${project.image_url}`} alt="Project" style={{ width: '100px', height: '100px', objectFit: 'cover', borderRadius: '8px' }} />
                                 ) : (
                                     <div style={{ width: '100px', height: '100px', background: '#f1f5f9', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>No Image</div>
                                 )}
