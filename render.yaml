@@ -1,10 +1,12 @@
-staticSites:
-  - name: lms-frontend
+services:
+  - type: web
+    name: lms-frontend
+    env: static
     repo: https://github.com/saifghl/lms
     branch: main
     rootDir: .
     buildCommand: npm install && npm run build
-    publishPath: build
+    staticPublishPath: build
     routes:
       - type: rewrite
         source: /*
@@ -16,10 +18,9 @@ staticSites:
           name: lms-backend
           property: url
 
-services:
   - type: web
     name: lms-backend
-    runtime: node
+    env: node
     region: singapore
     plan: free
     repo: https://github.com/saifghl/lms
