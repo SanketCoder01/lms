@@ -100,10 +100,13 @@ app.get("/api/health", (req, res) => {
 });
 
 /* =========================
-   SERVER START
+   SERVER START (LOCAL & VERCEL)
 ========================= */
-app.listen(PORT, "0.0.0.0", () => {
-  console.log(`🚀 Server running on port ${PORT}`);
+if (process.env.NODE_ENV !== 'production' || require.main === module) {
+  app.listen(PORT, "0.0.0.0", () => {
+    console.log(`🚀 Server running on port ${PORT}`);
+  });
+}
 
-});
-
+// Export for Vercel serverless function
+module.exports = app;
