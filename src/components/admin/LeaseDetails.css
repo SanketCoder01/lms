@@ -367,4 +367,225 @@
     .financials-row {
         grid-template-columns: 1fr;
     }
+    
+    .info-grid {
+        grid-template-columns: 1fr;
+    }
+    
+    .lease-details-container {
+        padding: 16px;
+    }
+    
+    .details-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 16px;
+        padding: 16px;
+    }
+    
+    .header-actions {
+        width: 100%;
+        flex-direction: column;
+    }
+    
+    .edit-btn, .renew-btn {
+        width: 100%;
+        justify-content: center;
+    }
+}
+
+@media (max-width: 768px) {
+    .lease-details-container {
+        padding: 12px;
+    }
+    
+    .details-header {
+        padding: 12px;
+        border-radius: 8px;
+    }
+    
+    .header-title-section h1 {
+        font-size: 1.25rem;
+        flex-wrap: wrap;
+    }
+    
+    .header-subtitle {
+        font-size: 0.85rem;
+    }
+    
+    .info-card {
+        padding: 16px;
+        border-radius: 8px;
+    }
+    
+    .info-card h3 {
+        font-size: 0.8rem;
+    }
+    
+    .tenant-info, .unit-info {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 12px;
+    }
+    
+    .avatar-placeholder, .unit-img-placeholder {
+        width: 40px;
+        height: 40px;
+    }
+    
+    .info-text h4 {
+        font-size: 1rem;
+    }
+    
+    .detail-row {
+        flex-direction: column;
+        gap: 12px;
+    }
+    
+    .detail-item {
+        width: 100%;
+    }
+    
+    .timeline-section {
+        padding: 16px;
+        border-radius: 8px;
+        overflow-x: auto;
+    }
+    
+    .timeline-track {
+        margin: 40px 10px;
+    }
+    
+    .timeline-label {
+        width: 80px;
+    }
+    
+    .date-text {
+        font-size: 0.8rem;
+    }
+    
+    .desc-text {
+        font-size: 0.7rem;
+    }
+    
+    .rent-card, .deposit-card {
+        padding: 16px;
+        border-radius: 8px;
+    }
+    
+    .rent-breakdown {
+        flex-direction: column;
+    }
+    
+    .rent-item {
+        padding: 12px;
+    }
+    
+    .amount {
+        font-size: 1rem;
+    }
+    
+    .total-amount {
+        font-size: 1.25rem;
+    }
+    
+    .deposit-amount {
+        font-size: 1.25rem;
+    }
+    
+    .expiry-days {
+        font-size: 1.5rem;
+    }
+}
+
+@media (max-width: 480px) {
+    .lease-details-container {
+        padding: 8px;
+    }
+    
+    .details-header {
+        padding: 12px;
+    }
+    
+    .header-title-section h1 {
+        font-size: 1.1rem;
+    }
+    
+    .status-badge {
+        font-size: 0.7rem;
+        padding: 3px 8px;
+    }
+    
+    .info-card {
+        padding: 12px;
+    }
+    
+    .info-card h3 {
+        font-size: 0.75rem;
+        margin-bottom: 12px;
+    }
+    
+    .avatar-placeholder, .unit-img-placeholder {
+        width: 36px;
+        height: 36px;
+        font-size: 0.8rem;
+    }
+    
+    .info-text h4 {
+        font-size: 0.95rem;
+    }
+    
+    .info-text p {
+        font-size: 0.8rem;
+    }
+    
+    .detail-item label {
+        font-size: 0.7rem;
+    }
+    
+    .detail-item span {
+        font-size: 0.85rem;
+    }
+    
+    .timeline-section {
+        padding: 12px;
+    }
+    
+    .current-label-badge {
+        font-size: 0.7rem;
+        padding: 3px 8px;
+        top: -30px;
+    }
+    
+    .rent-card, .deposit-card {
+        padding: 12px;
+    }
+    
+    .rent-item label {
+        font-size: 0.75rem;
+    }
+    
+    .amount {
+        font-size: 0.95rem;
+    }
+    
+    .total-amount, .deposit-amount {
+        font-size: 1.1rem;
+    }
+    
+    .deposit-details {
+        font-size: 0.8rem;
+    }
+    
+    .expiry-days {
+        font-size: 1.25rem;
+    }
+    
+    .expiry-label {
+        font-size: 0.8rem;
+    }
+    
+    .progress-bar {
+        height: 6px;
+    }
 }

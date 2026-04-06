@@ -198,6 +198,24 @@
 }
 
 /* Responsive */
+@media (max-width: 1024px) {
+    .add-lease-container {
+        padding: 20px;
+    }
+    
+    .form-layout {
+        max-width: 100%;
+    }
+    
+    .form-row {
+        flex-wrap: wrap;
+    }
+    
+    .form-group {
+        min-width: 200px;
+    }
+}
+
 @media (max-width: 768px) {
     .add-lease-container {
         padding: 16px;
@@ -209,20 +227,42 @@
 
     .form-section {
         padding: 16px;
+        border-radius: 8px;
+    }
+    
+    .form-section h3 {
+        font-size: 1rem;
+        margin-bottom: 16px;
     }
 
     .form-row {
         flex-direction: column;
-        gap: 20px;
+        gap: 16px;
+    }
+    
+    .form-group {
+        min-width: 100%;
     }
 
     .date-row {
-        flex-direction: row;
-        flex-wrap: wrap;
+        flex-direction: column;
+        flex-wrap: nowrap;
     }
 
     .escalation-row {
         grid-template-columns: 1fr;
+        gap: 12px;
+        padding: 12px;
+    }
+    
+    .escalation-row .form-group {
+        margin-bottom: 0;
+    }
+    
+    .remove-step-btn {
+        width: 100%;
+        height: 40px;
+        margin-top: 4px;
     }
 
     .stepper {
@@ -233,9 +273,98 @@
     .form-actions {
         flex-direction: column-reverse;
         gap: 12px;
+        padding-top: 16px;
+        margin-top: 16px;
     }
 
     .form-actions button {
         width: 100%;
+    }
+    
+    .cancel-btn, .create-btn {
+        padding: 12px 24px;
+    }
+    
+    .radio-group {
+        flex-direction: column;
+        gap: 12px;
+    }
+    
+    .currency-input input {
+        padding-left: 30px !important;
+        padding-right: 40px !important;
+    }
+    
+    .currency-symbol {
+        font-size: 0.85rem;
+    }
+    
+    .currency-code {
+        font-size: 0.75rem;
+    }
+}
+
+@media (max-width: 480px) {
+    .add-lease-container {
+        padding: 12px;
+        min-height: auto;
+    }
+    
+    .form-header {
+        margin-bottom: 4px;
+    }
+    
+    .form-header h1 {
+        font-size: 1.25rem;
+    }
+    
+    .form-section {
+        padding: 12px;
+        border-radius: 6px;
+    }
+    
+    .form-section h3 {
+        font-size: 0.95rem;
+        margin-bottom: 12px;
+    }
+
+    .form-group label {
+        font-size: 0.8rem;
+    }
+
+    .form-group input,
+    .form-group select {
+        padding: 10px;
+        font-size: 0.9rem;
+        border-radius: 6px;
+    }
+    
+    .form-row {
+        gap: 12px;
+        margin-bottom: 16px;
+    }
+    
+    .escalation-row {
+        padding: 10px;
+        border-radius: 6px;
+    }
+    
+    .add-step-btn {
+        font-size: 0.85rem;
+        padding: 6px 0;
+    }
+    
+    .remove-step-btn {
+        height: 36px;
+        border-radius: 4px;
+    }
+    
+    .radio-option {
+        font-size: 0.9rem;
+    }
+    
+    .cancel-btn, .create-btn {
+        padding: 10px 20px;
+        font-size: 0.9rem;
     }
 }

@@ -52,7 +52,7 @@ const EditParty = () => {
                     filterAPI.getFilterOptions("brand_category").catch(() => ({ data: { data: [] } })),
                     filterAPI.getFilterOptions("Party Type").catch(() => ({ data: { data: [] } })),
                     filterAPI.getFilterOptions("Owner Grouping").catch(() => ({ data: { data: [] } })),
-                    axios.get('https://lms-sepia-mu.vercel.app/api/locations/states').catch(() => ({ data: [] }))
+                    axios.get('https://lms-iac2-git-master-sanketg367-gmailcoms-projects.vercel.app/api/locations/states').catch(() => ({ data: [] }))
                 ]);
 
                 if (bcRes.data.data?.length > 0) setBrandCategories(bcRes.data.data);
@@ -72,7 +72,7 @@ const EditParty = () => {
                 'postgres_changes',
                 { event: '*', schema: 'public', table: 'states' },
                 () => {
-                    axios.get('https://lms-sepia-mu.vercel.app/api/locations/states').then(res => setStatesList(res.data)).catch(console.error);
+                    axios.get('https://lms-iac2-git-master-sanketg367-gmailcoms-projects.vercel.app/api/locations/states').then(res => setStatesList(res.data)).catch(console.error);
                 }
             )
             .subscribe();
@@ -95,10 +95,10 @@ const EditParty = () => {
                 // Fetch cities if state is present
                 if (safeData.state) {
                     try {
-                        const statesRes = await axios.get('https://lms-sepia-mu.vercel.app/api/locations/states');
+                        const statesRes = await axios.get('https://lms-iac2-git-master-sanketg367-gmailcoms-projects.vercel.app/api/locations/states');
                         const stateObj = statesRes.data.find(s => s.name === safeData.state);
                         if (stateObj) {
-                            const citiesRes = await axios.get(`https://lms-sepia-mu.vercel.app/api/locations/cities/${stateObj.id}`);
+                            const citiesRes = await axios.get(`https://lms-iac2-git-master-sanketg367-gmailcoms-projects.vercel.app/api/locations/cities/${stateObj.id}`);
                             setCitiesList(citiesRes.data || []);
                         }
                     } catch (e) {
@@ -122,7 +122,7 @@ const EditParty = () => {
                 setCitiesList([]);
                 return;
             }
-            const citiesRes = await axios.get(`https://lms-sepia-mu.vercel.app/api/locations/cities/${stateObj.id}`);
+            const citiesRes = await axios.get(`https://lms-iac2-git-master-sanketg367-gmailcoms-projects.vercel.app/api/locations/cities/${stateObj.id}`);
             setCitiesList(citiesRes.data || []);
         } catch (e) {
             console.error("Failed to fetch cities", e);

@@ -2026,6 +2026,152 @@
     .reminders-layout {
         grid-template-columns: 1fr;
     }
+    
+    .reminder-stats-row {
+        grid-template-columns: repeat(2, 1fr);
+    }
+    
+    .lease-dashboard-content {
+        padding: 24px 16px;
+    }
+    
+    .dashboard-cards-grid {
+        gap: 16px;
+    }
+    
+    .recent-activity-section {
+        padding: 24px;
+    }
+}
+
+@media (max-width: 768px) {
+    .lease-navbar {
+        padding: 12px 16px;
+    }
+    
+    .lease-nav-container {
+        flex-wrap: wrap;
+    }
+    
+    .search-bar {
+        width: 100%;
+        max-width: 200px;
+        order: 3;
+        margin-top: 12px;
+    }
+    
+    .lease-nav-actions {
+        gap: 12px;
+    }
+    
+    .lease-dashboard-content {
+        padding: 20px 12px;
+    }
+    
+    .dashboard-header-simple h1,
+    .page-header-simple h1 {
+        font-size: 22px;
+    }
+    
+    .dashboard-header-simple p,
+    .page-header-simple p {
+        font-size: 14px;
+    }
+    
+    .tracker-stats-row {
+        grid-template-columns: 1fr;
+        gap: 16px;
+    }
+    
+    .stat-card-clean {
+        padding: 16px;
+    }
+    
+    .stat-card-value {
+        font-size: 24px;
+    }
+    
+    .section-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 12px;
+    }
+    
+    .filters-bar {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 12px;
+    }
+    
+    .filter-left {
+        flex-wrap: wrap;
+        gap: 12px;
+    }
+    
+    .custom-table th,
+    .custom-table td {
+        padding: 12px 16px;
+    }
+    
+    .custom-table {
+        min-width: 600px;
+    }
+    
+    .custom-table-container {
+        overflow-x: auto;
+        border-radius: 8px;
+    }
+    
+    .leases-tabs {
+        overflow-x: auto;
+        padding-bottom: 4px;
+    }
+    
+    .lease-tab {
+        white-space: nowrap;
+    }
+    
+    .reminder-stats-row {
+        grid-template-columns: 1fr;
+    }
+    
+    .reminder-queue {
+        padding: 16px;
+    }
+    
+    .compose-card {
+        padding: 16px;
+    }
+    
+    .calendar-widget {
+        padding: 16px;
+    }
+    
+    .n-card {
+        flex-direction: column;
+        padding: 16px;
+    }
+    
+    .n-card-actions {
+        flex-wrap: wrap;
+    }
+    
+    .details-card {
+        padding: 16px;
+    }
+    
+    .info-grid-3 {
+        grid-template-columns: 1fr;
+        gap: 16px;
+    }
+    
+    .financial-box {
+        padding: 16px;
+    }
+    
+    .financial-box .amount {
+        font-size: 20px;
+    }
 }
 
 @media (max-width: 640px) {
@@ -2046,5 +2192,343 @@
 
     .l-step {
         min-width: 100px;
+    }
+    
+    .info-grid-2 {
+        grid-template-columns: 1fr;
+    }
+    
+    .details-footer {
+        padding: 12px 16px;
+    }
+    
+    .btn-reject-red,
+    .btn-approve-blue {
+        padding: 8px 16px;
+        font-size: 13px;
+    }
+}
+
+@media (max-width: 480px) {
+    .lease-navbar {
+        padding: 10px 12px;
+    }
+    
+    .brand-name {
+        font-size: 16px;
+    }
+    
+    .lease-nav-links {
+        gap: 16px;
+    }
+    
+    .nav-link {
+        font-size: 13px;
+    }
+    
+    .search-bar {
+        max-width: 100%;
+    }
+    
+    .lease-dashboard-content {
+        padding: 16px 8px;
+    }
+    
+    .dashboard-header-simple h1,
+    .page-header-simple h1 {
+        font-size: 20px;
+    }
+    
+    .dashboard-cards-grid {
+        gap: 12px;
+    }
+    
+    .dashboard-card {
+        padding: 16px;
+        border-radius: 12px;
+    }
+    
+    .card-value {
+        font-size: 28px;
+    }
+    
+    .card-title {
+        font-size: 12px;
+    }
+    
+    .recent-activity-section {
+        padding: 16px;
+        border-radius: 8px;
+    }
+    
+    .section-header h3 {
+        font-size: 16px;
+    }
+    
+    .activity-item {
+        gap: 12px;
+        padding-bottom: 16px;
+    }
+    
+    .status-icon {
+        width: 24px;
+        height: 24px;
+        font-size: 12px;
+    }
+    
+    .act-title {
+        font-size: 13px;
+    }
+    
+    .act-desc {
+        font-size: 12px;
+    }
+    
+    .bottom-widgets-grid {
+        gap: 16px;
+    }
+    
+    .widget-card {
+        padding: 16px;
+        border-radius: 8px;
+    }
+    
+    .leases-tabs {
+        gap: 16px;
+    }
+    
+    .lease-tab {
+        font-size: 13px;
+    }
+    
+    .tab-badge {
+        font-size: 10px;
+        padding: 2px 4px;
+    }
+    
+    .custom-table th {
+        font-size: 11px;
+        padding: 10px 12px;
+    }
+    
+    .custom-table td {
+        padding: 10px 12px;
+    }
+    
+    .lease-id {
+        font-size: 13px;
+    }
+    
+    .project-name {
+        font-size: 13px;
+    }
+    
+    .tenant-name {
+        font-size: 13px;
+    }
+    
+    .status-pill {
+        padding: 4px 8px;
+        font-size: 11px;
+    }
+    
+    .btn-review {
+        padding: 6px 12px;
+        font-size: 12px;
+    }
+    
+    .stat-card-clean {
+        padding: 12px;
+        border-radius: 8px;
+    }
+    
+    .stat-card-title {
+        font-size: 12px;
+    }
+    
+    .stat-card-value {
+        font-size: 22px;
+    }
+    
+    .stat-card-desc {
+        font-size: 11px;
+    }
+    
+    .details-card {
+        padding: 12px;
+        border-radius: 8px;
+    }
+    
+    .card-header h3 {
+        font-size: 14px;
+    }
+    
+    .info-item label {
+        font-size: 10px;
+    }
+    
+    .info-item p {
+        font-size: 14px;
+    }
+    
+    .financial-box {
+        padding: 12px;
+        border-radius: 6px;
+    }
+    
+    .financial-summary-row {
+        font-size: 13px;
+    }
+    
+    .sidebar-section {
+        margin-bottom: 24px;
+    }
+    
+    .sidebar-title {
+        font-size: 13px;
+    }
+    
+    .doc-item {
+        padding: 10px;
+    }
+    
+    .doc-name {
+        font-size: 12px;
+    }
+    
+    .doc-icon {
+        width: 28px;
+        height: 28px;
+    }
+    
+    .timeline-event {
+        padding-left: 20px;
+        margin-bottom: 16px;
+    }
+    
+    .timeline-dot {
+        width: 12px;
+        height: 12px;
+    }
+    
+    .timeline-content h4 {
+        font-size: 12px;
+    }
+    
+    .timeline-content p {
+        font-size: 11px;
+    }
+    
+    .n-header {
+        flex-direction: column;
+        gap: 16px;
+    }
+    
+    .n-actions {
+        gap: 16px;
+        flex-wrap: wrap;
+    }
+    
+    .n-icon {
+        width: 32px;
+        height: 32px;
+        font-size: 14px;
+    }
+    
+    .n-title {
+        font-size: 13px;
+    }
+    
+    .n-message {
+        font-size: 12px;
+    }
+    
+    .n-btn-primary {
+        padding: 6px 12px;
+        font-size: 11px;
+    }
+    
+    .reminder-queue {
+        padding: 12px;
+        border-radius: 8px;
+    }
+    
+    .compose-card {
+        padding: 12px;
+        border-radius: 8px;
+    }
+    
+    .compose-input {
+        padding: 10px;
+        font-size: 13px;
+    }
+    
+    .calendar-widget {
+        padding: 12px;
+        border-radius: 8px;
+    }
+    
+    .mini-calendar-grid {
+        gap: 4px;
+    }
+    
+    .cal-day {
+        font-size: 11px;
+        padding: 4px;
+    }
+    
+    .lifecycle-header {
+        padding: 16px;
+        border-radius: 8px;
+    }
+    
+    .lifecycle-timeline-container {
+        padding: 0 12px;
+    }
+    
+    .l-step {
+        min-width: 80px;
+    }
+    
+    .l-icon-circle {
+        width: 28px;
+        height: 28px;
+        font-size: 12px;
+    }
+    
+    .l-label {
+        font-size: 11px;
+    }
+    
+    .l-date {
+        font-size: 12px;
+    }
+    
+    .l-status {
+        font-size: 10px;
+    }
+    
+    .report-summary-card {
+        padding: 16px;
+        border-radius: 8px;
+    }
+    
+    .report-card-header {
+        margin-bottom: 16px;
+    }
+    
+    .icon-square {
+        width: 32px;
+        height: 32px;
+        font-size: 16px;
+    }
+    
+    .report-main-stat {
+        margin: 16px 0;
+    }
+    
+    .btn-view-report {
+        padding: 8px;
+        font-size: 12px;
     }
 }

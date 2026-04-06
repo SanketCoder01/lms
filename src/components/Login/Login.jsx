@@ -28,9 +28,9 @@ const Login = () => {
   }, []); // eslint-disable-line
 
   const redirectByRole = (role) => {
-    if (role === 'Lease Manager')      return navigate('/lease-manager/dashboard');
-    if (role === 'Management Rep')     return navigate('/management/dashboard');
-    if (role === 'Data Entry')         return navigate('/data-entry/dashboard');
+    if (role === 'Lease Manager') return navigate('/lease-manager/dashboard');
+    if (role === 'Management Rep') return navigate('/management/dashboard');
+    if (role === 'Data Entry') return navigate('/data-entry/dashboard');
     return navigate('/admin/dashboard');
   };
 
@@ -47,7 +47,7 @@ const Login = () => {
 
     try {
       const { data, error: authError } = await supabase.auth.signInWithPassword({
-        email:    formData.email,
+        email: formData.email,
         password: formData.password,
       });
 
@@ -59,10 +59,10 @@ const Login = () => {
       // Persist user info for the app
       localStorage.setItem('token', data.session.access_token);
       localStorage.setItem('user', JSON.stringify({
-        id:         user.id,
-        email:      user.email,
+        id: user.id,
+        email: user.email,
         first_name: user.user_metadata?.first_name || user.email.split('@')[0],
-        last_name:  user.user_metadata?.last_name || '',
+        last_name: user.user_metadata?.last_name || '',
         role,
       }));
 
@@ -82,13 +82,13 @@ const Login = () => {
 
     try {
       const { data, error: authError } = await supabase.auth.signUp({
-        email:    formData.email,
+        email: formData.email,
         password: formData.password,
         options: {
           data: {
             first_name: formData.first_name,
-            last_name:  formData.last_name,
-            role:       formData.role,
+            last_name: formData.last_name,
+            role: formData.role,
           },
         },
       });
@@ -103,9 +103,9 @@ const Login = () => {
         // Auto-confirmed
         localStorage.setItem('token', data.session.access_token);
         localStorage.setItem('user', JSON.stringify({
-          id:    data.user.id,
+          id: data.user.id,
           email: data.user.email,
-          role:  formData.role,
+          role: formData.role,
         }));
         redirectByRole(formData.role);
       }
@@ -185,15 +185,7 @@ const Login = () => {
           </div>
 
           {error && (
-            <div style={{
-              padding: '12px 16px',
-              borderRadius: '8px',
-              marginBottom: '16px',
-              fontSize: '14px',
-              background: error.startsWith('✅') ? '#f0fdf4' : '#fef2f2',
-              color: error.startsWith('✅') ? '#16a34a' : '#dc2626',
-              border: `1px solid ${error.startsWith('✅') ? '#bbf7d0' : '#fecaca'}`,
-            }}>
+            <div className={`error-message ${error.startsWith('✅') ? 'success' : 'error'}`}>
               {error}
             </div>
           )}
@@ -202,15 +194,15 @@ const Login = () => {
 
             {/* Name fields (register only) */}
             {mode === 'register' && (
-              <div style={{ display: 'flex', gap: '10px' }}>
-                <div className="form-group" style={{ flex: 1 }}>
+              <div className="name-row">
+                <div className="form-group">
                   <label>First Name</label>
                   <div className="input-wrapper">
                     <input type="text" name="first_name" placeholder="First Name"
                       value={formData.first_name} onChange={handleChange} required />
                   </div>
                 </div>
-                <div className="form-group" style={{ flex: 1 }}>
+                <div className="form-group">
                   <label>Last Name</label>
                   <div className="input-wrapper">
                     <input type="text" name="last_name" placeholder="Last Name"
@@ -261,14 +253,13 @@ const Login = () => {
                   <span className="input-icon">
                     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
                   </span>
-                  <select name="role" value={formData.role} onChange={handleChange}
-                    style={{ width: '100%', padding: '12px 16px 12px 60px', border: '1px solid #e2e8f0', borderRadius: '8px', fontSize: '0.95rem', color: '#2d3748', appearance: 'none', backgroundColor: '#fff', cursor: 'pointer' }}>
+                  <select name="role" value={formData.role} onChange={handleChange} className="role-select">
                     <option value="Admin">Admin</option>
                     <option value="Data Entry">Data Entry</option>
                     <option value="Lease Manager">Lease Manager</option>
                     <option value="Management Rep">Management Representative</option>
                   </select>
-                  <span style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none', color: '#718096' }}>
+                  <span className="select-arrow">
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="6 9 12 15 18 9"></polyline></svg>
                   </span>
                 </div>
@@ -281,9 +272,7 @@ const Login = () => {
                 <label className="remember-me">
                   <input type="checkbox" /> Remember me
                 </label>
-                <button type="button" className="forgot-password"
-                  style={{ background: 'none', border: 'none', padding: 0, textDecoration: 'underline', color: 'inherit', cursor: 'pointer' }}
-                  onClick={() => setMode('forgot')}>
+                <button type="button" className="forgot-password" onClick={() => setMode('forgot')}>
                   Forgot Password?
                 </button>
               </div>
@@ -303,17 +292,14 @@ const Login = () => {
             </button>
           </form>
 
-          {/* Toggle between login / register */}
           <div className="signup-link">
             {mode === 'login' ? (
               <>Don't have an account?{' '}
-                <button style={{ background: 'none', border: 'none', padding: 0, textDecoration: 'underline', color: '#2E66FF', cursor: 'pointer', fontWeight: '600' }}
-                  onClick={() => setMode('register')}>Sign Up</button>
+                <button className="mode-toggle-btn" onClick={() => setMode('register')}>Sign Up</button>
               </>
             ) : (
               <>Already have an account?{' '}
-                <button style={{ background: 'none', border: 'none', padding: 0, textDecoration: 'underline', color: '#2E66FF', cursor: 'pointer', fontWeight: '600' }}
-                  onClick={() => setMode('login')}>Log In</button>
+                <button className="mode-toggle-btn" onClick={() => setMode('login')}>Log In</button>
               </>
             )}
           </div>
