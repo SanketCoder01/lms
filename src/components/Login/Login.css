@@ -189,15 +189,17 @@
 
 .input-wrapper {
   position: relative;
-  display: flex;
+  display: block;
   width: 100%;
 }
 
 .input-wrapper input,
 .role-select {
   width: 100%;
-  padding: 14px 16px 14px 56px;
-  /* Left padding clears icon area */
+  padding-top: 14px;
+  padding-bottom: 14px;
+  padding-right: 16px;
+  padding-left: 54px !important;
   border: 1.5px solid var(--border-color);
   border-radius: 10px;
   font-size: 1rem;
@@ -206,9 +208,10 @@
   transition: all 0.2s ease;
   outline: none;
   box-sizing: border-box;
+  display: block;
 }
 
-/* Password field needs extra right padding for toggle button */
+/* Password/text fields have eye-toggle button on the right */
 .input-wrapper input[type="password"],
 .input-wrapper input[type="text"] {
   padding-right: 48px;
@@ -228,9 +231,11 @@
 
 .input-icon {
   position: absolute;
-  left: 16px;
+  left: 14px;
   top: 50%;
   transform: translateY(-50%);
+  width: 20px;
+  height: 20px;
   display: flex;
   align-items: center;
   justify-content: center;

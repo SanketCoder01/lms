@@ -198,6 +198,9 @@ const Login = () => {
                 <div className="form-group">
                   <label>First Name</label>
                   <div className="input-wrapper">
+                    <span className="input-icon">
+                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
+                    </span>
                     <input type="text" name="first_name" placeholder="First Name"
                       value={formData.first_name} onChange={handleChange} required />
                   </div>
@@ -205,6 +208,9 @@ const Login = () => {
                 <div className="form-group">
                   <label>Last Name</label>
                   <div className="input-wrapper">
+                    <span className="input-icon">
+                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
+                    </span>
                     <input type="text" name="last_name" placeholder="Last Name"
                       value={formData.last_name} onChange={handleChange} />
                   </div>

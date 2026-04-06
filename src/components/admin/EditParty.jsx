@@ -12,7 +12,7 @@ const EditParty = () => {
     const navigate = useNavigate();
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
-    
+
     const [brandCategories, setBrandCategories] = useState([]);
     const [partyTypes, setPartyTypes] = useState(['Tenant', 'Owner', 'Lessor', 'Sub-Lessee']);
     const [ownerGroupings, setOwnerGroupings] = useState([]);
@@ -91,7 +91,7 @@ const EditParty = () => {
                     safeData[key] = data[key] || '';
                 });
                 setFormData(safeData);
-                
+
                 // Fetch cities if state is present
                 if (safeData.state) {
                     try {
@@ -139,7 +139,7 @@ const EditParty = () => {
                 fetchCitiesForState(formData.state);
             }).subscribe();
         return () => supabase.removeChannel(channel);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [formData.state, statesList]);
 
     const handleChange = (e) => {
