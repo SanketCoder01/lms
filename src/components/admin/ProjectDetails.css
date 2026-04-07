@@ -13,6 +13,14 @@
     width: calc(100% - 250px);
 }
 
+/* Project Details Page - Full width without sidebar */
+.project-details-page {
+    min-height: 100vh;
+    background-color: #f8f9fa;
+    padding: 24px 32px;
+    box-sizing: border-box;
+}
+
 /* Header */
 .page-header {
     display: flex;
@@ -108,7 +116,131 @@
     background-color: #f1f5f9;
 }
 
-/* Metrics Banner */
+/* Metrics Banner - Horizontal (compact strip) */
+.metrics-banner-horizontal {
+    display: flex;
+    align-items: center;
+    background: white;
+    border-radius: 10px;
+    padding: 14px 24px;
+    margin-bottom: 16px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+    border: 1px solid #e2e8f0;
+    gap: 16px;
+}
+
+.metrics-banner-horizontal .metric-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex: 1;
+}
+
+.metrics-banner-horizontal .metric-icon {
+    width: 36px;
+    height: 36px;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.metrics-banner-horizontal .metric-icon.units { background: #dbeafe; color: #2563eb; }
+.metrics-banner-horizontal .metric-icon.area  { background: #dcfce7; color: #16a34a; }
+
+.metrics-banner-horizontal .metric-info { flex: 1; }
+
+.metrics-banner-horizontal .metric-label {
+    font-size: 0.78rem;
+    color: #64748b;
+    font-weight: 500;
+    margin-bottom: 2px;
+}
+
+.metrics-banner-horizontal .metric-value {
+    font-size: 1rem;
+    font-weight: 700;
+    color: #0f172a;
+    margin-bottom: 4px;
+}
+
+.metrics-banner-horizontal .value-primary  { color: #16a34a; }
+.metrics-banner-horizontal .value-divider  { color: #94a3b8; margin: 0 3px; }
+.metrics-banner-horizontal .value-total    { color: #64748b; font-weight: 500; }
+
+.metrics-banner-horizontal .progress-bar {
+    height: 5px;
+    background-color: #f1f5f9;
+    border-radius: 3px;
+    overflow: hidden;
+}
+
+.metrics-banner-horizontal .progress-fill.green { background-color: #22c55e; }
+
+.metrics-banner-horizontal .metric-divider {
+    width: 1px;
+    height: 36px;
+    background: #e2e8f0;
+}
+
+/* Compact Accordion Nav */
+.accordion-container {
+    margin-top: 0;
+}
+
+.accordion-nav {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-bottom: 12px;
+}
+
+.accordion-nav-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 5px 14px;
+    border: 1.5px solid #e2e8f0;
+    border-radius: 20px;
+    background: white;
+    font-size: 0.82rem;
+    font-weight: 500;
+    color: #475569;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    white-space: nowrap;
+}
+
+.accordion-nav-btn:hover {
+    border-color: #2e66ff;
+    color: #2e66ff;
+    background: #eff6ff;
+}
+
+.accordion-nav-btn.active {
+    background: #2e66ff;
+    border-color: #2e66ff;
+    color: white;
+    font-weight: 600;
+}
+
+.accordion-panel {
+    background: white;
+    border-radius: 10px;
+    border: 1px solid #e2e8f0;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+    overflow: hidden;
+    animation: panelOpen 0.18s ease;
+}
+
+@keyframes panelOpen {
+    from { opacity: 0; transform: translateY(-6px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+
+/* Old Metrics Banner (kept for compatibility) */
 .metrics-banner {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
@@ -169,20 +301,56 @@
 
 .tabs-header {
     display: flex;
+    align-items: center;
     border-bottom: 1px solid #e2e8f0;
     padding: 0 20px;
     background-color: #f8fafc;
+    gap: 0;
 }
 
+/* Inline metrics strip — shown in the tabs header row */
+.tabs-inline-metrics {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-left: auto;
+    padding: 6px 0;
+}
+
+.tabs-inline-metric {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    background: white;
+    border: 1px solid #e2e8f0;
+    border-radius: 20px;
+    padding: 4px 12px;
+    font-size: 0.8rem;
+    color: #334155;
+    font-weight: 500;
+    white-space: nowrap;
+}
+
+.tabs-inline-metric .metric-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+}
+
+.tabs-inline-metric .metric-dot.green { background: #22c55e; }
+.tabs-inline-metric .metric-dot.blue  { background: #3b82f6; }
+
 .tab-btn {
-    padding: 16px 24px;
+    padding: 10px 20px;
     border: none;
     background: none;
-    font-size: 0.95rem;
+    font-size: 0.9rem;
     font-weight: 500;
     color: #64748b;
     cursor: pointer;
     position: relative;
+    white-space: nowrap;
 }
 
 .tab-btn:hover {
@@ -259,11 +427,13 @@
 
 .project-main-image {
     width: 100%;
-    height: 250px;
-    object-fit: cover;
+    height: 220px;
+    object-fit: contain;
+    background: #f8fafc;
     border-radius: 8px;
     margin-bottom: 20px;
     border: 1px solid #e2e8f0;
+    display: block;
 }
 
 /* Added Placeholder Style */

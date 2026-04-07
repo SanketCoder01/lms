@@ -1,8 +1,9 @@
 import React, { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import Sidebar from './Sidebar';
-import { getDashboardStats, getProjects, tenantAPI, unitAPI } from '../../services/api';
+import { getDashboardStats, getProjects, tenantAPI, unitAPI, leaseAPI } from '../../services/api';
 import { supabase } from '../../services/supabase';
+import LeaseReport from './LeaseReport';
 import './dashboard.css';
 
 const initialStats = {
@@ -61,6 +62,7 @@ const Dashboard = () => {
     const [loading, setLoading] = useState(true);
     const [projectsList, setProjectsList] = useState([]);
     const [selectedProject, setSelectedProject] = useState('All');
+    const [recentLeases, setRecentLeases] = useState([]);
 
     // Live Clock State — auto-picks current system date/time
     const [now, setNow] = useState(new Date());
@@ -144,8 +146,20 @@ const Dashboard = () => {
 
     useEffect(() => {
         fetchStats();
+        fetchRecentLeases();
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [selectedProject]);
+
+    // Fetch Recent Leases for Quick Report Access
+    const fetchRecentLeases = async () => {
+        try {
+            const res = await leaseAPI.getAllLeases({ limit: 5 });
+            const leases = res.data?.data || res.data || [];
+            setRecentLeases(leases.slice(0, 5));
+        } catch (err) {
+            console.error("Error fetching recent leases:", err);
+        }
+    };
 
     // Realtime Subscriptions
     useEffect(() => {
@@ -374,22 +388,42 @@ const Dashboard = () => {
                             </div>
 
                             {/* Revenue Graph */}
-                            <div className="stat-card revenue-card" style={{ height: 'auto', minHeight: '300px' }}>
-                                <div style={{ marginBottom: '20px' }}>
-                                    <h4>Total Project Revenue (Trend)</h4>
-                                    <div className="sub-text">Monthly revenue trend based on active leases</div>
+                            <div className="stat-card revenue-card" style={{ height: 'auto', minHeight: '350px', background: 'linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%)' }}>
+                                <div style={{ marginBottom: '20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                    <div>
+                                        <h4 style={{ margin: 0, fontSize: '1.1rem', fontWeight: '700', color: '#0f172a' }}>Revenue Trend</h4>
+                                        <div className="sub-text" style={{ fontSize: '0.85rem', color: '#64748b', marginTop: '4px' }}>Monthly revenue from active leases</div>
+                                    </div>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                        <div style={{ width: '12px', height: '12px', borderRadius: '50%', background: 'linear-gradient(135deg, #22c55e, #16a34a)' }}></div>
+                                        <span style={{ fontSize: '0.8rem', color: '#64748b', fontWeight: '500' }}>Revenue</span>
+                                    </div>
                                 </div>
-                                <div style={{ flex: 1, position: 'relative' }}>
-                                    <svg viewBox="0 0 1000 300" preserveAspectRatio="none" style={{ width: '100%', height: '100%', overflow: 'visible' }}>
+                                <div style={{ flex: 1, position: 'relative', background: '#fff', borderRadius: '12px', padding: '20px', boxShadow: 'inset 0 2px 4px rgba(0,0,0,0.02)' }}>
+                                    <svg viewBox="0 0 1000 280" preserveAspectRatio="none" style={{ width: '100%', height: '280px', overflow: 'visible' }}>
                                         <defs>
-                                            <linearGradient id="trendGradient" x1="0" y1="0" x2="0" y2="1">
-                                                <stop offset="0%" stopColor="#2E66FF" stopOpacity="0.2" />
-                                                <stop offset="100%" stopColor="#2E66FF" stopOpacity="0" />
+                                            <linearGradient id="trendGradientNew" x1="0" y1="0" x2="0" y2="1">
+                                                <stop offset="0%" stopColor="#22c55e" stopOpacity="0.3" />
+                                                <stop offset="50%" stopColor="#22c55e" stopOpacity="0.1" />
+                                                <stop offset="100%" stopColor="#22c55e" stopOpacity="0" />
                                             </linearGradient>
+                                            <filter id="glow">
+                                                <feGaussianBlur stdDeviation="2" result="coloredBlur"/>
+                                                <feMerge>
+                                                    <feMergeNode in="coloredBlur"/>
+                                                    <feMergeNode in="SourceGraphic"/>
+                                                </feMerge>
+                                            </filter>
+                                            <filter id="shadow">
+                                                <feDropShadow dx="0" dy="2" stdDeviation="3" floodColor="#22c55e" floodOpacity="0.3"/>
+                                            </filter>
                                         </defs>
-                                        <line x1="0" y1="250" x2="1000" y2="250" stroke="#F3F4F6" strokeWidth="2" />
-                                        <line x1="0" y1="150" x2="1000" y2="150" stroke="#F3F4F6" strokeWidth="2" />
-                                        <line x1="0" y1="50" x2="1000" y2="50" stroke="#F3F4F6" strokeWidth="2" />
+                                        
+                                        {/* Grid lines with labels */}
+                                        <line x1="0" y1="230" x2="1000" y2="230" stroke="#e2e8f0" strokeWidth="1" strokeDasharray="5,5" />
+                                        <line x1="0" y1="160" x2="1000" y2="160" stroke="#e2e8f0" strokeWidth="1" strokeDasharray="5,5" />
+                                        <line x1="0" y1="90" x2="1000" y2="90" stroke="#e2e8f0" strokeWidth="1" strokeDasharray="5,5" />
+                                        <line x1="0" y1="20" x2="1000" y2="20" stroke="#e2e8f0" strokeWidth="1" strokeDasharray="5,5" />
 
                                         {stats?.graphs?.revenueTrends && stats.graphs.revenueTrends.length > 0 && (
                                             <>
@@ -401,7 +435,7 @@ const Dashboard = () => {
                                                         const revenues = data.map(d => d.revenue);
                                                         const maxRev = Math.max(...revenues) || 100;
                                                         const width = 1000;
-                                                        const height = 250;
+                                                        const height = 230;
                                                         const step = width / (data.length - 1);
 
                                                         const points = data.map((d, i) => {
@@ -414,14 +448,14 @@ const Dashboard = () => {
                                                         for (let i = 1; i < points.length; i++) {
                                                             path += ` L ${points[i]}`;
                                                         }
-                                                        // Close the path for fill
                                                         path += ` L ${width},${height} L 0,${height} Z`;
                                                         return path;
                                                     })()}
-                                                    fill="url(#trendGradient)"
+                                                    fill="url(#trendGradientNew)"
                                                     stroke="none"
                                                 />
-                                                {/* Stroke Line */}
+                                                
+                                                {/* Smooth Stroke Line */}
                                                 <path
                                                     d={(() => {
                                                         const data = stats.graphs.revenueTrends;
@@ -429,7 +463,7 @@ const Dashboard = () => {
                                                         const revenues = data.map(d => d.revenue);
                                                         const maxRev = Math.max(...revenues) || 100;
                                                         const width = 1000;
-                                                        const height = 250;
+                                                        const height = 230;
                                                         const step = width / (data.length - 1);
 
                                                         const points = data.map((d, i) => {
@@ -440,23 +474,125 @@ const Dashboard = () => {
 
                                                         let path = `M${points[0]}`;
                                                         for (let i = 1; i < points.length; i++) {
-                                                            path += ` L ${points[i]}`;
+                                                            const x0 = i > 1 ? (i - 1) * step : 0;
+                                                            const x1 = i * step;
+                                                            const y0 = i > 1 ? height - (data[i-1].revenue / maxRev) * 200 : points[0].split(',')[1];
+                                                            const y1 = height - (data[i].revenue / maxRev) * 200;
+                                                            const cpx = (x0 + x1) / 2;
+                                                            path += ` C ${cpx},${y0} ${cpx},${y1} ${x1},${y1}`;
                                                         }
                                                         return path;
                                                     })()}
                                                     fill="none"
-                                                    stroke="#2E66FF"
+                                                    stroke="#22c55e"
                                                     strokeWidth="3"
-                                                    strokeLinejoin="round"
+                                                    strokeLinecap="round"
+                                                    filter="url(#glow)"
                                                 />
+                                                
+                                                {/* Data Points */}
+                                                {(() => {
+                                                    const data = stats.graphs.revenueTrends;
+                                                    if (!data || data.length === 0) return null;
+                                                    const revenues = data.map(d => d.revenue);
+                                                    const maxRev = Math.max(...revenues) || 100;
+                                                    const width = 1000;
+                                                    const height = 230;
+                                                    const step = width / (data.length - 1);
+
+                                                    return data.map((d, i) => {
+                                                        const x = i * step;
+                                                        const y = height - (d.revenue / maxRev) * 200;
+                                                        return (
+                                                            <g key={i}>
+                                                                <circle cx={x} cy={y} r="6" fill="#fff" stroke="#22c55e" strokeWidth="3" filter="url(#shadow)" />
+                                                                <circle cx={x} cy={y} r="3" fill="#22c55e" />
+                                                            </g>
+                                                        );
+                                                    });
+                                                })()}
                                             </>
+                                        )}
+                                        
+                                        {/* Empty state */}
+                                        {(!stats?.graphs?.revenueTrends || stats.graphs.revenueTrends.length === 0) && (
+                                            <text x="500" y="140" textAnchor="middle" fill="#94a3b8" fontSize="14">
+                                                No revenue data available
+                                            </text>
                                         )}
                                     </svg>
                                 </div>
-                                <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '10px', fontSize: '0.75rem', color: '#9CA3AF' }}>
-                                    {stats?.graphs?.revenueTrends?.map((d, i) => <span key={i}>{d.month}</span>)}
+                                <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '16px', padding: '0 10px' }}>
+                                    {stats?.graphs?.revenueTrends?.map((d, i) => (
+                                        <div key={i} style={{ textAlign: 'center' }}>
+                                            <div style={{ fontSize: '0.75rem', color: '#64748b', fontWeight: '500' }}>{d.month}</div>
+                                            <div style={{ fontSize: '0.7rem', color: '#22c55e', fontWeight: '600' }}>¥{(d.revenue/1000).toFixed(0)}K</div>
+                                        </div>
+                                    ))}
                                 </div>
                             </div>
+                        </div>
+
+                        {/* Recent Leases - Quick Report Access */}
+                        <h4 className="section-title" style={{ marginBottom: '15px', marginTop: '30px' }}>Recent Leases - Quick Report</h4>
+                        <div className="stat-card" style={{ padding: '20px' }}>
+                            {recentLeases.length === 0 ? (
+                                <div style={{ textAlign: 'center', color: '#64748b', padding: '20px' }}>
+                                    No recent leases found. <Link to="/admin/add-lease" style={{ color: '#2e66ff' }}>Create a new lease</Link>
+                                </div>
+                            ) : (
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                                    {recentLeases.map((lease) => (
+                                        <div key={lease.id} style={{ 
+                                            display: 'flex', 
+                                            justifyContent: 'space-between', 
+                                            alignItems: 'center',
+                                            padding: '12px 16px',
+                                            background: '#f8fafc',
+                                            borderRadius: '8px',
+                                            border: '1px solid #e2e8f0'
+                                        }}>
+                                            <div style={{ flex: 1 }}>
+                                                <div style={{ fontWeight: '600', color: '#1e293b' }}>
+                                                    Lease #{lease.id} - {lease.tenant_name || lease.sub_tenant_name || 'Unknown Tenant'}
+                                                </div>
+                                                <div style={{ fontSize: '0.85rem', color: '#64748b', marginTop: '4px' }}>
+                                                    {lease.project_name || 'N/A'} | Unit: {lease.unit_number || 'N/A'} | Status: {lease.status || 'Draft'}
+                                                </div>
+                                            </div>
+                                            <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+                                                <Link 
+                                                    to={`/admin/leases/${lease.id}`}
+                                                    style={{ 
+                                                        padding: '6px 12px',
+                                                        background: '#e0f2fe',
+                                                        color: '#0369a1',
+                                                        borderRadius: '4px',
+                                                        fontSize: '0.85rem',
+                                                        textDecoration: 'none',
+                                                        fontWeight: '500'
+                                                    }}
+                                                >
+                                                    View
+                                                </Link>
+                                                <LeaseReport lease={lease} />
+                                            </div>
+                                        </div>
+                                    ))}
+                                    <Link 
+                                        to="/admin/leases" 
+                                        style={{ 
+                                            textAlign: 'center', 
+                                            color: '#2e66ff', 
+                                            fontWeight: '500',
+                                            padding: '10px',
+                                            textDecoration: 'none'
+                                        }}
+                                    >
+                                        View All Leases
+                                    </Link>
+                                </div>
+                            )}
                         </div>
 
                     </>

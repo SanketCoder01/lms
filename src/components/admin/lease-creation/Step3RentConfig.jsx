@@ -153,18 +153,27 @@ const Step3RentConfig = ({
                                     <option value="Adjusted Sales">Adjusted Sales</option>
                                 </select>
                             </div>
-                            {/* Issue 67: Net Sales input */}
+                            {/* Issue 67: Net Sales input with Revenue Share Amount on right */}
                             <div className="form-group" style={{ flex: 1 }}>
                                 <label>Net Sales / Total Sales (Monthly)</label>
-                                <div className="currency-input">
-                                    <span className="currency-symbol">₹</span>
-                                    <input
-                                        type="number"
-                                        placeholder="Monthly sales figure"
-                                        min="0"
-                                        value={formData.monthly_net_sales || ''}
-                                        onChange={(e) => setFormData({ ...formData, monthly_net_sales: e.target.value })}
-                                    />
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                                    <div className="currency-input" style={{ flex: 1 }}>
+                                        <span className="currency-symbol">Rs</span>
+                                        <input
+                                            type="number"
+                                            placeholder="Monthly sales figure"
+                                            min="0"
+                                            value={formData.monthly_net_sales || ''}
+                                            onChange={(e) => setFormData({ ...formData, monthly_net_sales: e.target.value })}
+                                        />
+                                    </div>
+                                    {/* Revenue Share Amount - moved to right side */}
+                                    <div style={{ background: '#f0fdf4', padding: '8px 12px', borderRadius: '6px', border: '1px solid #bbf7d0', minWidth: '140px' }}>
+                                        <div style={{ fontSize: '10px', color: '#166534', marginBottom: '2px' }}>Rev Share Amt</div>
+                                        <div style={{ fontWeight: 700, fontSize: '14px', color: '#166534' }}>
+                                            Rs{parseFloat(formData.revenue_share_amount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
                         </div>

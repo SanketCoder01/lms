@@ -39,6 +39,14 @@ const AddLease = () => {
         tenure_months: '',
         lockin_period_months: '',
         notice_period_months: '',
+        lessee_lockin_period_months: '',
+        lessor_lockin_period_months: '',
+        lessee_lockin_period_days: '',
+        lessor_lockin_period_days: '',
+        lessee_notice_period_days: '',
+        lessor_notice_period_days: '',
+        unit_handover_date: '',
+        has_rent_free_period: false,
         monthly_rent: '',
         monthly_net_sales: '', // ADDED THIS
         cam_charges: '',
@@ -264,10 +272,22 @@ const AddLease = () => {
                     escalation_on: step.escalation_on || null
                 }));
 
-            // Calculate tenure
-            const startDate = new Date(formData.lease_start);
-            const endDate = new Date(formData.lease_end);
-            const tenureMonths = Math.round((endDate - startDate) / (1000 * 60 * 60 * 24 * 30));
+            // Calculate tenure with +1 concept (inclusive counting)
+            const calcTenureMonths = (startStr, endStr) => {
+                if (!startStr || !endStr) return 0;
+                const start = new Date(startStr);
+                const end = new Date(endStr);
+                let years = end.getFullYear() - start.getFullYear();
+                let months = end.getMonth() - start.getMonth();
+                let totalMonths = years * 12 + months;
+                const startDay = start.getDate();
+                const endDay = end.getDate();
+                if (endDay >= startDay) {
+                    totalMonths += 1;
+                }
+                return Math.max(1, totalMonths);
+            };
+            const tenureMonths = calcTenureMonths(formData.lease_start, formData.lease_end);
 
             const payload = {
                 ...formData,
@@ -286,6 +306,10 @@ const AddLease = () => {
                 tenure_months: tenureMonths,
                 lockin_period_months: parseInt(formData.lockin_period_months) || 12,
                 notice_period_months: parseInt(formData.notice_period_months) || 3,
+                lessee_lockin_period_months: parseInt(formData.lessee_lockin_period_months) || 0,
+                lessor_lockin_period_months: parseInt(formData.lessor_lockin_period_months) || 0,
+                lessee_notice_period_days: parseInt(formData.lessee_notice_period_days) || 0,
+                lessor_notice_period_days: parseInt(formData.lessor_notice_period_days) || 0,
                 monthly_rent: parseFloat(formData.monthly_rent) || 0,
                 monthly_net_sales: parseFloat(formData.monthly_net_sales) || 0,
                 cam_charges: parseFloat(formData.cam_charges) || 0,

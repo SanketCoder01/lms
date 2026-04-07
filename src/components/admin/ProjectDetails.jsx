@@ -1,12 +1,10 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import Sidebar from './Sidebar';
 import { getProjectById, unitAPI, FILE_BASE_URL } from '../../services/api';
-import './ProjectDetails.css'; // We'll create this CSS file next
+import './ProjectDetails.css';
 
 const ProjectDetails = () => {
     const { id } = useParams();
-    // const navigate = useNavigate();
     const [project, setProject] = useState(null);
     const [activeTab, setActiveTab] = useState('home');
     const [units, setUnits] = useState([]);
@@ -46,22 +44,16 @@ const ProjectDetails = () => {
 
     if (loading) {
         return (
-            <div className="dashboard-container">
-                <Sidebar />
-                <main className="main-content">
-                    <p style={{ padding: '20px' }}>Loading project details...</p>
-                </main>
+            <div className="project-details-page">
+                <p style={{ padding: '20px' }}>Loading project details...</p>
             </div>
         );
     }
 
     if (!project) {
         return (
-            <div className="dashboard-container">
-                <Sidebar />
-                <main className="main-content">
-                    <p style={{ padding: '20px' }}>Project not found.</p>
-                </main>
+            <div className="project-details-page">
+                <p style={{ padding: '20px' }}>Project not found.</p>
             </div>
         );
     }
@@ -76,8 +68,8 @@ const ProjectDetails = () => {
                     <div className="project-image-container">
                         {project.project_image && !imageError ? (
                             <img
-                                src={project.project_image && project.project_image.startsWith('http') 
-                                    ? project.project_image 
+                                src={project.project_image && project.project_image.startsWith('http')
+                                    ? project.project_image
                                     : `${FILE_BASE_URL}/uploads/${project.project_image}`}
                                 alt={project.project_name}
                                 className="project-main-image"
@@ -237,96 +229,102 @@ const ProjectDetails = () => {
         </div>
     );
 
-    return (
-        <div className="dashboard-container">
-            <Sidebar />
-            <main className="main-content">
-                {/* Header */}
-                <header className="page-header">
-                    <div className="header-left">
-                        <div className="breadcrumb">
-                            <Link to="/admin/projects">PROJECTS</Link> &gt; <span className="active">{project.project_name.toUpperCase()}</span>
-                        </div>
-                        <div className="title-row">
-                            <h1>{project.project_name}</h1>
-                            <span className={`status-badge ${project.status}`}>{project.status}</span>
-                        </div>
-                        <div className="project-meta">
-                            <span>{project.location}</span>
-                        </div>
-                    </div>
-                    <div className="header-actions">
-                        <Link to={`/admin/edit-project/${project.id}`} className="secondary-btn">Edit Project</Link>
-                        <Link to={`/admin/add-unit?projectId=${project.id}`} className="primary-btn">+ Add Unit</Link>
-                    </div>
-                </header>
+    // Calculate correct totals from units
+    const totalUnitsCount = units.length || project.total_units_count || project.total_units || 0;
+    const occupiedUnits = units.filter(u => u.status === 'occupied').length || project.occupied_units || 0;
+    const totalArea = units.reduce((sum, u) => sum + parseFloat(u.chargeable_area || 0), 0) || project.total_area || 0;
+    const leasedArea = units.filter(u => u.status === 'occupied').reduce((sum, u) => sum + parseFloat(u.chargeable_area || 0), 0) || project.leased_area || 0;
 
-                {/* Metrics Banner */}
-                <div className="metrics-banner">
-                    <div className="metric-card">
+    return (
+        <div className="project-details-page">
+            {/* Header */}
+            <header className="page-header">
+                <div className="header-left">
+                    <div className="breadcrumb">
+                        <Link to="/admin/projects">PROJECTS</Link> &gt; <span className="active">{project.project_name.toUpperCase()}</span>
+                    </div>
+                    <div className="title-row">
+                        <h1>{project.project_name}</h1>
+                        <span className={`status-badge ${project.status}`}>{project.status}</span>
+                    </div>
+                    <div className="project-meta">
+                        <span>{project.location}</span>
+                    </div>
+                </div>
+                <div className="header-actions">
+                    <Link to={`/admin/edit-project/${project.id}`} className="secondary-btn">Edit Project</Link>
+                    <Link to={`/admin/add-unit?projectId=${project.id}`} className="primary-btn">+ Add Unit</Link>
+                    <Link to={`/admin/unit-structure?projectId=${project.id}`} className="primary-btn" style={{ backgroundColor: '#10b981' }}>+ Add Unit Structure</Link>
+                </div>
+            </header>
+
+            {/* Metrics Banner - Horizontal */}
+            <div className="metrics-banner-horizontal">
+                <div className="metric-item">
+                    <div className="metric-icon units">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg>
+                    </div>
+                    <div className="metric-info">
                         <div className="metric-label">Leased Units</div>
                         <div className="metric-value">
-                            {project.occupied_units || 0} / {project.total_units || 0} <span className="metric-sub">Units</span>
+                            <span className="value-primary">{occupiedUnits}</span>
+                            <span className="value-divider">/</span>
+                            <span className="value-total">{totalUnitsCount}</span>
                         </div>
                         <div className="progress-bar">
-                            <div
-                                className="progress-fill"
-                                style={{ width: `${project.total_units ? (project.occupied_units / project.total_units) * 100 : 0}%` }}
-                            ></div>
-                        </div>
-                    </div>
-                    <div className="metric-card">
-                        <div className="metric-label">Leased Area</div>
-                        <div className="metric-value">
-                            {project.leased_area || 0} / {project.total_area || 0} <span className="metric-sub">sqft</span>
-                        </div>
-                        <div className="progress-bar">
-                            <div
-                                className="progress-fill"
-                                style={{ width: `${project.total_area ? (project.leased_area / project.total_area) * 100 : 0}%` }}
-                            ></div>
+                            <div className="progress-fill green" style={{ width: `${totalUnitsCount ? (occupiedUnits / totalUnitsCount) * 100 : 0}%` }}></div>
                         </div>
                     </div>
                 </div>
-
-                {/* Tabs */}
-                <div className="tabs-container">
-                    <div className="tabs-header">
-                        <button
-                            className={`tab-btn ${activeTab === 'home' ? 'active' : ''}`}
-                            onClick={() => setActiveTab('home')}
-                        >
-                            Home
-                        </button>
-                        <button
-                            className={`tab-btn ${activeTab === 'units' ? 'active' : ''}`}
-                            onClick={() => setActiveTab('units')}
-                        >
-                            Units ({units.length})
-                        </button>
-                        <button
-                            className={`tab-btn ${activeTab === 'tenants' ? 'active' : ''}`}
-                            onClick={() => setActiveTab('tenants')}
-                        >
-                            Tenants ({tenants.length})
-                        </button>
-                        <button
-                            className={`tab-btn ${activeTab === 'owner' ? 'active' : ''}`}
-                            onClick={() => setActiveTab('owner')}
-                        >
-                            Owner
-                        </button>
+                <div className="metric-divider"></div>
+                <div className="metric-item">
+                    <div className="metric-icon area">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><line x1="3" y1="9" x2="21" y2="9"></line><line x1="9" y1="21" x2="9" y2="9"></line></svg>
                     </div>
+                    <div className="metric-info">
+                        <div className="metric-label">Leased Area</div>
+                        <div className="metric-value">
+                            <span className="value-primary">{leasedArea.toLocaleString()}</span>
+                            <span className="value-divider">/</span>
+                            <span className="value-total">{totalArea.toLocaleString()} sqft</span>
+                        </div>
+                        <div className="progress-bar">
+                            <div className="progress-fill green" style={{ width: `${totalArea ? (leasedArea / totalArea) * 100 : 0}%` }}></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
 
-                    <div className="tab-body">
+            {/* Compact Accordion Sections */}
+            <div className="accordion-container">
+
+                {/* Section nav strip */}
+                <div className="accordion-nav">
+                    <button className={`accordion-nav-btn ${activeTab === 'home' ? 'active' : ''}`} onClick={() => setActiveTab(activeTab === 'home' ? '' : 'home')}>
+                        Home {activeTab === 'home' ? '▲' : '▼'}
+                    </button>
+                    <button className={`accordion-nav-btn ${activeTab === 'units' ? 'active' : ''}`} onClick={() => setActiveTab(activeTab === 'units' ? '' : 'units')}>
+                        Units ({units.length}) {activeTab === 'units' ? '▲' : '▼'}
+                    </button>
+                    <button className={`accordion-nav-btn ${activeTab === 'tenants' ? 'active' : ''}`} onClick={() => setActiveTab(activeTab === 'tenants' ? '' : 'tenants')}>
+                        Tenants ({tenants.length}) {activeTab === 'tenants' ? '▲' : '▼'}
+                    </button>
+                    <button className={`accordion-nav-btn ${activeTab === 'owner' ? 'active' : ''}`} onClick={() => setActiveTab(activeTab === 'owner' ? '' : 'owner')}>
+                        Owner {activeTab === 'owner' ? '▲' : '▼'}
+                    </button>
+                </div>
+
+                {/* Expandable content panel */}
+                {activeTab && (
+                    <div className="accordion-panel">
                         {activeTab === 'home' && renderHomeTab()}
                         {activeTab === 'units' && renderUnitsTab()}
                         {activeTab === 'tenants' && renderTenantsTab()}
                         {activeTab === 'owner' && renderOwnersTab()}
                     </div>
-                </div>
+                )}
+            </div>
 
-            </main>
         </div>
     );
 };

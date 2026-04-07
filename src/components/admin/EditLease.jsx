@@ -45,9 +45,14 @@ const EditLease = () => {
         notice_period_months: '',
         lessee_lockin_period_months: '',
         lessor_lockin_period_months: '',
+        lessee_lockin_period_days: '',
+        lessor_lockin_period_days: '',
         lessee_notice_period_months: '',
         lessor_notice_period_months: '',
+        lessee_notice_period_days: '',
+        lessor_notice_period_days: '',
         unit_handover_date: '',
+        has_rent_free_period: false,
         rent_amount_option: 'Option B',
         mg_amount_sqft: '',
         mg_amount: '',
@@ -129,7 +134,10 @@ const EditLease = () => {
                     lessor_lockin_period_months: data.lessor_lockin_period_months || '',
                     lessee_notice_period_months: data.lessee_notice_period_months || '',
                     lessor_notice_period_months: data.lessor_notice_period_months || '',
+                    lessee_notice_period_days: data.lessee_notice_period_days || '',
+                    lessor_notice_period_days: data.lessor_notice_period_days || '',
                     unit_handover_date: formatDate(data.unit_handover_date),
+                    has_rent_free_period: !!(data.rent_free_start_date && data.rent_free_end_date),
                     rent_amount_option: data.rent_amount_option || 'Option B',
                     mg_amount_sqft: data.mg_amount_sqft || '',
                     mg_amount: data.mg_amount || '',
@@ -277,10 +285,22 @@ const EditLease = () => {
                     escalation_on: step.escalation_on || 'mg'
                 }));
 
-            // Tenure validation rule 25 states Editing duration is blocked, but backend uses dates. We keep existing structure.
-            const startDate = new Date(formData.lease_start);
-            const endDate = new Date(formData.lease_end);
-            const tenureMonths = Math.round((endDate - startDate) / (1000 * 60 * 60 * 24 * 30));
+            // Calculate tenure with +1 concept (inclusive counting)
+            const calcTenureMonths = (startStr, endStr) => {
+                if (!startStr || !endStr) return 0;
+                const start = new Date(startStr);
+                const end = new Date(endStr);
+                let years = end.getFullYear() - start.getFullYear();
+                let months = end.getMonth() - start.getMonth();
+                let totalMonths = years * 12 + months;
+                const startDay = start.getDate();
+                const endDay = end.getDate();
+                if (endDay >= startDay) {
+                    totalMonths += 1;
+                }
+                return Math.max(1, totalMonths);
+            };
+            const tenureMonths = calcTenureMonths(formData.lease_start, formData.lease_end);
 
             const payload = {
                 ...formData,
@@ -299,6 +319,8 @@ const EditLease = () => {
                 lessor_lockin_period_months: parseInt(formData.lessor_lockin_period_months) || 0,
                 lessee_notice_period_months: parseInt(formData.lessee_notice_period_months) || 0,
                 lessor_notice_period_months: parseInt(formData.lessor_notice_period_months) || 0,
+                lessee_notice_period_days: parseInt(formData.lessee_notice_period_days) || 0,
+                lessor_notice_period_days: parseInt(formData.lessor_notice_period_days) || 0,
                 monthly_rent: parseFloat(formData.monthly_rent) || 0,
                 cam_charges: parseFloat(formData.cam_charges) || 0,
                 revenue_share_percentage: (rentModel === 'RevenueShare' || rentModel === 'Hybrid') ? (parseFloat(formData.revenue_share_percentage) || 0) : null,

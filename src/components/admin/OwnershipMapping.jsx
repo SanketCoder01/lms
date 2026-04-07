@@ -527,8 +527,21 @@ const AssignOwnerModal = ({ isOpen, onClose, unitId, onAssign }) => {
 
     return (
         <div className="modal-overlay">
-            <div className="modal-content" style={{ maxWidth: '600px', width: '90%' }}>
-                <h3>Assign Owner(s)</h3>
+            <div className="modal-content" style={{ maxWidth: '600px', width: '90%', position: 'relative' }}>
+                {/* X close button - top right corner */}
+                <button
+                    onClick={onClose}
+                    style={{
+                        position: 'absolute', top: '12px', right: '12px',
+                        background: '#f1f5f9', border: 'none', borderRadius: '50%',
+                        width: '30px', height: '30px', cursor: 'pointer',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        fontSize: '16px', color: '#64748b', fontWeight: 'bold',
+                        lineHeight: '1', zIndex: 10
+                    }}
+                    title="Close"
+                >✕</button>
+                <h3 style={{ paddingRight: '40px' }}>Assign Owner(s)</h3>
                 
                 <div style={{ marginBottom: '20px' }}>
                     <p style={{ fontSize: '14px', color: '#64748b', marginBottom: '10px' }}>
@@ -536,9 +549,9 @@ const AssignOwnerModal = ({ isOpen, onClose, unitId, onAssign }) => {
                     </p>
                     
                     {selectedOwners.map(owner => (
-                        <div key={owner.party.id} style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '10px', background: '#f8fafc', padding: '10px', borderRadius: '4px' }}>
+                        <div key={owner.party.id} style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '10px', background: '#f0fdf4', padding: '10px', borderRadius: '6px', border: '1px solid #bbf7d0' }}>
                             <div style={{ flex: 1 }}>
-                                <strong>{owner.party.company_name || `${owner.party.first_name} ${owner.party.last_name}`}</strong>
+                                <strong style={{ color: '#166534' }}>{owner.party.company_name || `${owner.party.first_name} ${owner.party.last_name}`}</strong>
                             </div>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
                                 <input 
@@ -549,39 +562,69 @@ const AssignOwnerModal = ({ isOpen, onClose, unitId, onAssign }) => {
                                     min="0" max="100" step="0.01"
                                 /> %
                             </div>
-                            <button onClick={() => handleRemoveOwner(owner.party.id)} style={{ color: '#ef4444', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 'bold' }}>✕</button>
+                            <button onClick={() => handleRemoveOwner(owner.party.id)} style={{ color: '#ef4444', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 'bold', fontSize: '16px' }}>X</button>
                         </div>
                     ))}
                     {selectedOwners.length === 0 && (
-                        <div style={{ padding: '10px', background: '#f8fafc', color: '#94a3b8', textAlign: 'center', borderRadius: '4px' }}>
-                            Search and select below to add owners...
+                        <div style={{ padding: '20px', background: '#fef3c7', color: '#92400e', textAlign: 'center', borderRadius: '6px', border: '1px solid #fde68a' }}>
+                            <strong>No owners selected yet.</strong><br/>
+                            <span style={{ fontSize: '13px' }}>Search and click on a party below to add as owner.</span>
+                        </div>
+                    )}
+                    {selectedOwners.length > 0 && selectedOwners.length < 4 && (
+                        <div style={{ padding: '10px', background: '#ecfdf5', color: '#065f46', textAlign: 'center', borderRadius: '6px', fontSize: '13px', marginTop: '10px' }}>
+                            {selectedOwners.length === 1 ? 'You can add more joint owners, or proceed with single owner.' : `${4 - selectedOwners.length} more joint owner(s) can be added.`}
                         </div>
                     )}
                 </div>
 
-                        {selectedOwners.length < 4 && (
-                    <div className="form-group" style={{ position: 'relative' }}>
+                {selectedOwners.length < 4 && (
+                    <div className="form-group" style={{ position: 'relative', marginBottom: '8px' }}>
                         <label>Search Party to Add</label>
                         <input
                             className="form-input"
                             value={search}
                             onChange={(e) => setSearch(e.target.value)}
-                            placeholder="Type to filter, or scroll to select..."
+                            placeholder="Type name, company, or email..."
+                            autoComplete="off"
                         />
-                        {parties.length > 0 && (
-                            <div className="search-results" style={{ position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 10, background: '#fff', border: '1px solid #cbd5e1', maxHeight: '200px', overflowY: 'auto', boxShadow: '0 4px 6px rgba(0,0,0,0.1)' }}>
-                                {parties.map(p => (
-                                    <div
-                                        key={p.id}
-                                        className="search-item"
-                                        onClick={() => handleAddOwner(p)}
-                                        style={{ padding: '8px 12px', cursor: 'pointer', borderBottom: '1px solid #f1f5f9' }}
-                                        onMouseEnter={(e) => e.currentTarget.style.background = '#f1f5f9'}
-                                        onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
-                                    >
-                                        {p.company_name || `${p.first_name} ${p.last_name}`} ({p.type})
-                                    </div>
-                                ))}
+                        {/* Only show dropdown when search has text */}
+                        {search.trim() && (
+                            <div className="search-results" style={{ position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 10, background: '#fff', border: '1px solid #cbd5e1', maxHeight: '200px', overflowY: 'auto', boxShadow: '0 4px 6px rgba(0,0,0,0.1)', borderRadius: '4px' }}>
+                                {parties.filter(p => {
+                                    const q = search.toLowerCase();
+                                    return (p.company_name || '').toLowerCase().includes(q)
+                                        || (p.first_name || '').toLowerCase().includes(q)
+                                        || (p.last_name || '').toLowerCase().includes(q)
+                                        || (p.email || '').toLowerCase().includes(q);
+                                }).length === 0 ? (
+                                    <div style={{ padding: '10px', color: '#64748b', fontSize: '13px' }}>No matches found for "{search}"</div>
+                                ) : (
+                                    parties.filter(p => {
+                                        const q = search.toLowerCase();
+                                        return (p.company_name || '').toLowerCase().includes(q)
+                                            || (p.first_name || '').toLowerCase().includes(q)
+                                            || (p.last_name || '').toLowerCase().includes(q)
+                                            || (p.email || '').toLowerCase().includes(q);
+                                    }).map(p => (
+                                        <div
+                                            key={p.id}
+                                            className="search-item"
+                                            onClick={() => handleAddOwner(p)}
+                                            style={{ padding: '10px 12px', cursor: 'pointer', borderBottom: '1px solid #f1f5f9', display: 'flex', alignItems: 'center', gap: '10px' }}
+                                            onMouseEnter={(e) => e.currentTarget.style.background = '#f0fdf4'}
+                                            onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
+                                        >
+                                            <div style={{ width: '32px', height: '32px', borderRadius: '50%', background: '#e2e8f0', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: '600', color: '#475569', flexShrink: 0 }}>
+                                                {(p.company_name || p.first_name || '?').charAt(0).toUpperCase()}
+                                            </div>
+                                            <div>
+                                                <div style={{ fontWeight: '500' }}>{p.company_name || `${p.first_name} ${p.last_name}`}</div>
+                                                <div style={{ fontSize: '12px', color: '#64748b' }}>{p.type}{p.email ? ` | ${p.email}` : ''}</div>
+                                            </div>
+                                        </div>
+                                    ))
+                                )}
                             </div>
                         )}
                     </div>
@@ -592,9 +635,26 @@ const AssignOwnerModal = ({ isOpen, onClose, unitId, onAssign }) => {
                     <input type="date" className="form-input" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
                 </div>
                 
-                <div className="form-actions" style={{ marginTop: '20px' }}>
-                    <button className="btn-cancel" onClick={onClose}>Cancel</button>
-                    <button className="btn-submit" onClick={handleAssign} disabled={selectedOwners.length === 0}>Assign Owner(s)</button>
+                {/* Always visible action buttons */}
+                <div className="form-actions" style={{ marginTop: '20px', display: 'flex', justifyContent: 'flex-end', gap: '12px', paddingTop: '16px', borderTop: '1px solid #e2e8f0' }}>
+                    <button className="btn-cancel" onClick={onClose} style={{ padding: '10px 20px', borderRadius: '6px', border: '1px solid #e2e8f0', background: '#fff', cursor: 'pointer', fontWeight: '500' }} title="Cancel">Cancel</button>
+                    <button 
+                        className="btn-submit" 
+                        onClick={handleAssign} 
+                        disabled={selectedOwners.length === 0}
+                        style={{ 
+                            padding: '10px 24px', 
+                            borderRadius: '6px', 
+                            border: 'none', 
+                            background: selectedOwners.length > 0 ? '#16a34a' : '#cbd5e1', 
+                            color: '#fff', 
+                            cursor: selectedOwners.length > 0 ? 'pointer' : 'not-allowed', 
+                            fontWeight: '600',
+                            fontSize: '14px'
+                        }}
+                    >
+                        {selectedOwners.length === 0 ? 'Select Owner(s) First' : `Assign ${selectedOwners.length} Owner${selectedOwners.length > 1 ? 's' : ''}`}
+                    </button>
                 </div>
             </div>
         </div>

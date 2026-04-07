@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import Sidebar from './Sidebar';
 import { leaseAPI } from '../../services/api';
+import LeaseReport from './LeaseReport';
 import './LeaseDetails.css';
 import './dashboard.css';
 
@@ -102,6 +103,7 @@ const LeaseDetails = () => {
                         <p className="header-subtitle">Commercial Lease Agreement • {lease.project_name || 'N/A'}</p>
                     </div>
                     <div className="header-actions">
+                        <LeaseReport lease={lease} />
                         <Link to={`/admin/edit-lease/${lease.id}`} className="edit-btn">
                             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: '8px' }}><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
                             Edit
@@ -246,7 +248,8 @@ const LeaseDetails = () => {
                                 <label>Original Base Rent</label>
                                 <span className="amount" style={{ color: '#718096' }}>{formatCurrency(lease.monthly_rent)}</span>
                             </div>
-                            {rentModel === 'revenue_share' && (
+                            {/* Always show Revenue Share if exists */}
+                            {lease.revenue_share_percentage && (
                                 <>
                                     <div className="rent-item">
                                         <label>Total Sales Amount (Net/Gross)</label>
@@ -254,14 +257,11 @@ const LeaseDetails = () => {
                                     </div>
                                     <div className="rent-item">
                                         <label>Revenue Share</label>
-                                        <span className="amount">{lease.revenue_share_percentage}% of {lease.revenue_share_applicable_on}</span>
+                                        <span className="amount">{lease.revenue_share_percentage}% of {lease.revenue_share_applicable_on || 'Net Sales'}</span>
                                     </div>
                                 </>
                             )}
-                            <div className="rent-item">
-                                <label>CAM / Service</label>
-                                <span className="amount">{formatCurrency(lease.cam_charges)}</span>
-                            </div>
+                            {/* CAM/Service removed from total calculation per user request */}
                             {/* Assuming Tax is calculated or stored? For now, we only show what we have. If tax isn't in DB, omit or calculate example */}
                             {/* <div className="rent-item">
                                 <label>Tax (Example 5%)</label>
@@ -271,9 +271,9 @@ const LeaseDetails = () => {
 
                         <div className="total-row">
                             <span style={{ color: '#718096', fontWeight: 500 }}>Total Base Payable ({lease.billing_frequency}):</span>
-                            {/* Simple sum, real calc might be complex (tax etc) */}
+                            {/* CAM removed from total - only base rent */}
                             <span className="total-amount">
-                                {formatCurrency(parseFloat(lease.monthly_rent || 0) + parseFloat(lease.cam_charges || 0))}
+                                {formatCurrency(parseFloat(lease.monthly_rent || 0))}
                             </span>
                         </div>
                     </div>
@@ -306,9 +306,13 @@ const LeaseDetails = () => {
                                             </div>
                                             <div style={{ color: '#4a5568' }}>
                                                 {esc.increase_type}: {esc.value}
-                                                {esc.increase_type === 'Percentage' ? '%' : (esc.increase_type === 'Rate Per Sqft' ? ' / sqft' : ' ₹ addition')}
+                                                {esc.increase_type === 'Percentage' ? '%' : (esc.increase_type === 'Rate Per Sqft' ? ' / sqft' : ' Rs addition')}
+                                                {/* Always show % and rev share if applicable */}
+                                                {esc.rev_share_value && esc.rev_share_value > 0 && (
+                                                    <span style={{ marginLeft: '8px', color: '#059669' }}>| Rev Share: {esc.rev_share_value}%</span>
+                                                )}
                                             </div>
-                                            <div style={{ color: '#718096', fontSize: '0.75rem', marginTop: '2px' }}>Applies to: {esc.escalation_on === 'mg' ? 'MG Base' : esc.escalation_on}</div>
+                                            <div style={{ color: '#718096', fontSize: '0.75rem', marginTop: '2px' }}>Applies to: {esc.escalation_on === 'mg' ? 'MG Base' : esc.escalation_on === 'revenue_share' ? 'Revenue Share' : esc.escalation_on === 'both' ? 'Both (MG + Rev Share)' : esc.escalation_on}</div>
                                         </div>
                                     ))}
                                 </div>

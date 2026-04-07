@@ -110,6 +110,34 @@ const Leases = () => {
         }
     };
 
+    /* ================= EXPORT CSV ================= */
+    const handleExportCSV = () => {
+        if (leases.length === 0) return;
+        const headers = ["Lease ID", "Tenant", "Project", "Unit", "Start Date", "End Date", "Monthly Rent", "Status"];
+        const rows = leases.map(l => [
+            l.id,
+            l.tenant_name || l.sub_tenant_name || 'N/A',
+            l.project_name || 'N/A',
+            l.unit_number || 'N/A',
+            formatDate(l.lease_start),
+            formatDate(l.lease_end),
+            formatCurrency(l.monthly_rent),
+            l.status || 'N/A'
+        ]);
+        
+        let csvContent = "data:text/csv;charset=utf-8," 
+            + headers.join(",") + "\n"
+            + rows.map(r => r.map(cell => `"${(cell || '').toString().replace(/"/g, '""')}"`).join(",")).join("\n");
+            
+        const encodedUri = encodeURI(csvContent);
+        const link = document.createElement("a");
+        link.setAttribute("href", encodedUri);
+        link.setAttribute("download", `leases_${activeTab}.csv`);
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    };
+
     return (
         <div className="dashboard-container">
             <Sidebar />
@@ -122,11 +150,21 @@ const Leases = () => {
                         <h1>Lease Management</h1>
                         <p>View and manage all active lease agreements and contracts.</p>
                     </div>
-                    {/* Link to Create Lease page */}
-                    <Link to="/admin/add-lease" className="primary-btn" style={{ textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: '8px' }}>
-                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
-                        Create Lease
-                    </Link>
+                    {/* Export and Create Lease buttons */}
+                    <div style={{ display: 'flex', gap: '10px' }}>
+                        <button onClick={handleExportCSV} className="secondary-btn" style={{ background: '#f8f9fa', color: '#333', border: '1px solid #ddd', padding: '8px 16px', borderRadius: '4px', cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ marginRight: '6px' }}>
+                                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                                <polyline points="7 10 12 15 17 10"></polyline>
+                                <line x1="12" y1="15" x2="12" y2="3"></line>
+                            </svg>
+                            Export CSV
+                        </button>
+                        <Link to="/admin/add-lease" className="primary-btn" style={{ textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: '8px' }}>
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                            Create Lease
+                        </Link>
+                    </div>
                 </header>
 
                 <div className="content-card">

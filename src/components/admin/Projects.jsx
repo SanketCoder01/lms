@@ -117,6 +117,32 @@ const Projects = () => {
     }
   };
 
+  /* ================= EXPORT CSV ================= */
+  const handleExportCSV = () => {
+    if (projects.length === 0) return;
+    const headers = ["Project Name", "Location", "Type", "Total Units", "Available Units", "Status"];
+    const rows = projects.map(p => [
+      p.project_name,
+      p.location,
+      p.project_type,
+      p.total_units || 0,
+      p.available_units || 0,
+      p.status || 'Active'
+    ]);
+    
+    let csvContent = "data:text/csv;charset=utf-8," 
+      + headers.join(",") + "\n"
+      + rows.map(r => r.map(cell => `"${(cell || '').toString().replace(/"/g, '""')}"`).join(",")).join("\n");
+        
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    link.setAttribute("download", "projects_list.csv");
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   return (
     <div className="dashboard-container">
       <Sidebar />
@@ -126,14 +152,24 @@ const Projects = () => {
             <h1>Projects</h1>
             <p>Manage your commercial properties and business spaces</p>
           </div>
-          <Link
-            to="/admin/add-project"
-            className="primary-btn"
-            style={{ textDecoration: "none", display: 'inline-flex', alignItems: 'center', gap: '8px' }}
-          >
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
-            Add Project
-          </Link>
+          <div style={{ display: 'flex', gap: '10px' }}>
+            <button onClick={handleExportCSV} className="secondary-btn" style={{ background: '#f8f9fa', color: '#333', border: '1px solid #ddd', padding: '8px 16px', borderRadius: '4px', cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ marginRight: '6px' }}>
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                <polyline points="7 10 12 15 17 10"></polyline>
+                <line x1="12" y1="15" x2="12" y2="3"></line>
+              </svg>
+              Export CSV
+            </button>
+            <Link
+              to="/admin/add-project"
+              className="primary-btn"
+              style={{ textDecoration: "none", display: 'inline-flex', alignItems: 'center', gap: '8px' }}
+            >
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+              Add Project
+            </Link>
+          </div>
         </header>
 
         {message.text && (

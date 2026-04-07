@@ -17,6 +17,32 @@ const Units = () => {
     const [error, setError] = useState(null);
     const [projects, setProjects] = useState([]);
 
+    /* ================= EXPORT CSV ================= */
+    const handleExportCSV = () => {
+        if (units.length === 0) return;
+        const headers = ["Unit No", "Building/Project", "Owner Name", "Tenant Name", "Area (SQ FT)", "Status"];
+        const rows = units.map(u => [
+            u.unitNo,
+            u.building,
+            u.ownerName,
+            u.tenantName,
+            u.area,
+            u.status === 'occupied' ? 'Leased' : u.status
+        ]);
+        
+        let csvContent = "data:text/csv;charset=utf-8," 
+            + headers.join(",") + "\n"
+            + rows.map(r => r.map(cell => `"${(cell || '').toString().replace(/"/g, '""')}"`).join(",")).join("\n");
+            
+        const encodedUri = encodeURI(csvContent);
+        const link = document.createElement("a");
+        link.setAttribute("href", encodedUri);
+        link.setAttribute("download", "units_inventory.csv");
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    };
+
     /* ================= FETCH PROJECTS FOR DROPDOWN ================= */
     useEffect(() => {
         const fetchProjectsList = async () => {
@@ -141,7 +167,18 @@ const Units = () => {
                         <h1>Unit Management</h1>
                         <p>Manage your property inventory, availability, and unit details.</p>
                     </div>
-                    <Link to="/admin/add-unit" className="primary-btn" style={{ textDecoration: 'none', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>+ Add Units</Link>
+                    <div style={{ display: 'flex', gap: '10px' }}>
+                        <button onClick={handleExportCSV} className="secondary-btn" style={{ background: '#f8f9fa', color: '#333', border: '1px solid #ddd', padding: '8px 16px', borderRadius: '4px', cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ marginRight: '6px' }}>
+                                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                                <polyline points="7 10 12 15 17 10"></polyline>
+                                <line x1="12" y1="15" x2="12" y2="3"></line>
+                            </svg>
+                            Export CSV
+                        </button>
+                        <Link to="/admin/add-unit" className="primary-btn" style={{ textDecoration: 'none', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>+ Add Units</Link>
+                        <Link to="/admin/unit-structure" className="primary-btn" style={{ textDecoration: 'none', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', backgroundColor: '#10b981' }}>+ Add Unit Structure</Link>
+                    </div>
                 </header>
 
                 <div className="content-card">

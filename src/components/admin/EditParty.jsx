@@ -5,6 +5,7 @@ import { filterAPI, partyAPI } from '../../services/api';
 import { supabase } from '../../services/supabase';
 import axios from 'axios';
 import { isValidPhone, isValidPAN, isValidAadhaar, isValidCIN } from '../../utils/validators';
+import { INDIA_STATES, getStaticCities } from '../../utils/locationData';
 import './PartyForm.css';
 
 const EditParty = () => {
@@ -52,16 +53,17 @@ const EditParty = () => {
                     filterAPI.getFilterOptions("brand_category").catch(() => ({ data: { data: [] } })),
                     filterAPI.getFilterOptions("Party Type").catch(() => ({ data: { data: [] } })),
                     filterAPI.getFilterOptions("Owner Grouping").catch(() => ({ data: { data: [] } })),
-                    axios.get('https://lms-iac2-git-master-sanketg367-gmailcoms-projects.vercel.app/api/locations/states').catch(() => ({ data: [] }))
+                    axios.get('/api/locations/states').catch(() => ({ data: [] }))
                 ]);
 
                 if (bcRes.data.data?.length > 0) setBrandCategories(bcRes.data.data);
                 if (ptRes.data.data?.length > 0) setPartyTypes(ptRes.data.data.map(d => d.option_value));
                 if (ogRes.data.data?.length > 0) setOwnerGroupings(ogRes.data.data);
-                if (statesRes.data?.length > 0) setStatesList(statesRes.data);
+                setStatesList(statesRes.data?.length > 0 ? statesRes.data : INDIA_STATES);
 
             } catch (e) {
                 console.error(e);
+                setStatesList(INDIA_STATES);
             }
         };
         fetchFilters();
@@ -72,7 +74,7 @@ const EditParty = () => {
                 'postgres_changes',
                 { event: '*', schema: 'public', table: 'states' },
                 () => {
-                    axios.get('https://lms-iac2-git-master-sanketg367-gmailcoms-projects.vercel.app/api/locations/states').then(res => setStatesList(res.data)).catch(console.error);
+                    axios.get('/api/locations/states').then(res => setStatesList(res.data)).catch(console.error);
                 }
             )
             .subscribe();
@@ -95,14 +97,16 @@ const EditParty = () => {
                 // Fetch cities if state is present
                 if (safeData.state) {
                     try {
-                        const statesRes = await axios.get('https://lms-iac2-git-master-sanketg367-gmailcoms-projects.vercel.app/api/locations/states');
-                        const stateObj = statesRes.data.find(s => s.name === safeData.state);
+                        const statesRes = await axios.get('/api/locations/states');
+                        const allStates = statesRes.data?.length > 0 ? statesRes.data : INDIA_STATES;
+                        const stateObj = allStates.find(s => s.name === safeData.state);
                         if (stateObj) {
-                            const citiesRes = await axios.get(`https://lms-iac2-git-master-sanketg367-gmailcoms-projects.vercel.app/api/locations/cities/${stateObj.id}`);
-                            setCitiesList(citiesRes.data || []);
+                            const citiesRes = await axios.get(`/api/locations/cities/${stateObj.id}`);
+                            setCitiesList(citiesRes.data?.length > 0 ? citiesRes.data : getStaticCities(stateObj.id));
                         }
                     } catch (e) {
-                        console.error("Fetch cities error", e);
+                        const stateObj = INDIA_STATES.find(s => s.name === safeData.state);
+                        if (stateObj) setCitiesList(getStaticCities(stateObj.id));
                     }
                 }
             }
@@ -118,15 +122,13 @@ const EditParty = () => {
     const fetchCitiesForState = async (stateName) => {
         try {
             const stateObj = statesList.find(s => s.name === stateName);
-            if (!stateObj) {
-                setCitiesList([]);
-                return;
-            }
-            const citiesRes = await axios.get(`https://lms-iac2-git-master-sanketg367-gmailcoms-projects.vercel.app/api/locations/cities/${stateObj.id}`);
-            setCitiesList(citiesRes.data || []);
+            if (!stateObj) { setCitiesList([]); return; }
+            const citiesRes = await axios.get(`/api/locations/cities/${stateObj.id}`);
+            setCitiesList(citiesRes.data?.length > 0 ? citiesRes.data : getStaticCities(stateObj.id));
         } catch (e) {
-            console.error("Failed to fetch cities", e);
-            setCitiesList([]);
+            const stateObj = statesList.find(s => s.name === stateName);
+            if (stateObj) setCitiesList(getStaticCities(stateObj.id));
+            else setCitiesList([]);
         }
     };
 

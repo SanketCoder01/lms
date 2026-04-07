@@ -1,5 +1,5 @@
 /**
- * config/db.js — Supabase Admin Client
+ * config/db.js - Supabase Admin Client
  * All database access via Supabase service_role (bypasses RLS).
  */
 
@@ -11,9 +11,13 @@ const SERVICE_KEY   = process.env.SUPABASE_SERVICE_ROLE_KEY;
 // Track if we have valid credentials
 const hasCredentials = SUPABASE_URL && SERVICE_KEY;
 
+// Log status for debugging (but don't crash in production)
 if (!hasCredentials) {
-  console.error('❌  Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY');
-  console.error('    Make sure these are set in Vercel Environment Variables');
+  console.error(' Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY');
+  console.error('   Make sure these are set in Vercel Environment Variables');
+  console.error('   Current env:', process.env.NODE_ENV);
+} else {
+  console.log(' Supabase client initialized successfully');
 }
 
 // Create client (will be null if credentials missing)

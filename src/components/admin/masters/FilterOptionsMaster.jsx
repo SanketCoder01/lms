@@ -114,16 +114,21 @@ const FilterOptionsMaster = () => {
                                     key={c.value}
                                     onClick={() => setSelectedCategory(c.value)}
                                     style={{
-                                        padding: '8px 16px',
-                                        borderRadius: '20px',
+                                        padding: '6px 12px',
+                                        borderRadius: '16px',
                                         border: selectedCategory === c.value ? '2px solid #2E66FF' : '1px solid #e5e7eb',
                                         background: selectedCategory === c.value ? '#EBF2FF' : '#fff',
                                         color: selectedCategory === c.value ? '#2E66FF' : '#374151',
                                         fontWeight: selectedCategory === c.value ? '600' : '400',
                                         cursor: 'pointer',
-                                        fontSize: '13px',
+                                        fontSize: '12px',
                                         transition: 'all 0.2s',
+                                        whiteSpace: 'nowrap',
+                                        maxWidth: '150px',
+                                        overflow: 'hidden',
+                                        textOverflow: 'ellipsis',
                                     }}
+                                    title={c.label}
                                 >
                                     {c.label}
                                 </button>

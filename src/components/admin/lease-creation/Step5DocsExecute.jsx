@@ -2,25 +2,33 @@ import React, { useEffect } from 'react';
 
 const Step5DocsExecute = ({ formData, setFormData, handleFileChange, files }) => {
 
-    // Issue 60: Auto-fill docs dates from previous step data
+    // Issue 60: Auto-fill docs dates from previous step data - use today's date for LOI and Agreement
     useEffect(() => {
         setFormData(prev => {
             const updates = {};
-            // If LOI date is blank but lease_start is set, default to lease_start
-            if (!prev.loi_date && prev.lease_start) updates.loi_date = prev.lease_start;
-            // If agreement_date is blank but loi_date is set, default to loi_date
-            if (!prev.agreement_date && prev.loi_date) updates.agreement_date = prev.loi_date;
+            const today = new Date().toISOString().slice(0, 10);
+            // If LOI date is blank, default to today's date
+            if (!prev.loi_date) updates.loi_date = today;
+            // If agreement_date is blank, default to today's date
+            if (!prev.agreement_date) updates.agreement_date = today;
             if (Object.keys(updates).length === 0) return prev;
             return { ...prev, ...updates };
         });
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
+    // Format date for display
+    const fmtDate = (dateStr) => {
+        if (!dateStr) return 'N/A';
+        const d = new Date(dateStr);
+        return d.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+    };
+
     return (
         <div className="form-section">
             <h3>Step 5: Docs Execution &amp; Details</h3>
             <p className="helper-text" style={{ color: '#64748b', fontSize: '13px', marginBottom: '20px' }}>
-                Attach execution documents. Dates are pre-filled from earlier steps where available — you can edit them.
+                Attach execution documents. Dates are pre-filled with today's date -- you can edit them.
             </p>
 
             {/* LOI Details */}
@@ -35,6 +43,11 @@ const Step5DocsExecute = ({ formData, setFormData, handleFileChange, files }) =>
                         className="form-control"
                         style={{ fontSize: '13px' }}
                     />
+                    {formData.loi_date && (
+                        <small style={{ color: '#059669', fontSize: '11px', marginTop: '4px', display: 'block' }}>
+                            {fmtDate(formData.loi_date)}
+                        </small>
+                    )}
                 </div>
                 <div className="form-group" style={{ flex: 1 }}>
                     <label>Upload LOI Document</label>
@@ -67,6 +80,11 @@ const Step5DocsExecute = ({ formData, setFormData, handleFileChange, files }) =>
                         className="form-control"
                         style={{ fontSize: '13px' }}
                     />
+                    {formData.agreement_date && (
+                        <small style={{ color: '#059669', fontSize: '11px', marginTop: '4px', display: 'block' }}>
+                            {fmtDate(formData.agreement_date)}
+                        </small>
+                    )}
                 </div>
                 <div className="form-group" style={{ flex: 1 }}>
                     <label>Upload Agreement</label>
@@ -87,21 +105,11 @@ const Step5DocsExecute = ({ formData, setFormData, handleFileChange, files }) =>
                 </div>
             </div>
 
-            {/* Issue 41: Deposit payment REMOVED from docs — it's in Step 3 (financial section) */}
+            {/* Issue 41: Deposit payment REMOVED from docs -- it's in Step 3 (financial section) */}
 
-            {/* Lease Registration */}
+            {/* Lease Registration - Only document upload, no date field */}
             <h4 style={{ margin: '20px 0 10px', borderBottom: '1px solid #eee', paddingBottom: '5px' }}>Lease Registration</h4>
             <div className="form-row" style={{ gap: '12px' }}>
-                <div className="form-group" style={{ flex: '0 0 200px' }}>
-                    <label>Registration Date</label>
-                    <input
-                        type="date"
-                        value={formData.registration_date || ''}
-                        onChange={(e) => setFormData({ ...formData, registration_date: e.target.value })}
-                        className="form-control"
-                        style={{ fontSize: '13px' }}
-                    />
-                </div>
                 <div className="form-group" style={{ flex: 1 }}>
                     <label>Upload Registered Agreement</label>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>

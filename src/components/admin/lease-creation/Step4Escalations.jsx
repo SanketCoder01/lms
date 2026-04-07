@@ -81,6 +81,16 @@ const Step4Escalations = ({
         return [{ value: 'Percentage (%)', label: '% Increase' }];
     };
 
+    // Check if we need to show both MG and Rev Share inputs
+    const showBothInputs = (step) => {
+        return step.escalation_on === 'both' && step.increaseType === 'Percentage (%)';
+    };
+
+    // Check if Convert to Traditional - only show single value input
+    const isConvertToTraditional = (step) => {
+        return step.escalation_on === 'both' && step.increaseType === 'Convert to Traditional';
+    };
+
     const getValueDescription = (step) => {
         switch (step.increaseType) {
             case 'Percentage (%)': return 'Adds explicit % increase on top of current rate/amount.';
@@ -148,7 +158,8 @@ const Step4Escalations = ({
                 {escalationSteps.map((step, index) => {
                     const isFirst = index === 0;
                     const increaseTypeOptions = getIncreaseTypeOptions(step);
-                    const showBothInputs = step.escalation_on === 'both' && step.increaseType === 'Percentage (%)';
+                    const isBothInputs = showBothInputs(step);
+                    const isConvertTrad = isConvertToTraditional(step);
 
                     return (
                         <div key={index} style={{ background: '#fff', padding: '16px 20px', borderRadius: '8px', border: '1px solid #e2e8f0', marginBottom: '16px', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
@@ -228,10 +239,10 @@ const Step4Escalations = ({
                                 </div>
                             </div>
 
-                            {/* Value input(s) — Issue 59: Both mode shows MG + RevShare fields */}
+                            {/* Value input(s) -- Issue 59: Both mode shows MG + RevShare fields, Convert to Traditional shows only value */}
                             {!needsNoValue(step) && (
-                                <div style={{ display: 'grid', gridTemplateColumns: showBothInputs ? '1fr 1fr' : '1fr', gap: '12px', marginTop: '10px' }}>
-                                    {showBothInputs ? (
+                                <div style={{ display: 'grid', gridTemplateColumns: isBothInputs ? '1fr 1fr' : '1fr', gap: '12px', marginTop: '10px' }}>
+                                    {isBothInputs ? (
                                         <>
                                             <div className="form-group">
                                                 <label style={{ fontSize: '12px', fontWeight: 600 }}>MG Change Value</label>
@@ -258,11 +269,13 @@ const Step4Escalations = ({
                                         </>
                                     ) : (
                                         <div className="form-group">
-                                            <label style={{ fontSize: '12px', fontWeight: 600 }}>Value</label>
+                                            <label style={{ fontSize: '12px', fontWeight: 600 }}>
+                                                {isConvertTrad ? 'New Fixed Rate (Per Sqft)' : 'Value'}
+                                            </label>
                                             <input
                                                 type="number"
                                                 className="form-control"
-                                                placeholder="e.g. 5"
+                                                placeholder={isConvertTrad ? "e.g. 150" : "e.g. 5"}
                                                 value={step.value || ''}
                                                 onChange={(e) => handleStepChange(index, 'value', e.target.value)}
                                                 style={{ fontSize: '13px' }}
