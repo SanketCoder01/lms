@@ -39,6 +39,7 @@ router.get("/unit/:unitId/main-lessee", leaseController.getMainLesseeForUnit);
 router.get("/:id/effective-rent", leaseController.getEffectiveRent);
 
 // DANGER ZONE
+router.delete("/:id", leaseController.deleteLease);
 router.delete("/wipe-all-data-danger", leaseController.wipeAllData);
 
 module.exports = router;

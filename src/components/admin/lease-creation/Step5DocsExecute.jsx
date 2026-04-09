@@ -107,9 +107,24 @@ const Step5DocsExecute = ({ formData, setFormData, handleFileChange, files }) =>
 
             {/* Issue 41: Deposit payment REMOVED from docs -- it's in Step 3 (financial section) */}
 
-            {/* Lease Registration - Only document upload, no date field */}
+            {/* Lease Registration - Document upload and registration date */}
             <h4 style={{ margin: '20px 0 10px', borderBottom: '1px solid #eee', paddingBottom: '5px' }}>Lease Registration</h4>
             <div className="form-row" style={{ gap: '12px' }}>
+                <div className="form-group" style={{ flex: '0 0 200px' }}>
+                    <label>Registration Date</label>
+                    <input
+                        type="date"
+                        value={formData.registration_date || ''}
+                        onChange={(e) => setFormData({ ...formData, registration_date: e.target.value })}
+                        className="form-control"
+                        style={{ fontSize: '13px' }}
+                    />
+                    {formData.registration_date && (
+                        <small style={{ color: '#059669', fontSize: '11px', marginTop: '4px', display: 'block' }}>
+                            {fmtDate(formData.registration_date)}
+                        </small>
+                    )}
+                </div>
                 <div className="form-group" style={{ flex: 1 }}>
                     <label>Upload Registered Agreement</label>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>

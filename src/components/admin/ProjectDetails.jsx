@@ -65,7 +65,7 @@ const ProjectDetails = () => {
                 {/* General Info */}
                 <div className="detail-card">
                     <h3>General Information</h3>
-                    <div className="project-image-container">
+                    <div className="project-image-container" style={{ textAlign: 'left' }}>
                         {project.project_image && !imageError ? (
                             <img
                                 src={project.project_image && project.project_image.startsWith('http')
@@ -76,7 +76,7 @@ const ProjectDetails = () => {
                                 onError={() => setImageError(true)}
                             />
                         ) : (
-                            <div className="project-placeholder-image">
+                            <div className="project-placeholder-image" style={{ width: 'auto', maxWidth: '300px', minHeight: '150px' }}>
                                 {project.project_name ? project.project_name : "No Image Available"}
                             </div>
                         )}

@@ -454,8 +454,10 @@ const getAllLeases = async (req, res) => {
 
         let query = supabase.from('leases').select(`
             id, lease_type, rent_model, lease_start, lease_end, monthly_rent, security_deposit, status,
+            mg_amount, mg_amount_sqft, revenue_share_amount, revenue_share_percentage,
+            monthly_net_sales, sub_lease_area_sqft, created_at,
             projects(project_name, location, address),
-            units(unit_number),
+            units(unit_number, chargeable_area),
             tenant:parties!leases_party_tenant_id_fkey(company_name, first_name, last_name),
             owner:parties!leases_party_owner_id_fkey(company_name, first_name, last_name),
             sub_tenants(company_name)
@@ -478,8 +480,16 @@ const getAllLeases = async (req, res) => {
             lease_start: l.lease_start,
             lease_end: l.lease_end,
             monthly_rent: l.monthly_rent,
+            monthly_net_sales: l.monthly_net_sales,
             security_deposit: l.security_deposit,
             status: l.status,
+            mg_amount: l.mg_amount,
+            mg_amount_sqft: l.mg_amount_sqft,
+            revenue_share_amount: l.revenue_share_amount,
+            revenue_share_percentage: l.revenue_share_percentage,
+            sub_lease_area_sqft: l.sub_lease_area_sqft,
+            area_leased: l.sub_lease_area_sqft || l.units?.chargeable_area || 0,
+            created_at: l.created_at,
             project_name: l.projects?.project_name,
             project_location: l.projects?.location,
             project_address: l.projects?.address,
@@ -758,6 +768,45 @@ const exportLeases = async (req, res) => {
     }
 };
 
+const deleteLease = async (req, res) => {
+    try {
+        const { id } = req.params;
+
+        // 1. Get unit_id before deletion to update status
+        const { data: lease, error: getErr } = await supabase
+            .from('leases')
+            .select('unit_id')
+            .eq('id', id)
+            .single();
+
+        if (getErr || !lease) {
+            return res.status(404).json({ success: false, message: "Lease not found" });
+        }
+
+        // 2. Delete the lease (escalations will cascade delete)
+        const { error: delErr } = await supabase
+            .from('leases')
+            .delete()
+            .eq('id', id);
+
+        if (delErr) throw delErr;
+
+        // 3. Mark unit as vacant
+        if (lease.unit_id) {
+            await supabase
+                .from('units')
+                .update({ status: 'vacant' })
+                .eq('id', lease.unit_id);
+        }
+
+        await createNotification(1, "Lease Deleted", `Lease #${id} has been deleted.`, "info");
+        res.json({ success: true, message: "Lease deleted successfully" });
+    } catch (err) {
+        console.error("deleteLease err:", err);
+        res.status(500).json({ success: false, message: "Server error", error: err.message });
+    }
+};
+
 const wipeAllData = async (req, res) => {
     res.json({ message: "Danger Zone wipe using Drop commands must be executed strictly via Supabase Dashboard SQL Editor to protect cloud relations." });
 };
@@ -783,5 +832,6 @@ module.exports = {
     wipeAllData,
     getMainLesseeForUnit,
     getEffectiveRent,
-    exportLeases
+    exportLeases,
+    deleteLease
 };

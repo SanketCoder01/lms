@@ -16,6 +16,7 @@ const getUnits = async (req, res) => {
       .from('units')
       .select(`
         id, unit_number, block_tower, floor_number, chargeable_area, status, project_id,
+        projected_rent, unit_category, unit_zoning_type,
         projects!inner ( project_name ),
         unit_ownerships (
           id, ownership_status, share_percentage,
@@ -63,7 +64,10 @@ const getUnits = async (req, res) => {
         project_id:    u.project_id,
         owner_name:    ownerName,
         total_share:   totalShare,
-        is_full:       isFull
+        is_full:       isFull,
+        projected_rent: u.projected_rent,
+        unit_category: u.unit_category,
+        unit_zoning_type: u.unit_zoning_type
       };
     });
 

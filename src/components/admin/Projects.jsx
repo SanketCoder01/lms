@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import Sidebar from "./Sidebar";
 import { getProjects, deleteProject as deleteProjectAPI, getProjectLocations, filterAPI } from "../../services/api";
 import { indianCities } from "../../utils/indianLocations";
+import ReportGenerator from "./ReportGenerator";
 import "./projects.css";
 
 const Projects = () => {
@@ -15,6 +16,42 @@ const Projects = () => {
   const [availableLocations, setAvailableLocations] = useState(["All"]);
 
   const [types, setTypes] = useState(["All"]);
+  const [showReportModal, setShowReportModal] = useState(false);
+
+  // Report columns for Projects - All sections
+  const projectReportColumns = [
+    // Basic Info
+    { key: 'id', label: 'Project ID' },
+    { key: 'project_name', label: 'Project Name' },
+    { key: 'project_code', label: 'Project Code' },
+    // Location
+    { key: 'location', label: 'Location/City' },
+    { key: 'state', label: 'State' },
+    { key: 'address', label: 'Address' },
+    { key: 'pincode', label: 'Pincode' },
+    // Property Details
+    { key: 'project_type', label: 'Project Type' },
+    { key: 'property_status', label: 'Property Status' },
+    { key: 'construction_status', label: 'Construction Status' },
+    // Area & Units
+    { key: 'total_units', label: 'Total Units' },
+    { key: 'total_floors', label: 'Total Floors' },
+    { key: 'actual_total_floors', label: 'Actual Floors' },
+    { key: 'total_project_area', label: 'Total Area' },
+    { key: 'total_built_up_area', label: 'Built-up Area' },
+    { key: 'total_carpet_area', label: 'Carpet Area' },
+    { key: 'calculation_type', label: 'Calculation Basis' },
+    // Occupancy
+    { key: 'occupied_units', label: 'Occupied Units' },
+    { key: 'leased_units', label: 'Leased Units' },
+    { key: 'vacant_units', label: 'Vacant Units' },
+    // Additional
+    { key: 'status', label: 'Status' },
+    { key: 'description', label: 'Description' },
+    { key: 'project_image', label: 'Project Image' },
+    { key: 'created_at', label: 'Created Date' },
+    { key: 'updated_at', label: 'Updated Date' }
+  ];
 
   /* ================= FETCH LOCATIONS ================= */
   useEffect(() => {
@@ -120,14 +157,21 @@ const Projects = () => {
   /* ================= EXPORT CSV ================= */
   const handleExportCSV = () => {
     if (projects.length === 0) return;
-    const headers = ["Project Name", "Location", "Type", "Total Units", "Available Units", "Status"];
+    const headers = ["Project ID", "Project Name", "Location", "State", "Address", "Type", "Total Units", "Total Floors", "Total Area", "Calculation Basis", "Status", "Description", "Created Date"];
     const rows = projects.map(p => [
+      `P-${p.id}`,
       p.project_name,
       p.location,
+      p.state || 'N/A',
+      p.address || 'N/A',
       p.project_type,
       p.total_units || 0,
-      p.available_units || 0,
-      p.status || 'Active'
+      p.total_floors || 0,
+      p.total_project_area || 'N/A',
+      p.calculation_type || 'N/A',
+      p.status || 'Active',
+      (p.description || 'N/A').substring(0, 100),
+      p.created_at ? new Date(p.created_at).toLocaleDateString() : 'N/A'
     ]);
     
     let csvContent = "data:text/csv;charset=utf-8," 
@@ -160,6 +204,15 @@ const Projects = () => {
                 <line x1="12" y1="15" x2="12" y2="3"></line>
               </svg>
               Export CSV
+            </button>
+            <button onClick={() => setShowReportModal(true)} className="secondary-btn" style={{ background: '#eff6ff', color: '#2e66ff', border: '1px solid #bfdbfe', padding: '8px 16px', borderRadius: '4px', cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ marginRight: '6px' }}>
+                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                <polyline points="14 2 14 8 20 8"></polyline>
+                <line x1="16" y1="13" x2="8" y2="13"></line>
+                <line x1="16" y1="17" x2="8" y2="17"></line>
+              </svg>
+              Generate Report
             </button>
             <Link
               to="/admin/add-project"
@@ -366,6 +419,15 @@ const Projects = () => {
 
         </div>
       </main>
+
+      {showReportModal && (
+        <ReportGenerator
+          title="Projects Report"
+          data={projects}
+          columns={projectReportColumns}
+          onClose={() => setShowReportModal(false)}
+        />
+      )}
     </div>
   );
 };

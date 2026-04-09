@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import Sidebar from './Sidebar';
+import ReportGenerator from './ReportGenerator';
 import './dashboard.css';
 import './leases.css';
 import { leaseAPI, getProjects, getProjectLocations, filterAPI } from "../../services/api";
@@ -23,6 +24,52 @@ const Leases = () => {
 
     const [projects, setProjects] = useState([]);
     const [locations, setLocations] = useState([]);
+    const [showReportModal, setShowReportModal] = useState(false);
+
+    // Report columns for Leases - All sections (Step 1-5)
+    const leaseReportColumns = [
+        // Step 1: Basic Info
+        { key: 'id', label: 'Lease ID' },
+        { key: 'lease_type', label: 'Lease Type' },
+        { key: 'status', label: 'Status' },
+        // Step 2: Parties
+        { key: 'tenant_name', label: 'Tenant Name' },
+        { key: 'sub_tenant_name', label: 'Sub-Tenant' },
+        { key: 'landlord_name', label: 'Landlord Name' },
+        // Step 3: Property
+        { key: 'project_name', label: 'Project' },
+        { key: 'unit_number', label: 'Unit Number' },
+        { key: 'floor', label: 'Floor' },
+        { key: 'block_tower', label: 'Block/Tower' },
+        { key: 'property_type', label: 'Property Type' },
+        { key: 'chargeable_area', label: 'Chargeable Area' },
+        { key: 'carpet_area', label: 'Carpet Area' },
+        // Step 4: Lease Terms
+        { key: 'lease_start', label: 'Start Date' },
+        { key: 'lease_end', label: 'End Date' },
+        { key: 'tenure_months', label: 'Tenure (Months)' },
+        { key: 'rent_commencement_date', label: 'Rent Commencement' },
+        { key: 'lockin_period', label: 'Lock-in Period' },
+        { key: 'lockin_end_date', label: 'Lock-in End Date' },
+        { key: 'rent_free_period', label: 'Rent Free Period' },
+        { key: 'rent_free_start', label: 'Rent Free Start' },
+        { key: 'rent_free_end', label: 'Rent Free End' },
+        // Step 5: Financial
+        { key: 'monthly_rent', label: 'Monthly Rent' },
+        { key: 'security_deposit', label: 'Security Deposit' },
+        { key: 'rent_per_sqft', label: 'Rent/Sq Ft' },
+        { key: 'escalation_rate', label: 'Escalation Rate' },
+        { key: 'escalation_type', label: 'Escalation Type' },
+        { key: 'next_escalation_date', label: 'Next Escalation' },
+        { key: 'next_escalation_rent', label: 'Next Escalation Rent' },
+        // Additional
+        { key: 'fit_out_period', label: 'Fit-out Period' },
+        { key: 'fit_out_start', label: 'Fit-out Start' },
+        { key: 'fit_out_end', label: 'Fit-out End' },
+        { key: 'termination_notice_months', label: 'Termination Notice' },
+        { key: 'remarks', label: 'Remarks' },
+        { key: 'created_at', label: 'Created Date' }
+    ];
 
     // Effect for initial data fetching and URL param handling
     useEffect(() => {
@@ -105,7 +152,8 @@ const Leases = () => {
                 setLeases(leases.filter(l => l.id !== id));
             } catch (err) {
                 console.error('Failed to delete lease:', err);
-                alert('Failed to delete lease. It may have dependencies.');
+                const errorMsg = err.response?.data?.message || 'Failed to delete lease. It may have dependencies.';
+                alert(errorMsg);
             }
         }
     };
@@ -124,11 +172,11 @@ const Leases = () => {
             formatCurrency(l.monthly_rent),
             l.status || 'N/A'
         ]);
-        
-        let csvContent = "data:text/csv;charset=utf-8," 
+
+        let csvContent = "data:text/csv;charset=utf-8,"
             + headers.join(",") + "\n"
             + rows.map(r => r.map(cell => `"${(cell || '').toString().replace(/"/g, '""')}"`).join(",")).join("\n");
-            
+
         const encodedUri = encodeURI(csvContent);
         const link = document.createElement("a");
         link.setAttribute("href", encodedUri);
@@ -160,6 +208,15 @@ const Leases = () => {
                             </svg>
                             Export CSV
                         </button>
+                        <button onClick={() => setShowReportModal(true)} className="secondary-btn" style={{ background: '#eff6ff', color: '#2e66ff', border: '1px solid #bfdbfe', padding: '8px 16px', borderRadius: '4px', cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ marginRight: '6px' }}>
+                                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                                <polyline points="14 2 14 8 20 8"></polyline>
+                                <line x1="16" y1="13" x2="8" y2="13"></line>
+                                <line x1="16" y1="17" x2="8" y2="17"></line>
+                            </svg>
+                            Generate Report
+                        </button>
                         <Link to="/admin/add-lease" className="primary-btn" style={{ textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: '8px' }}>
                             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
                             Create Lease
@@ -169,14 +226,14 @@ const Leases = () => {
 
                 <div className="content-card">
                     <div className="tabs-container" style={{ display: 'flex', gap: '20px', borderBottom: '1px solid #e2e8f0', padding: '0 20px', marginBottom: '20px' }}>
-                        <button 
+                        <button
                             className={`tab-btn ${activeTab === 'direct' ? 'active' : ''}`}
                             onClick={() => setActiveTab('direct')}
                             style={{ padding: '15px 5px', background: 'none', border: 'none', borderBottom: activeTab === 'direct' ? '2px solid #2e66ff' : '2px solid transparent', color: activeTab === 'direct' ? '#2e66ff' : '#64748b', fontWeight: activeTab === 'direct' ? 600 : 400, cursor: 'pointer', fontSize: '15px' }}
                         >
                             Direct Leases
                         </button>
-                        <button 
+                        <button
                             className={`tab-btn ${activeTab === 'sub' ? 'active' : ''}`}
                             onClick={() => setActiveTab('sub')}
                             style={{ padding: '15px 5px', background: 'none', border: 'none', borderBottom: activeTab === 'sub' ? '2px solid #2e66ff' : '2px solid transparent', color: activeTab === 'sub' ? '#2e66ff' : '#64748b', fontWeight: activeTab === 'sub' ? 600 : 400, cursor: 'pointer', fontSize: '15px' }}
@@ -355,6 +412,15 @@ const Leases = () => {
 
                 </div>
             </main >
+
+            {showReportModal && (
+                <ReportGenerator
+                    title="Leases Report"
+                    data={leases}
+                    columns={leaseReportColumns}
+                    onClose={() => setShowReportModal(false)}
+                />
+            )}
         </div >
     );
 };

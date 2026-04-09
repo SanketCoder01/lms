@@ -13,8 +13,8 @@ const UnitStructure = () => {
     const [activeTab, setActiveTab] = useState('blocks'); // 'blocks' | 'floors'
 
     // Forms
-    const [blockForm, setBlockForm] = useState({ block_name: '', description: '', sort_order: '' });
-    const [floorForm, setFloorForm] = useState({ floor_name: '', block_id: '', units_count: '', sort_order: '' });
+    const [blockForm, setBlockForm] = useState({ block_name: '', description: '' });
+    const [floorForm, setFloorForm] = useState({ floor_name: '', block_id: '', units_count: '' });
     const [editingBlock, setEditingBlock] = useState(null);
     const [editingFloor, setEditingFloor] = useState(null);
 
@@ -52,7 +52,7 @@ const UnitStructure = () => {
         if (!selectedProject) return alert('Select a project first');
         try {
             await structureAPI.addBlock({ ...blockForm, project_id: selectedProject });
-            setBlockForm({ block_name: '', description: '', sort_order: '' });
+            setBlockForm({ block_name: '', description: '' });
             loadData();
         } catch (err) { alert(err.response?.data?.message || 'Error adding block'); }
     };
@@ -79,7 +79,7 @@ const UnitStructure = () => {
         if (!selectedProject) return alert('Select a project first');
         try {
             await structureAPI.addFloor({ ...floorForm, project_id: selectedProject });
-            setFloorForm({ floor_name: '', block_id: '', units_count: '', sort_order: '' });
+            setFloorForm({ floor_name: '', block_id: '', units_count: '' });
             loadData();
         } catch (err) { alert(err.response?.data?.message || 'Error adding floor'); }
     };
@@ -173,13 +173,7 @@ const UnitStructure = () => {
                                                         value={blockForm.description}
                                                         onChange={e => setBlockForm({ ...blockForm, description: e.target.value })} />
                                                 </div>
-                                                <div className="form-group-structure">
-                                                    <label>Sort Order</label>
-                                                    <input className="structure-input" type="number" placeholder="0" min="0"
-                                                        value={blockForm.sort_order}
-                                                        onChange={e => setBlockForm({ ...blockForm, sort_order: e.target.value })} />
-                                                </div>
-                                                <button type="submit" className="btn-primary-structure">+ Add Block</button>
+                                                                                                <button type="submit" className="btn-primary-structure">+ Add Block</button>
                                             </div>
                                         </form>
                                     </div>
@@ -197,7 +191,6 @@ const UnitStructure = () => {
                                                             <th>#</th>
                                                             <th>Block Name</th>
                                                             <th>Description</th>
-                                                            <th>Sort</th>
                                                             <th>Floors</th>
                                                             <th>Actions</th>
                                                         </tr>
@@ -217,12 +210,6 @@ const UnitStructure = () => {
                                                                         ? <input className="structure-input" value={editingBlock.description || ''}
                                                                             onChange={e => setEditingBlock({ ...editingBlock, description: e.target.value })} />
                                                                         : block.description || '—'}
-                                                                </td>
-                                                                <td>
-                                                                    {editingBlock?.id === block.id
-                                                                        ? <input className="structure-input" style={{ width: '60px' }} type="number" value={editingBlock.sort_order}
-                                                                            onChange={e => setEditingBlock({ ...editingBlock, sort_order: e.target.value })} />
-                                                                        : block.sort_order}
                                                                 </td>
                                                                 <td>
                                                                     <span className="badge-structure">{floors.filter(f => f.block_id === block.id).length} floors</span>
@@ -279,13 +266,7 @@ const UnitStructure = () => {
                                                         value={floorForm.units_count}
                                                         onChange={e => setFloorForm({ ...floorForm, units_count: e.target.value })} />
                                                 </div>
-                                                <div className="form-group-structure">
-                                                    <label>Sort Order</label>
-                                                    <input className="structure-input" type="number" placeholder="0" min="0"
-                                                        value={floorForm.sort_order}
-                                                        onChange={e => setFloorForm({ ...floorForm, sort_order: e.target.value })} />
-                                                </div>
-                                                <button type="submit" className="btn-primary-structure">+ Add Floor</button>
+                                                                                                <button type="submit" className="btn-primary-structure">+ Add Floor</button>
                                             </div>
                                         </form>
                                     </div>
@@ -304,7 +285,6 @@ const UnitStructure = () => {
                                                             <th>Floor Name</th>
                                                             <th>Block</th>
                                                             <th>Units Count</th>
-                                                            <th>Sort</th>
                                                             <th>Actions</th>
                                                         </tr>
                                                     </thead>
@@ -335,7 +315,6 @@ const UnitStructure = () => {
                                                                                 onChange={e => setEditingFloor({ ...editingFloor, units_count: e.target.value })} />
                                                                             : floor.units_count || 0}
                                                                     </td>
-                                                                    <td>{floor.sort_order}</td>
                                                                     <td>
                                                                         {editingFloor?.id === floor.id ? (
                                                                             <div style={{ display: 'flex' }}>

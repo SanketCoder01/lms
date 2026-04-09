@@ -2,7 +2,6 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import Sidebar from './Sidebar';
 import { filterAPI, partyAPI } from '../../services/api';
-import { supabase } from '../../services/supabase';
 import axios from 'axios';
 import { isValidPhone, isValidPAN, isValidAadhaar, isValidCIN } from '../../utils/validators';
 import { INDIA_STATES, getStaticCities } from '../../utils/locationData';
@@ -47,7 +46,7 @@ const AddParty = () => {
     useEffect(() => {
         const fetchFilters = async () => {
             try {
-                const [bcRes, ptRes, ogRes, statesRes] = await Promise.all([
+                const [bcRes, ptRes, ogRes] = await Promise.all([
                     filterAPI.getFilterOptions("brand_category").catch(() => ({ data: { data: [] } })),
                     filterAPI.getFilterOptions("Party Type").catch(() => ({ data: { data: [] } })),
                     filterAPI.getFilterOptions("Owner Grouping").catch(() => ({ data: { data: [] } })),
@@ -57,75 +56,32 @@ const AddParty = () => {
                 if (bcRes.data.data?.length > 0) setBrandCategories(bcRes.data.data);
                 if (ptRes.data.data?.length > 0) setPartyTypes(ptRes.data.data.map(d => d.option_value));
                 if (ogRes.data.data?.length > 0) setOwnerGroupings(ogRes.data.data);
-                // Use API data if available, else fall back to static India states list
-                const statesData = statesRes.data?.length > 0 ? statesRes.data : INDIA_STATES;
-                setStatesList(statesData);
-                
-                // Load ALL cities from all states
-                const allCities = [];
-                statesData.forEach(state => {
-                    const stateCities = getStaticCities(state.id);
-                    stateCities.forEach(city => {
-                        allCities.push({ ...city, stateName: state.name });
-                    });
-                });
-                setCitiesList(allCities);
+                // ALWAYS use full 36 India states - never rely on partial API data
+                setStatesList(INDIA_STATES);
 
             } catch (e) {
                 console.error(e);
                 setStatesList(INDIA_STATES); // always have states
-                // Load all static cities as fallback
-                const allCities = [];
-                INDIA_STATES.forEach(state => {
-                    const stateCities = getStaticCities(state.id);
-                    stateCities.forEach(city => {
-                        allCities.push({ ...city, stateName: state.name });
-                    });
-                });
-                setCitiesList(allCities);
+                // Cities will be loaded when state is selected
             }
         };
         fetchFilters();
 
-        const channel = supabase.channel('locations-channel')
-            .on('postgres_changes', { event: '*', schema: 'public', table: 'states' }, () => {
-                axios.get('/api/locations/states').then(res => setStatesList(res.data?.length > 0 ? res.data : INDIA_STATES)).catch(console.error);
-            })
-            .subscribe();
-
-        return () => supabase.removeChannel(channel);
+        // No need to subscribe to states changes - we always use static INDIA_STATES
     }, []);
 
-    const fetchCities = async (stateName) => {
-        try {
-            const stateObj = statesList.find(s => s.name === stateName);
-            if (!stateObj) { setCitiesList([]); return; }
-            const citiesRes = await axios.get(`/api/locations/cities/${stateObj.id}`);
-            if (citiesRes.data?.length > 0) {
-                setCitiesList(citiesRes.data);
-            } else {
-                // Fallback: use static cities for this state
-                setCitiesList(getStaticCities(stateObj.id));
-            }
-        } catch (e) {
-            // On any error, fall back to static cities
-            const stateObj = statesList.find(s => s.name === stateName);
-            if (stateObj) setCitiesList(getStaticCities(stateObj.id));
-            else setCitiesList([]);
+    const fetchCities = (stateName) => {
+        // Find state from INDIA_STATES and get all its cities
+        const stateObj = INDIA_STATES.find(s => s.name === stateName);
+        if (!stateObj) {
+            setCitiesList([]);
+            return;
         }
+        // Always use static cities for the selected state
+        setCitiesList(getStaticCities(stateObj.id));
     };
 
-    // Sub to cities changing for the selected state
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    useEffect(() => {
-        if (!formData.state) return;
-        const channel = supabase.channel('cities-channel')
-            .on('postgres_changes', { event: '*', schema: 'public', table: 'cities' }, () => {
-                fetchCities(formData.state);
-            }).subscribe();
-        return () => supabase.removeChannel(channel);
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [formData.state, statesList]);
+    // No need for cities subscription - using static data
 
     const handleChange = (e) => {
         const { name, value } = e.target;
@@ -499,7 +455,7 @@ const AddParty = () => {
                                 >
                                     <option value="">Select City</option>
                                     {citiesList.map((city) => (
-                                        <option key={`${city.id}-${city.state_id}`} value={city.name}>{city.name} ({city.stateName || ''})</option>
+                                        <option key={`${city.id}-${city.state_id}`} value={city.name}>{city.name}</option>
                                     ))}
                                 </select>
                             </div>

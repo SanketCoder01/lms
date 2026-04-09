@@ -46,6 +46,7 @@ const LeaseDetails = () => {
     if (!lease) return <div style={{ padding: 20 }}>Lease not found</div>;
 
     const leaseType = lease.lease_type === 'Subtenant lease' ? 'sub_lease' : 'direct';
+    // eslint-disable-next-line no-unused-vars
     const rentModel = lease.rent_model === 'RevenueShare' ? 'revenue_share' : 'fixed';
 
     const getEffectiveRent = () => {
@@ -300,19 +301,63 @@ const LeaseDetails = () => {
                                 <h3 style={{ margin: 0, color: '#2d3748', textTransform: 'none', fontWeight: 600, fontSize: '1.1rem', marginBottom: '15px', paddingTop: '15px', borderTop: '1px solid #e2e8f0' }}>Rent Escalations</h3>
                                 <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
                                     {lease.escalations.map((esc, idx) => (
-                                        <div key={idx} style={{ background: '#f8fafc', padding: '10px', borderRadius: '6px', fontSize: '0.85rem' }}>
-                                            <div style={{ fontWeight: 600, color: '#2d3748', marginBottom: '4px' }}>
-                                                {formatDate(esc.effective_from)} to {esc.effective_to ? formatDate(esc.effective_to) : 'Present'}
+                                        <div key={idx} style={{ background: '#f8fafc', padding: '12px', borderRadius: '8px', fontSize: '0.85rem', border: '1px solid #e2e8f0' }}>
+                                            <div style={{ fontWeight: 600, color: '#2d3748', marginBottom: '6px', display: 'flex', justifyContent: 'space-between' }}>
+                                                <span>{formatDate(esc.effective_from)} to {esc.effective_to ? formatDate(esc.effective_to) : 'Present'}</span>
+                                                <span style={{ fontSize: '0.75rem', background: '#e0f2fe', color: '#0369a1', padding: '2px 8px', borderRadius: '4px' }}>
+                                                    {esc.escalation_on === 'mg' ? 'MG Base' : esc.escalation_on === 'revenue_share' ? 'Revenue Share' : esc.escalation_on === 'both' ? 'Both (MG + Rev Share)' : esc.escalation_on}
+                                                </span>
                                             </div>
-                                            <div style={{ color: '#4a5568' }}>
-                                                {esc.increase_type}: {esc.value}
-                                                {esc.increase_type === 'Percentage' ? '%' : (esc.increase_type === 'Rate Per Sqft' ? ' / sqft' : ' Rs addition')}
-                                                {/* Always show % and rev share if applicable */}
-                                                {esc.rev_share_value && esc.rev_share_value > 0 && (
-                                                    <span style={{ marginLeft: '8px', color: '#059669' }}>| Rev Share: {esc.rev_share_value}%</span>
+                                            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', marginTop: '8px' }}>
+                                                {esc.increase_type === 'Convert to Fixed Lease' ? (
+                                                    <>
+                                                        <div style={{ color: '#4a5568' }}>
+                                                            <span style={{ fontWeight: 500 }}>New Fixed Rate:</span> Rs {esc.value} / sqft
+                                                        </div>
+                                                        {esc.rev_share_value && esc.rev_share_value > 0 && (
+                                                            <div style={{ color: '#059669' }}>
+                                                                <span style={{ fontWeight: 500 }}>Revenue Share:</span> {esc.rev_share_value}%
+                                                            </div>
+                                                        )}
+                                                    </>
+                                                ) : (
+                                                    <>
+                                                        {esc.increase_type === 'Percentage' ? (
+                                                            <div style={{ color: '#4a5568' }}>
+                                                                <span style={{ fontWeight: 500 }}>Percentage Increase:</span> {esc.value}%
+                                                            </div>
+                                                        ) : esc.increase_type === 'Rate Per Sqft' ? (
+                                                            <div style={{ color: '#4a5568' }}>
+                                                                <span style={{ fontWeight: 500 }}>Rate Per Sqft:</span> Rs {esc.value}
+                                                            </div>
+                                                        ) : (
+                                                            <div style={{ color: '#4a5568' }}>
+                                                                <span style={{ fontWeight: 500 }}>Fixed Amount:</span> Rs {esc.value}
+                                                            </div>
+                                                        )}
+                                                        {esc.escalation_on === 'both' && esc.mg_value && (
+                                                            <div style={{ color: '#7c3aed' }}>
+                                                                <span style={{ fontWeight: 500 }}>MG Increase:</span> {esc.mg_value}%
+                                                            </div>
+                                                        )}
+                                                        {esc.escalation_on === 'both' && esc.rev_share_value && (
+                                                            <div style={{ color: '#059669' }}>
+                                                                <span style={{ fontWeight: 500 }}>Rev Share Increase:</span> {esc.rev_share_value}%
+                                                            </div>
+                                                        )}
+                                                        {esc.escalation_on === 'mg' && esc.value && (
+                                                            <div style={{ color: '#4a5568' }}>
+                                                                <span style={{ fontWeight: 500 }}>MG Increase:</span> {esc.value}{esc.increase_type === 'Percentage' ? '%' : ' Rs'}
+                                                            </div>
+                                                        )}
+                                                        {esc.escalation_on === 'revenue_share' && esc.rev_share_value && (
+                                                            <div style={{ color: '#059669' }}>
+                                                                <span style={{ fontWeight: 500 }}>Rev Share:</span> {esc.rev_share_value}%
+                                                            </div>
+                                                        )}
+                                                    </>
                                                 )}
                                             </div>
-                                            <div style={{ color: '#718096', fontSize: '0.75rem', marginTop: '2px' }}>Applies to: {esc.escalation_on === 'mg' ? 'MG Base' : esc.escalation_on === 'revenue_share' ? 'Revenue Share' : esc.escalation_on === 'both' ? 'Both (MG + Rev Share)' : esc.escalation_on}</div>
                                         </div>
                                     ))}
                                 </div>

@@ -384,25 +384,28 @@
 
 .details-grid {
     display: grid;
-    grid-template-columns: 2fr 1fr;
-    gap: 24px;
+    grid-template-columns: auto auto;
+    gap: 16px;
+    align-items: start;
 }
 
 .detail-card {
     background: white;
-    /* Nested card style if needed, generally implicit */
+    border-radius: 8px;
+    padding: 16px;
+    border: 1px solid #e2e8f0;
 }
 
 .detail-card h3 {
-    font-size: 1.1rem;
+    font-size: 1rem;
     color: #0f172a;
-    margin-bottom: 20px;
-    padding-bottom: 12px;
+    margin-bottom: 12px;
+    padding-bottom: 8px;
     border-bottom: 1px solid #f1f5f9;
 }
 
 .info-group {
-    margin-bottom: 20px;
+    margin-bottom: 12px;
 }
 
 .info-group label {
@@ -426,8 +429,10 @@
 }
 
 .project-main-image {
-    width: 100%;
-    height: 220px;
+    max-width: 500px;
+    max-height: 300px;
+    width: auto;
+    height: auto;
     object-fit: contain;
     background: #f8fafc;
     border-radius: 8px;
@@ -438,7 +443,8 @@
 
 /* Added Placeholder Style */
 .project-placeholder-image {
-    width: 100%;
+    width: auto;
+    max-width: 300px;
     height: 250px;
     background-color: #f1f5f9;
     border-radius: 8px;
@@ -465,8 +471,9 @@
 .stat-row {
     display: flex;
     justify-content: space-between;
-    padding: 12px 0;
+    padding: 8px 0;
     border-bottom: 1px solid #f8fafc;
+    font-size: 0.9rem;
 }
 
 .stat-row:last-child {

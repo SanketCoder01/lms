@@ -51,12 +51,25 @@ const Step3RentConfig = ({
         const optionA = (mgAmt + parseFloat(revShareAmt)).toFixed(2);
         const optionB = Math.max(mgAmt, parseFloat(revShareAmt)).toFixed(2);
 
+        const selectedOption = formData.rent_amount_option || 'Option A';
+        const finalRent = selectedOption === 'Option B' ? optionB : optionA;
+
         setFormData(prev => {
-            if (prev.revenue_share_amount === revShareAmt && prev.rent_option_a === optionA && prev.rent_option_b === optionB) return prev;
-            return { ...prev, revenue_share_amount: revShareAmt, rent_option_a: optionA, rent_option_b: optionB };
+            if (prev.revenue_share_amount === revShareAmt &&
+                prev.rent_option_a === optionA &&
+                prev.rent_option_b === optionB &&
+                prev.monthly_rent === finalRent) return prev;
+
+            return {
+                ...prev,
+                revenue_share_amount: revShareAmt,
+                rent_option_a: optionA,
+                rent_option_b: optionB,
+                monthly_rent: finalRent
+            };
         });
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [formData.revenue_share_percentage, formData.monthly_net_sales, formData.mg_amount, rentModel]);
+    }, [formData.revenue_share_percentage, formData.monthly_net_sales, formData.mg_amount, formData.rent_amount_option, rentModel]);
 
     const daysOptions = Array.from({ length: 31 }, (_, i) => {
         const day = i + 1;
@@ -69,7 +82,12 @@ const Step3RentConfig = ({
 
     const areaLabel = isSubLease ? 'Sub-Leased Area' : (selectedProject?.calculation_type || 'Chargeable Area');
     const infoStyle = { background: '#f0f9ff', padding: '10px 14px', borderRadius: '6px', fontSize: '13px', color: '#0369a1', border: '1px solid #bae6fd', marginBottom: '16px' };
-    const outputStyle = { background: '#f8fafc', padding: '10px 14px', borderRadius: '6px', borderLeft: '3px solid #6366f1' };
+
+    // Determine labels based on rent model
+    const isFixedRent = rentModel === 'Fixed';
+    const rentPerSqftLabel = isFixedRent ? 'Fixed Rent (Per Sqft)' : 'MG (Per Sqft)';
+    const rentAmountLabel = isFixedRent ? 'Fixed Rent Amount (INR) — Auto-calculated' : 'MG Amount (INR) — Auto-calculated';
+    const sectionTitle = isFixedRent ? 'Fixed Rent Details' : 'MG / Base Rent Details';
 
     return (
         <div className="form-section">
@@ -77,7 +95,7 @@ const Step3RentConfig = ({
 
             <div className="rent-block">
                 {/* Issue 36/42: MG + Revenue Share inputs */}
-                <h4>MG / Base Rent Details</h4>
+                <h4>{sectionTitle}</h4>
                 <div style={infoStyle}>
                     Area basis: <strong>{areaLabel}</strong>
                     {getUsableArea() > 0 && <> — <strong>{getUsableArea().toLocaleString('en-IN')} sq ft</strong></>}
@@ -85,7 +103,7 @@ const Step3RentConfig = ({
 
                 <div className="form-row" style={{ gap: '12px' }}>
                     <div className="form-group" style={{ flex: 1 }}>
-                        <label>MG (Per Sqft)</label>
+                        <label>{rentPerSqftLabel}</label>
                         <div className="input-with-suffix" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                             <input
                                 type="number"
@@ -105,7 +123,7 @@ const Step3RentConfig = ({
                         </div>
                     </div>
                     <div className="form-group" style={{ flex: 1 }}>
-                        <label>MG Amount (INR) — Auto-calculated</label>
+                        <label>{rentAmountLabel}</label>
                         <div className="currency-input">
                             <span className="currency-symbol">₹</span>
                             <input
@@ -167,55 +185,38 @@ const Step3RentConfig = ({
                                             onChange={(e) => setFormData({ ...formData, monthly_net_sales: e.target.value })}
                                         />
                                     </div>
-                                    {/* Revenue Share Amount - moved to right side */}
-                                    <div style={{ background: '#f0fdf4', padding: '8px 12px', borderRadius: '6px', border: '1px solid #bbf7d0', minWidth: '140px' }}>
-                                        <div style={{ fontSize: '10px', color: '#166534', marginBottom: '2px' }}>Rev Share Amt</div>
-                                        <div style={{ fontWeight: 700, fontSize: '14px', color: '#166534' }}>
+                                    <div style={{ background: 'linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%)', padding: '10px 16px', borderRadius: '8px', border: '1px solid #86efac', minWidth: '180px', boxShadow: '0 2px 4px rgba(0,0,0,0.05)' }}>
+                                        <div style={{ fontSize: '11px', color: '#166534', marginBottom: '4px', fontWeight: 600 }}>Revenue Share Amount</div>
+                                        <div style={{ fontWeight: 700, fontSize: '16px', color: '#15803d' }}>
                                             Rs{parseFloat(formData.revenue_share_amount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                                         </div>
                                     </div>
                                 </div>
                             </div>
                         </div>
-                        <div className="form-group" style={{ marginTop: '24px', maxWidth: '300px' }}>
-                            <label>Rent Calculation Method</label>
-                            <select
-                                className="form-control"
-                                value={formData.rent_amount_option || 'Option B'}
-                                onChange={(e) => setFormData({ ...formData, rent_amount_option: e.target.value })}
-                            >
-                                <option value="Option A">Option A (MG + Rev Share)</option>
-                                <option value="Option B">Option B (Higher of MG or Rev Share)</option>
-                            </select>
-                        </div>
 
-                        {/* Calculated outputs */}
-                        <div className="form-row" style={{ gap: '12px', marginTop: '12px' }}>
-                            <div style={{ ...outputStyle, flex: 1 }}>
-                                <div style={{ fontSize: '11px', color: '#64748b', marginBottom: '2px' }}>Revenue Share Amount</div>
-                                <div style={{ fontWeight: 700, fontSize: '16px', color: '#6366f1' }}>
-                                    ₹{parseFloat(formData.revenue_share_amount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                        <div style={{ marginTop: '20px', background: '#fefce8', padding: '16px', borderRadius: '8px', border: '1px solid #fde047' }}>
+                            <h5 style={{ margin: '0 0 12px 0', color: '#854d0e', fontSize: '14px' }}>Rent Calculation Method</h5>
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', alignItems: 'end' }}>
+                                <div className="form-group" style={{ marginBottom: 0 }}>
+                                    <label style={{ fontSize: '12px', fontWeight: 600, color: '#854d0e' }}>Select Calculation Rule</label>
+                                    <select
+                                        className="form-control"
+                                        value={formData.rent_amount_option || 'Option A'}
+                                        onChange={(e) => setFormData({ ...formData, rent_amount_option: e.target.value })}
+                                        style={{ fontSize: '13px', borderColor: '#fde047' }}
+                                    >
+                                        <option value="Option A">Option A: MG + Revenue Share</option>
+                                        <option value="Option B">Option B: Higher of MG or Revenue Share</option>
+                                    </select>
                                 </div>
-                                <small style={{ color: '#64748b', fontSize: '11px' }}>{formData.revenue_share_percentage || 0}% of ₹{parseFloat(formData.monthly_net_sales || 0).toLocaleString('en-IN')}</small>
+                                <div style={{ background: '#fff', padding: '10px 16px', borderRadius: '6px', border: '1px solid #fde047', minHeight: '58px', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+                                    <div style={{ fontSize: '11px', color: '#854d0e', fontWeight: 600, textTransform: 'uppercase', marginBottom: '2px' }}>Total Monthly Rent</div>
+                                    <div style={{ fontSize: '18px', fontWeight: 700, color: '#1e293b' }}>
+                                        ₹{parseFloat(formData.monthly_rent || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                                    </div>
+                                </div>
                             </div>
-
-                            {(!formData.rent_amount_option || formData.rent_amount_option === 'Option A') ? (
-                                <div style={{ ...outputStyle, flex: 1 }}>
-                                    <div style={{ fontSize: '11px', color: '#64748b', marginBottom: '2px' }}>Option A: MG + Rev Share</div>
-                                    <div style={{ fontWeight: 700, fontSize: '16px', color: '#059669' }}>
-                                        ₹{parseFloat(formData.rent_option_a || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-                                    </div>
-                                    <small style={{ color: '#64748b', fontSize: '11px' }}>Total of both components</small>
-                                </div>
-                            ) : (
-                                <div style={{ ...outputStyle, flex: 1, borderLeft: '4px solid #dc2626' }}>
-                                    <div style={{ fontSize: '11px', color: '#64748b', marginBottom: '2px' }}>Option B: Higher of MG or Rev Share</div>
-                                    <div style={{ fontWeight: 700, fontSize: '16px', color: '#dc2626' }}>
-                                        ₹{parseFloat(formData.rent_option_b || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-                                    </div>
-                                    <small style={{ color: '#64748b', fontSize: '11px' }}>Whichever is higher</small>
-                                </div>
-                            )}
                         </div>
                     </>
                 )}

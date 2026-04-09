@@ -49,7 +49,7 @@ const EditParty = () => {
     useEffect(() => {
         const fetchFilters = async () => {
             try {
-                const [bcRes, ptRes, ogRes, statesRes] = await Promise.all([
+                const [bcRes, ptRes, ogRes] = await Promise.all([
                     filterAPI.getFilterOptions("brand_category").catch(() => ({ data: { data: [] } })),
                     filterAPI.getFilterOptions("Party Type").catch(() => ({ data: { data: [] } })),
                     filterAPI.getFilterOptions("Owner Grouping").catch(() => ({ data: { data: [] } })),
@@ -59,27 +59,18 @@ const EditParty = () => {
                 if (bcRes.data.data?.length > 0) setBrandCategories(bcRes.data.data);
                 if (ptRes.data.data?.length > 0) setPartyTypes(ptRes.data.data.map(d => d.option_value));
                 if (ogRes.data.data?.length > 0) setOwnerGroupings(ogRes.data.data);
-                setStatesList(statesRes.data?.length > 0 ? statesRes.data : INDIA_STATES);
+                // ALWAYS use full 36 India states - never rely on partial API data
+                setStatesList(INDIA_STATES);
 
             } catch (e) {
                 console.error(e);
-                setStatesList(INDIA_STATES);
+                setStatesList(INDIA_STATES); // always have states
             }
         };
         fetchFilters();
         fetchParty();
 
-        const channel = supabase.channel('locations-channel-edit')
-            .on(
-                'postgres_changes',
-                { event: '*', schema: 'public', table: 'states' },
-                () => {
-                    axios.get('/api/locations/states').then(res => setStatesList(res.data)).catch(console.error);
-                }
-            )
-            .subscribe();
-
-        return () => supabase.removeChannel(channel);
+        // No need to subscribe to states changes - we always use static INDIA_STATES
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [id]);
 
@@ -94,20 +85,10 @@ const EditParty = () => {
                 });
                 setFormData(safeData);
 
-                // Fetch cities if state is present
+                // Load cities for existing state using static data
                 if (safeData.state) {
-                    try {
-                        const statesRes = await axios.get('/api/locations/states');
-                        const allStates = statesRes.data?.length > 0 ? statesRes.data : INDIA_STATES;
-                        const stateObj = allStates.find(s => s.name === safeData.state);
-                        if (stateObj) {
-                            const citiesRes = await axios.get(`/api/locations/cities/${stateObj.id}`);
-                            setCitiesList(citiesRes.data?.length > 0 ? citiesRes.data : getStaticCities(stateObj.id));
-                        }
-                    } catch (e) {
-                        const stateObj = INDIA_STATES.find(s => s.name === safeData.state);
-                        if (stateObj) setCitiesList(getStaticCities(stateObj.id));
-                    }
+                    const stateObj = INDIA_STATES.find(s => s.name === safeData.state);
+                    if (stateObj) setCitiesList(getStaticCities(stateObj.id));
                 }
             }
         } catch (error) {

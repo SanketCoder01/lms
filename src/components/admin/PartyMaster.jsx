@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import Sidebar from './Sidebar';
 import { partyAPI } from '../../services/api';
+import ReportGenerator from './ReportGenerator';
 import './PartyMaster.css';
 
 const PartyMaster = () => {
@@ -9,6 +10,50 @@ const PartyMaster = () => {
     const [loading, setLoading] = useState(true);
     const [search, setSearch] = useState('');
     const [filterType, setFilterType] = useState('All');
+    const [showReportModal, setShowReportModal] = useState(false);
+
+    // Report columns for Parties - All sections
+    const partyReportColumns = [
+        // Basic Info
+        { key: 'id', label: 'Party ID' },
+        { key: 'type', label: 'Structure Type' },
+        { key: 'party_type', label: 'Party Role' },
+        // Company/Individual Details
+        { key: 'company_name', label: 'Company Name' },
+        { key: 'brand_name', label: 'Brand Name' },
+        { key: 'first_name', label: 'First Name' },
+        { key: 'last_name', label: 'Last Name' },
+        { key: 'pan_number', label: 'PAN Number' },
+        { key: 'gst_number', label: 'GST Number' },
+        { key: 'cin_number', label: 'CIN Number' },
+        // Contact Info
+        { key: 'email', label: 'Email' },
+        { key: 'phone', label: 'Phone' },
+        { key: 'alt_phone', label: 'Alternate Phone' },
+        // Address
+        { key: 'address_line1', label: 'Address Line 1' },
+        { key: 'address_line2', label: 'Address Line 2' },
+        { key: 'city', label: 'City' },
+        { key: 'state', label: 'State' },
+        { key: 'postal_code', label: 'Postal Code' },
+        { key: 'country', label: 'Country' },
+        // Identification
+        { key: 'identification_type', label: 'ID Type' },
+        { key: 'identification_number', label: 'ID Number' },
+        // Business Details
+        { key: 'brand_category', label: 'Brand Category' },
+        { key: 'owner_group', label: 'Owner Group' },
+        { key: 'representative_designation', label: 'Representative Designation' },
+        // Bank Details
+        { key: 'bank_name', label: 'Bank Name' },
+        { key: 'account_number', label: 'Account Number' },
+        { key: 'ifsc_code', label: 'IFSC Code' },
+        { key: 'branch_name', label: 'Branch Name' },
+        // Additional
+        { key: 'remarks', label: 'Remarks' },
+        { key: 'created_at', label: 'Created Date' },
+        { key: 'updated_at', label: 'Updated Date' }
+    ];
 
     useEffect(() => {
         fetchParties();
@@ -87,6 +132,15 @@ const PartyMaster = () => {
                             </svg>
                             Export CSV
                         </button>
+                        <button onClick={() => setShowReportModal(true)} className="secondary-btn" style={{ background: '#eff6ff', color: '#2e66ff', border: '1px solid #bfdbfe', padding: '8px 16px', borderRadius: '4px', cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ marginRight: '6px' }}>
+                                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                                <polyline points="14 2 14 8 20 8"></polyline>
+                                <line x1="16" y1="13" x2="8" y2="13"></line>
+                                <line x1="16" y1="17" x2="8" y2="17"></line>
+                            </svg>
+                            Generate Report
+                        </button>
                         <Link to="/admin/parties/add" className="primary-btn">
                             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: '8px' }}>
                                 <line x1="12" y1="5" x2="12" y2="19"></line>
@@ -99,8 +153,8 @@ const PartyMaster = () => {
 
                 <div className="content-card">
                     {/* Filters */}
-                    <div className="filters-bar">
-                        <div className="search-wrapper">
+                    <div className="filters-bar" style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                        <div className="search-wrapper" style={{ flex: 1 }}>
                             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="search-icon">
                                 <circle cx="11" cy="11" r="8"></circle>
                                 <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
@@ -116,9 +170,9 @@ const PartyMaster = () => {
                         <select
                             value={filterType}
                             onChange={(e) => setFilterType(e.target.value)}
-                            className="filter-select"
+                            style={{ padding: '8px 12px', borderRadius: '6px', border: '1px solid #e5e7eb', fontSize: '13px', minWidth: '120px' }}
                         >
-                            <option value="All">All Types</option>
+                            <option value="All">All</option>
                             <option value="Individual">Individual</option>
                             <option value="Company">Company</option>
                         </select>
@@ -210,6 +264,15 @@ const PartyMaster = () => {
                     </div>
                 </div>
             </main>
+
+            {showReportModal && (
+                <ReportGenerator
+                    title="Parties Report"
+                    data={parties}
+                    columns={partyReportColumns}
+                    onClose={() => setShowReportModal(false)}
+                />
+            )}
         </div>
     );
 };

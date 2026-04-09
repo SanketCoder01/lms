@@ -120,8 +120,32 @@ const OwnershipMapping = () => {
     const fetchDocumentTypes = async () => {
         try {
             const res = await ownershipAPI.getDocumentTypes();
-            setDocumentTypes(res.data || []);
-        } catch (error) { console.error("Failed to fetch types", error); }
+            const types = res.data || [];
+            // If no types from API, use defaults
+            if (types.length === 0) {
+                setDocumentTypes([
+                    { id: 1, name: 'Application For Allotment' },
+                    { id: 2, name: 'SBA' },
+                    { id: 3, name: 'Purchase Agreement' },
+                    { id: 4, name: 'Possession Handover' },
+                    { id: 5, name: 'Conveyance Deed' },
+                    { id: 6, name: 'Sale Deed' }
+                ]);
+            } else {
+                setDocumentTypes(types);
+            }
+        } catch (error) { 
+            console.error("Failed to fetch types", error);
+            // Use defaults on error
+            setDocumentTypes([
+                { id: 1, name: 'Application For Allotment' },
+                { id: 2, name: 'SBA' },
+                { id: 3, name: 'Purchase Agreement' },
+                { id: 4, name: 'Possession Handover' },
+                { id: 5, name: 'Conveyance Deed' },
+                { id: 6, name: 'Sale Deed' }
+            ]);
+        }
     };
 
     const fetchDocuments = async (unitId, partyId) => {
@@ -370,14 +394,14 @@ const OwnershipMapping = () => {
                                                                     borderRadius: '4px', cursor: 'pointer', transition: 'background 0.2s'
                                                                 }} title="Upload Document">
                                                                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
-                                                                    <input type="file" hidden onChange={(e) => handleFileUpload(e, type.id)} />
+                                                                    <input type="file" hidden accept=".pdf,application/pdf" onChange={(e) => handleFileUpload(e, type.id)} />
                                                                 </label>
                                                             )}
                                                         </div>
 
                                                         {/* Date Column */}
                                                         <div style={{ textAlign: 'center', fontSize: '14px', color: '#64748b' }}>
-                                                            {doc ? new Date(doc.document_date).toLocaleDateString() : '11/1/26'}
+                                                            {doc ? new Date(doc.document_date).toLocaleDateString() : <span style={{ color: '#cbd5e1' }}>-</span>}
                                                         </div>
 
                                                         {/* Action Column */}
@@ -637,7 +661,7 @@ const AssignOwnerModal = ({ isOpen, onClose, unitId, onAssign }) => {
                 
                 {/* Always visible action buttons */}
                 <div className="form-actions" style={{ marginTop: '20px', display: 'flex', justifyContent: 'flex-end', gap: '12px', paddingTop: '16px', borderTop: '1px solid #e2e8f0' }}>
-                    <button className="btn-cancel" onClick={onClose} style={{ padding: '10px 20px', borderRadius: '6px', border: '1px solid #e2e8f0', background: '#fff', cursor: 'pointer', fontWeight: '500' }} title="Cancel">Cancel</button>
+                    <button className="btn-cancel" onClick={onClose} style={{ padding: '10px 20px', borderRadius: '6px', border: '1px solid #e2e8f0', background: '#fff', color: '#374151', cursor: 'pointer', fontWeight: '500', fontSize: '14px' }}>Cancel</button>
                     <button 
                         className="btn-submit" 
                         onClick={handleAssign} 

@@ -86,10 +86,12 @@ const Step4Escalations = ({
         return step.escalation_on === 'both' && step.increaseType === 'Percentage (%)';
     };
 
-    // Check if Convert to Traditional - only show single value input
+    // Check if Convert to Traditional - show both fixed rate and rev share
     const isConvertToTraditional = (step) => {
         return step.escalation_on === 'both' && step.increaseType === 'Convert to Traditional';
     };
+
+
 
     const getValueDescription = (step) => {
         switch (step.increaseType) {
@@ -239,17 +241,17 @@ const Step4Escalations = ({
                                 </div>
                             </div>
 
-                            {/* Value input(s) -- Issue 59: Both mode shows MG + RevShare fields, Convert to Traditional shows only value */}
+                            {/* Value input(s) -- Issue 59: Both mode shows MG + RevShare fields, Convert to Traditional shows fixed rate + rev share */}
                             {!needsNoValue(step) && (
-                                <div style={{ display: 'grid', gridTemplateColumns: isBothInputs ? '1fr 1fr' : '1fr', gap: '12px', marginTop: '10px' }}>
+                                <div style={{ display: 'grid', gridTemplateColumns: (isBothInputs || isConvertTrad) ? '1fr 1fr' : '1fr', gap: '12px', marginTop: '10px' }}>
                                     {isBothInputs ? (
                                         <>
                                             <div className="form-group">
-                                                <label style={{ fontSize: '12px', fontWeight: 600 }}>MG Change Value</label>
+                                                <label style={{ fontSize: '12px', fontWeight: 600 }}>MG Change Value (%)</label>
                                                 <input
                                                     type="number"
                                                     className="form-control"
-                                                    placeholder="MG % or amount"
+                                                    placeholder="MG % increase"
                                                     value={step.value || ''}
                                                     onChange={(e) => handleStepChange(index, 'value', e.target.value)}
                                                     style={{ fontSize: '13px' }}
@@ -260,22 +262,47 @@ const Step4Escalations = ({
                                                 <input
                                                     type="number"
                                                     className="form-control"
-                                                    placeholder="Rev share %"
+                                                    placeholder="Rev share % increase"
                                                     value={step.rev_share_value || ''}
                                                     onChange={(e) => handleStepChange(index, 'rev_share_value', e.target.value)}
                                                     style={{ fontSize: '13px' }}
                                                 />
                                             </div>
                                         </>
+                                    ) : isConvertTrad ? (
+                                        <>
+                                            <div className="form-group">
+                                                <label style={{ fontSize: '12px', fontWeight: 600 }}>New Fixed Rate (Per Sqft)</label>
+                                                <input
+                                                    type="number"
+                                                    className="form-control"
+                                                    placeholder="e.g. 150"
+                                                    value={step.value || ''}
+                                                    onChange={(e) => handleStepChange(index, 'value', e.target.value)}
+                                                    style={{ fontSize: '13px' }}
+                                                />
+                                                <small style={{ color: '#64748b', fontSize: '11px' }}>New fixed rental rate per sqft</small>
+                                            </div>
+                                            <div className="form-group">
+                                                <label style={{ fontSize: '12px', fontWeight: 600 }}>Revenue Share (%)</label>
+                                                <input
+                                                    type="number"
+                                                    className="form-control"
+                                                    placeholder="e.g. 5"
+                                                    value={step.rev_share_value || ''}
+                                                    onChange={(e) => handleStepChange(index, 'rev_share_value', e.target.value)}
+                                                    style={{ fontSize: '13px' }}
+                                                />
+                                                <small style={{ color: '#64748b', fontSize: '11px' }}>Revenue share percentage to apply</small>
+                                            </div>
+                                        </>
                                     ) : (
                                         <div className="form-group">
-                                            <label style={{ fontSize: '12px', fontWeight: 600 }}>
-                                                {isConvertTrad ? 'New Fixed Rate (Per Sqft)' : 'Value'}
-                                            </label>
+                                            <label style={{ fontSize: '12px', fontWeight: 600 }}>Value</label>
                                             <input
                                                 type="number"
                                                 className="form-control"
-                                                placeholder={isConvertTrad ? "e.g. 150" : "e.g. 5"}
+                                                placeholder="e.g. 5"
                                                 value={step.value || ''}
                                                 onChange={(e) => handleStepChange(index, 'value', e.target.value)}
                                                 style={{ fontSize: '13px' }}

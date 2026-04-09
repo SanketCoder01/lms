@@ -1,6 +1,7 @@
 import React from 'react';
 import jsPDF from 'jspdf';
-import 'jspdf-autotable';
+// eslint-disable-next-line no-unused-vars
+import autoTable from 'jspdf-autotable';
 
 /**
  * Lease Report Generator Component
@@ -86,11 +87,12 @@ const LeaseReport = ({ lease, onGenerated }) => {
             tableWidth: 'auto',
             body: [
                 ['Tenant Name', lease.tenant_name || lease.sub_tenant_name || 'N/A'],
-                ['Contact Person', lease.contact_person_name || 'N/A'],
+                ['Contact Person', lease.tenant_first_name && lease.tenant_last_name ? `${lease.tenant_first_name} ${lease.tenant_last_name}` : lease.tenant_name || 'N/A'],
                 ['Phone', lease.contact_person_phone || 'N/A'],
                 ['Email', lease.contact_person_email || 'N/A'],
                 ['Industry', lease.industry || 'N/A'],
                 ['Lease Type', lease.lease_type || 'Direct Lease'],
+                ['Sub-Tenant', lease.sub_tenant_name || 'N/A'],
             ],
         });
 
@@ -113,11 +115,13 @@ const LeaseReport = ({ lease, onGenerated }) => {
             tableWidth: 'auto',
             body: [
                 ['Project', lease.project_name || 'N/A'],
+                ['Location', lease.project_location || 'N/A'],
                 ['Unit Number', lease.unit_number || 'N/A'],
+                ['Floor', lease.floor_number || 'N/A'],
                 ['Unit Condition', lease.unit_condition || 'N/A'],
                 ['Chargeable Area', lease.chargeable_area ? `${lease.chargeable_area} sq ft` : 'N/A'],
-                ['Floor', lease.floor || 'N/A'],
-                ['Block/Tower', lease.block_tower || 'N/A'],
+                ['Carpet Area', lease.carpet_area ? `${lease.carpet_area} sq ft` : 'N/A'],
+                ['Sub-Lease Area', lease.sub_lease_area_sqft ? `${lease.sub_lease_area_sqft} sq ft` : 'N/A'],
             ],
         });
 
@@ -140,8 +144,7 @@ const LeaseReport = ({ lease, onGenerated }) => {
             tableWidth: 'auto',
             body: [
                 ['Owner Name', lease.owner_name || 'N/A'],
-                ['Owner Contact', lease.owner_phone || 'N/A'],
-                ['Owner Email', lease.owner_email || 'N/A'],
+                ['Owner ID', lease.party_owner_id || 'N/A'],
             ],
         });
 
@@ -166,11 +169,12 @@ const LeaseReport = ({ lease, onGenerated }) => {
                 ['Lease Start Date', formatDate(lease.lease_start)],
                 ['Lease End Date', formatDate(lease.lease_end)],
                 ['Rent Commencement Date', formatDate(lease.rent_commencement_date)],
-                ['Unit Handover Date', formatDate(lease.unit_handover_date)],
+                ['Fitout Period End', formatDate(lease.fitout_period_end)],
                 ['Tenure (Months)', lease.tenure_months || 'N/A'],
                 ['Lock-in Period (Days)', lease.lessee_lockin_period_days || lease.lockin_period_months || 'N/A'],
-                ['Notice Period (Days)', lease.lessee_notice_period_days || 'N/A'],
+                ['Notice Period (Days)', lease.lessee_notice_period_days || lease.notice_period_months ? `${lease.lessee_notice_period_days || lease.notice_period_months}` : 'N/A'],
                 ['Billing Frequency', lease.billing_frequency || 'Monthly'],
+                ['Days Remaining', lease.days_remaining ? `${lease.days_remaining} days` : 'N/A'],
             ],
         });
 
@@ -205,6 +209,9 @@ const LeaseReport = ({ lease, onGenerated }) => {
                 ['CAM Charges', formatCurrency(lease.cam_charges)],
                 ['Revenue Share %', lease.revenue_share_percentage ? `${lease.revenue_share_percentage}%` : 'N/A'],
                 ['Revenue Share Applicable On', lease.revenue_share_applicable_on || 'N/A'],
+                ['Net Sales Threshold', formatCurrency(lease.net_sales_threshold)],
+                ['Parking Charges', formatCurrency(lease.parking_charges)],
+                ['Electricity Type', lease.electricity_type || 'N/A'],
             ],
         });
 

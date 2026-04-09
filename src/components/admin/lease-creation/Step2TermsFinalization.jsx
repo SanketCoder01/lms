@@ -3,6 +3,7 @@ import React from 'react';
 // ─── Date Helpers ───────────────────────────────────────────────────────────
 
 /** Add whole/fractional months to a date. Returns YYYY-MM-DD. */
+// eslint-disable-next-line no-unused-vars
 const addMonths = (dateStr, months) => {
     if (!dateStr || !months || parseFloat(months) <= 0) return '';
     const d = new Date(dateStr);

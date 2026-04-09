@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import Sidebar from './Sidebar';
 import { unitAPI, getProjects } from '../../services/api';
+import ReportGenerator from './ReportGenerator';
 import './units.css';
 
 const Units = () => {
@@ -16,6 +17,41 @@ const Units = () => {
     const [selectedUnitType, setSelectedUnitType] = useState('All'); // Acts as Status Filter
     const [error, setError] = useState(null);
     const [projects, setProjects] = useState([]);
+    const [showReportModal, setShowReportModal] = useState(false);
+
+    // Report columns for Units - All sections
+    const unitReportColumns = [
+        // Basic Info
+        { key: 'id', label: 'Unit ID' },
+        { key: 'unitNo', label: 'Unit Number' },
+        // Location
+        { key: 'building', label: 'Building/Project' },
+        { key: 'blockTower', label: 'Block/Tower' },
+        { key: 'floor', label: 'Floor' },
+        // Area Details
+        { key: 'area', label: 'Area (SQ FT)' },
+        { key: 'carpetArea', label: 'Carpet Area' },
+        { key: 'builtUpArea', label: 'Built-up Area' },
+        { key: 'superBuiltUpArea', label: 'Super Built-up' },
+        // Ownership
+        { key: 'ownerName', label: 'Owner Name' },
+        { key: 'ownerShare', label: 'Owner Share %' },
+        { key: 'ownershipStatus', label: 'Ownership Status' },
+        // Tenant
+        { key: 'tenantName', label: 'Tenant Name' },
+        { key: 'tenantSince', label: 'Tenant Since' },
+        // Status
+        { key: 'status', label: 'Status' },
+        { key: 'statusDesc', label: 'Status Description' },
+        { key: 'unitType', label: 'Unit Type' },
+        { key: 'unitCategory', label: 'Unit Category' },
+        // Additional
+        { key: 'facing', label: 'Facing' },
+        { key: 'furnishedStatus', label: 'Furnished Status' },
+        { key: 'parkingSlots', label: 'Parking Slots' },
+        { key: 'remarks', label: 'Remarks' },
+        { key: 'created_at', label: 'Created Date' }
+    ];
 
     /* ================= EXPORT CSV ================= */
     const handleExportCSV = () => {
@@ -176,6 +212,15 @@ const Units = () => {
                             </svg>
                             Export CSV
                         </button>
+                        <button onClick={() => setShowReportModal(true)} className="secondary-btn" style={{ background: '#eff6ff', color: '#2e66ff', border: '1px solid #bfdbfe', padding: '8px 16px', borderRadius: '4px', cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ marginRight: '6px' }}>
+                                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                                <polyline points="14 2 14 8 20 8"></polyline>
+                                <line x1="16" y1="13" x2="8" y2="13"></line>
+                                <line x1="16" y1="17" x2="8" y2="17"></line>
+                            </svg>
+                            Generate Report
+                        </button>
                         <Link to="/admin/add-unit" className="primary-btn" style={{ textDecoration: 'none', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>+ Add Units</Link>
                         <Link to="/admin/unit-structure" className="primary-btn" style={{ textDecoration: 'none', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', backgroundColor: '#10b981' }}>+ Add Unit Structure</Link>
                     </div>
@@ -272,6 +317,15 @@ const Units = () => {
                     </div>
                 </div>
             </main>
+
+            {showReportModal && (
+                <ReportGenerator
+                    title="Units Report"
+                    data={units}
+                    columns={unitReportColumns}
+                    onClose={() => setShowReportModal(false)}
+                />
+            )}
         </div>
     );
 };
