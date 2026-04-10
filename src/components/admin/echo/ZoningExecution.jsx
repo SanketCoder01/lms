@@ -60,7 +60,7 @@ const ZoningExecution = ({ zoningData, loading }) => {
   return (
     <div className="echo-card" style={{ border: 'none' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '2px' }}>
-        <h3 style={{ fontSize: '14px', fontWeight: 600, color: '#0f172a', margin: 0 }}>Unit Category vs Actual Leasing</h3>
+        <h3 style={{ fontSize: '14px', fontWeight: 600, color: '#0f172a', margin: 0 }}>Zoning Plan vs Actual Leasing</h3>
         <Info size={14} color="#64748b" />
       </div>
       <p style={{ fontSize: '12px', color: '#64748b', marginBottom: '16px' }}>Category allocation vs executed leases by units</p>
