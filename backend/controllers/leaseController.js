@@ -455,22 +455,24 @@ const getAllLeases = async (req, res) => {
         let query = supabase.from('leases').select(`
             id, lease_type, rent_model, lease_start, lease_end, monthly_rent, security_deposit, status,
             mg_amount, mg_amount_sqft, revenue_share_amount, revenue_share_percentage,
-            monthly_net_sales, sub_lease_area_sqft, created_at,
+            monthly_net_sales, sub_lease_area_sqft, lockin_period_months, created_at,
+            project_id, unit_id, party_tenant_id, party_owner_id,
             projects(project_name, location, address),
             units(unit_number, chargeable_area),
-            tenant:parties!leases_party_tenant_id_fkey(company_name, first_name, last_name),
-            owner:parties!leases_party_owner_id_fkey(company_name, first_name, last_name),
-            sub_tenants(company_name)
+            tenant:parties!leases_party_tenant_id_fkey(id, company_name, first_name, last_name, brand_name),
+            owner:parties!leases_party_owner_id_fkey(id, company_name, first_name, last_name, brand_name)
         `).order('created_at', { ascending: false });
 
         if (status) query = query.eq('status', status);
         if (project_id) query = query.eq('project_id', project_id);
-        // Issue 39: Filter by lease_type to separate main and sub-lease reporting
-        if (lease_type) query = query.eq('lease_type', lease_type);
-        else query = query.not('lease_type', 'eq', 'Subtenant lease'); // Default: exclude sub-leases from main list unless explicitly requested
+        // Don't filter by lease_type by default - show all leases for dashboard
 
         let { data, error } = await query;
         if (error) throw error;
+
+        console.log('Fetched leases:', data?.length);
+        console.log('Sample lease tenant:', data?.[0]?.tenant);
+        console.log('Sample lease owner:', data?.[0]?.owner);
 
         // JS Filtering for relations since advanced embedded string matching is tricky
         let result = data.map(l => ({
@@ -488,16 +490,34 @@ const getAllLeases = async (req, res) => {
             revenue_share_amount: l.revenue_share_amount,
             revenue_share_percentage: l.revenue_share_percentage,
             sub_lease_area_sqft: l.sub_lease_area_sqft,
+            lock_in_period: l.lockin_period_months,
+            lockin_period_months: l.lockin_period_months,
             area_leased: l.sub_lease_area_sqft || l.units?.chargeable_area || 0,
             created_at: l.created_at,
             project_name: l.projects?.project_name,
             project_location: l.projects?.location,
             project_address: l.projects?.address,
             unit_number: l.units?.unit_number,
-            tenant_name: l.tenant?.company_name || `${l.tenant?.first_name || ''} ${l.tenant?.last_name || ''}`.trim(),
-            owner_name: l.owner?.company_name || `${l.owner?.first_name || ''} ${l.owner?.last_name || ''}`.trim(),
-            sub_tenant_name: l.sub_tenants?.company_name
+            tenant_name: l.tenant?.company_name || 
+                         `${l.tenant?.first_name || ''} ${l.tenant?.last_name || ''}`.trim() || 'Unknown',
+            owner_name: l.owner?.company_name || 
+                        `${l.owner?.first_name || ''} ${l.owner?.last_name || ''}`.trim() || 'Unknown',
+            brand_name: l.tenant?.brand_name || 
+                        l.tenant?.company_name || 'Unknown',
+            tenant: {
+                company_name: l.tenant?.company_name,
+                first_name: l.tenant?.first_name,
+                last_name: l.tenant?.last_name,
+                brand_name: l.tenant?.brand_name
+            },
+            units: {
+                unit_number: l.units?.unit_number,
+                chargeable_area: l.units?.chargeable_area
+            }
         }));
+
+        console.log('Sample result brand_name:', result?.[0]?.brand_name);
+        console.log('Sample result tenant:', result?.[0]?.tenant);
 
         if (location) {
             result = result.filter(r => r.project_location === location);

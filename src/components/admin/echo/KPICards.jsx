@@ -14,9 +14,12 @@ const KPICards = ({
   unitBreakdown,
   loading,
   projectedRent,
+  actualRent,
   onTotalUnitsClick,
   onLeasedUnitsClick,
-  onVacantUnitsClick
+  onVacantUnitsClick,
+  onProjectedRentClick,
+  onActualRentClick
 }) => {
   // Format numbers
   const formatNumber = (num) => {
@@ -32,15 +35,15 @@ const KPICards = ({
     return formatNumber(area);
   };
 
-  const formatLoss = (loss) => {
-    if (!loss || loss === 0) return '0/monthly';
-    if (loss >= 10000000) {
-      return (loss / 10000000).toFixed(2) + ' Cr/monthly';
+  const formatActualRent = (rent) => {
+    if (!rent || rent === 0) return '0';
+    if (rent >= 10000000) {
+      return (rent / 10000000).toFixed(2) + ' Cr';
     }
-    if (loss >= 100000) {
-      return (loss / 100000).toFixed(1) + 'L/monthly';
+    if (rent >= 100000) {
+      return (rent / 100000).toFixed(1) + 'L';
     }
-    return formatNumber(loss) + '/monthly';
+    return formatNumber(rent);
   };
 
   const formatProjectedRent = (rent) => {
@@ -85,24 +88,24 @@ const KPICards = ({
       onClick: onVacantUnitsClick,
     },
     {
-      label: "TOTAL PROJECT RENT",
+      label: "TOTAL PROJECTED RENT",
       value: loading ? '...' : formatProjectedRent(projectedRent),
       valueSuffix: "/mo",
       sub: "Projected rent from all units",
       badges: null,
       progress: null,
       valueColor: "#1e293b",
-      onClick: null,
+      onClick: onProjectedRentClick,
     },
     {
-      label: "OPPORTUNITY LOSS",
-      value: loading ? '...' : formatLoss(opportunityLoss),
-      valueSuffix: "",
-      sub: "Due to vacancy",
+      label: "ACTUAL RENT",
+      value: loading ? '...' : formatActualRent(actualRent || projectedRent),
+      valueSuffix: "/mo",
+      sub: opportunityLoss > 0 ? `Loss: ${formatActualRent(opportunityLoss)}/mo from vacancy` : "From active leases",
       badges: null,
       progress: null,
-      valueColor: "#ef4444",
-      onClick: null,
+      valueColor: "#0ea5e9",
+      onClick: onActualRentClick,
     },
   ];
 

@@ -20,7 +20,7 @@ const getUnits = async (req, res) => {
         projects!inner ( project_name ),
         unit_ownerships (
           id, ownership_status, share_percentage,
-          parties ( id, first_name, last_name, company_name )
+          parties ( id, first_name, last_name, company_name, party_type )
         )
       `)
       .order('id', { ascending: false });
@@ -50,6 +50,20 @@ const getUnits = async (req, res) => {
       const ownerName = ownerParty
         ? (ownerParty.company_name || `${ownerParty.first_name || ''} ${ownerParty.last_name || ''}`.trim() || 'N/A')
         : 'N/A';
+      
+      // Determine ownership grouping based on party_type
+      const partyType = ownerParty?.party_type || '';
+      let ownershipGrouping = 'Developer Units'; // Default for unsold
+      if (activeOwnerships.length > 0) {
+        if (partyType === 'Group Company' || partyType === 'Group' || partyType === 'Related Party') {
+          ownershipGrouping = 'Group Companies';
+        } else if (partyType === 'Owner' || partyType === 'Investor' || partyType === 'External') {
+          ownershipGrouping = 'Other Investors';
+        } else {
+          // If has ownership but party_type doesn't match above, check if it's developer
+          ownershipGrouping = 'Other Investors';
+        }
+      }
 
       const isFull = totalShare >= 100 || u.status === 'Sold';
 
@@ -67,7 +81,8 @@ const getUnits = async (req, res) => {
         is_full:       isFull,
         projected_rent: u.projected_rent,
         unit_category: u.unit_category,
-        unit_zoning_type: u.unit_zoning_type
+        unit_zoning_type: u.unit_zoning_type,
+        ownership_grouping: ownershipGrouping
       };
     });
 

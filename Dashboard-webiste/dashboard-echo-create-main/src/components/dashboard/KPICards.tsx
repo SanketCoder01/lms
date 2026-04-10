@@ -29,7 +29,7 @@ const kpis = [
     valueColor: "text-primary",
   },
   {
-    label: "TOTAL PROJECT RENT",
+    label: "TOTAL PROJECTD RENT",
     value: "₹2.14",
     valueSuffix: " Cr/mo",
     sub: "Projected at full occupancy",
