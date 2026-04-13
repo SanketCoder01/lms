@@ -12,10 +12,10 @@ import LockInExpirySection from './LockInExpirySection';
 import OwnershipSection from './OwnershipSection';
 import UpcomingEscalations from './UpcomingEscalations';
 import RentalProjectionTable from './RentalProjectionTable';
+import FinancialValueMonthly from './FinancialValueMonthly';
 import BrandPerformanceSection from './BrandPerformanceSection';
 import FloorOccupancySection from './FloorOccupancySection';
-import FinancialValueMonthly from './FinancialValueMonthly';
-import { getProjects, getDashboardStats, unitAPI, leaseAPI } from '../../../services/api';
+import { getProjects, getDashboardStats, leaseAPI, unitAPI } from '../../../services/api';
 import './echo.css';
 
 const EchoDashboard = () => {
@@ -28,7 +28,7 @@ const EchoDashboard = () => {
   const [userInfo, setUserInfo] = useState({ name: '', initials: 'AD' });
   const [projectedRent, setProjectedRent] = useState(0);
   const [rentComposition, setRentComposition] = useState({ fixed: 0, mg: 0, revenueShare: 0, fixedUnits: 0, mgUnits: 0, revShareUnits: 0 });
-  const [leasingStats, setLeasingStats] = useState({ newLeases: 0, areaLeased: 0, loisSigned: 0, chartData: [] });
+  const [leasingStats, setLeasingStats] = useState({ newLeases: 0, areaLeased: 0, chartData: [], loiCount: 0, executedCount: 0, registeredCount: 0 });
   const [zoningData, setZoningData] = useState([]);
   const [allLeases, setAllLeases] = useState([]);
   const [allUnits, setAllUnits] = useState([]);
@@ -103,57 +103,38 @@ const EchoDashboard = () => {
           .slice(0, 4); // Show top 4 units
         setUnitBreakdown(breakdownArray);
 
-        // Calculate zoning data from units - ONLY show categories that are actually used
+        // Calculate zoning data from unit_zoning_type
         const zoningMap = {};
-        
-        console.log('Total units for zoning:', units.length);
-        console.log('Sample unit category data:', units.slice(0, 5).map(u => ({
-          unit_number: u.unit_number,
-          unit_category: u.unit_category,
-          chargeable_area: u.chargeable_area,
-          status: u.status
-        })));
-        
-        // Count units by category - dynamic, no hardcoded categories, skip empty categories
+        console.log('Calculating zoning from unit_zoning_type');
+
+        // Build zoning map from units (plan = total units/area per zoning type)
         units.forEach(unit => {
-          const category = unit.unit_category;
-          
-          console.log(`Unit ${unit.unit_number}: category="${category}", hasValue=${!!category}, trimmed="${category?.trim()}"`);
-          
-          // Skip units without category - don't create "Other" category
-          if (!category || category.trim() === '') {
-            console.log(`Skipping unit ${unit.unit_number} - no category selected`);
-            return;
-          }
-          
-          const categoryKey = category.toLowerCase().replace(/\s+/g, '_');
-          
-          if (!zoningMap[categoryKey]) {
-            zoningMap[categoryKey] = { 
-              name: category, // Keep original name with proper casing
-              plan: 0, 
-              actual: 0,
-              planArea: 0,
-              actualArea: 0
-            };
-          }
-          
-          zoningMap[categoryKey].plan += 1;
-          zoningMap[categoryKey].planArea += parseFloat(unit.chargeable_area || 0);
-          
-          // Check if unit has an active lease (status = 'leased' or 'sold' or 'occupied')
-          if (unit.status === 'leased' || unit.status === 'sold' || unit.status === 'occupied') {
-            zoningMap[categoryKey].actual += 1;
-            zoningMap[categoryKey].actualArea += parseFloat(unit.chargeable_area || 0);
+          const zoningType = unit.unit_zoning_type || unit.zoning_type || unit.zoningType;
+          const area = parseFloat(unit.chargeable_area || unit.area || 0);
+
+          if (zoningType && area > 0) {
+            const zoningKey = zoningType.toLowerCase().trim().replace(/\s+/g, '_');
+
+            if (!zoningMap[zoningKey]) {
+              zoningMap[zoningKey] = {
+                name: zoningType,
+                plan: 0,
+                actual: 0,
+                planArea: 0,
+                actualArea: 0
+              };
+            }
+
+            zoningMap[zoningKey].plan += 1;
+            zoningMap[zoningKey].planArea += area;
+
+            // If unit is leased, add to actual
+            if (unit.status === 'leased' || unit.status === 'sold' || unit.status === 'occupied') {
+              zoningMap[zoningKey].actual += 1;
+              zoningMap[zoningKey].actualArea += area;
+            }
           }
         });
-        
-        console.log('Zoning map before filter:', zoningMap);
-        
-        // Filter to only include categories with plan > 0 (units assigned)
-        const filteredZoning = Object.values(zoningMap).filter(z => z.plan > 0);
-        console.log('Zoning data (filtered):', filteredZoning);
-        setZoningData(filteredZoning);
 
         // Fetch rent composition from leases
         try {
@@ -176,6 +157,12 @@ const EchoDashboard = () => {
           console.log('Fetched leases count:', leases.length);
           console.log('Fetched leases data:', leases);
           setAllLeases(leases); // Store for expiry sections
+
+          // Set zoning data from unit_zoning_type (already calculated above)
+          const updatedZoning = Object.values(zoningMap).filter(z => z.plan > 0);
+          console.log('Zoning data from unit_zoning_type:', updatedZoning);
+          setZoningData(updatedZoning);
+
           let fixedTotal = 0, mgTotal = 0, revShareTotal = 0;
           let fixedUnits = 0, mgUnits = 0, revShareUnits = 0;
           
@@ -240,14 +227,32 @@ const EchoDashboard = () => {
 
           const chartDataArr = Object.values(monthData).map(d => ({
             ...d,
-            area: Math.round(d.area / 1000) // Convert to '000 sqft
+            area: d.area // Keep actual area in sqft, no rounding
           }));
 
+          // Calculate LOI, Executed, Registered counts from all leases
+          const loiCount = leases.filter(l => {
+            const s = (l.status || '').toLowerCase();
+            return s === 'loi' || s === 'draft' || s === 'pending' || s === 'loi_signed';
+          }).length;
+
+          const executedCount = leases.filter(l => {
+            const s = (l.status || '').toLowerCase();
+            return s === 'executed' || s === 'signed' || s === 'active' || s === 'approved';
+          }).length;
+
+          const registeredCount = leases.filter(l => {
+            const s = (l.status || '').toLowerCase();
+            return s === 'registered' || s === 'completed';
+          }).length;
+          
           setLeasingStats({
             newLeases: recentLeases.length,
             areaLeased: recentLeases.reduce((sum, l) => sum + (parseFloat(l.area_leased) || 0), 0),
-            loisSigned: leases.filter(l => l.status === 'loi_signed' || l.status === 'draft').length,
-            chartData: chartDataArr
+            chartData: chartDataArr,
+            loiCount,
+            executedCount,
+            registeredCount
           });
         } catch (err) {
           console.error('Error fetching lease composition:', err);
@@ -279,30 +284,36 @@ const EchoDashboard = () => {
           setDashboardData(statsRes.data);
           const units = unitsRes.data?.data || unitsRes.data || [];
           setAllUnits(units);
-          
-          // Recalculate zoning using unit_category
-          const zoningMap = {};
-          units.forEach(unit => {
-            const category = unit.unit_category;
-            if (!category || category.trim() === '') return;
-            const categoryKey = category.toLowerCase().replace(/\s+/g, '_');
-            if (!zoningMap[categoryKey]) {
-              zoningMap[categoryKey] = { name: category, plan: 0, actual: 0, planArea: 0, actualArea: 0 };
-            }
-            zoningMap[categoryKey].plan += 1;
-            zoningMap[categoryKey].planArea += parseFloat(unit.chargeable_area || 0);
-            if (unit.status === 'leased' || unit.status === 'sold' || unit.status === 'occupied') {
-              zoningMap[categoryKey].actual += 1;
-              zoningMap[categoryKey].actualArea += parseFloat(unit.chargeable_area || 0);
-            }
-          });
-          setZoningData(Object.values(zoningMap).filter(z => z.plan > 0));
-          
+
           // Refetch leases
           const leaseParams = selectedProject !== 'All' ? { project_id: selectedProject } : {};
           const leasesRes = await leaseAPI.getAllLeases(leaseParams);
           let leases = Array.isArray(leasesRes.data) ? leasesRes.data : (leasesRes.data?.data || []);
           setAllLeases(leases);
+
+          // Calculate zoning from unit_zoning_type
+          const zoningMap = {};
+          units.forEach(unit => {
+            const zoningType = unit.unit_zoning_type || unit.zoning_type || unit.zoningType;
+            const area = parseFloat(unit.chargeable_area || unit.area || 0);
+
+            if (zoningType && area > 0) {
+              const zoningKey = zoningType.toLowerCase().trim().replace(/\s+/g, '_');
+
+              if (!zoningMap[zoningKey]) {
+                zoningMap[zoningKey] = { name: zoningType, plan: 0, actual: 0, planArea: 0, actualArea: 0 };
+              }
+              zoningMap[zoningKey].plan += 1;
+              zoningMap[zoningKey].planArea += area;
+
+              if (unit.status === 'leased' || unit.status === 'sold' || unit.status === 'occupied') {
+                zoningMap[zoningKey].actual += 1;
+                zoningMap[zoningKey].actualArea += area;
+              }
+            }
+          });
+
+          setZoningData(Object.values(zoningMap).filter(z => z.plan > 0));
         } catch (err) {
           console.error('Error refreshing data:', err);
         }
@@ -413,7 +424,6 @@ const EchoDashboard = () => {
       const leasingData = [
         ['New Leases', leasingStats.newLeases.toString()],
         ['Area Leased', `${leasingStats.areaLeased.toLocaleString('en-IN')} sqft`],
-        ['LOIs Signed', leasingStats.loisSigned.toString()],
       ];
       
       doc.autoTable({
@@ -497,6 +507,16 @@ const EchoDashboard = () => {
   // Vacant % = (area vacant / total project area) * 100
   const vacantPercent = totalArea > 0 ? ((vacantArea / totalArea) * 100).toFixed(1) : 0;
 
+  // Calculate average rate per sqft
+  const avgRatePerSqft = totalArea > 0 ? parseFloat((projectedRent / totalArea).toFixed(2)) : 0;
+
+  // Calculate rate variance (actual rent - target rent for leased units)
+  const actualRent = (rentComposition.fixed || 0) + (rentComposition.mg || 0) + (rentComposition.revenueShare || 0);
+  const targetRentForLeased = (allUnits || [])
+    .filter(u => u.status === 'leased' || u.status === 'sold' || u.status === 'occupied')
+    .reduce((sum, u) => sum + (parseFloat(u.projected_rent) || parseFloat(u.chargeable_area * (u.rate_per_sqft || 0)) || 0), 0);
+  const rateVariance = actualRent - targetRentForLeased;
+
   return (
     <div className="echo-dashboard-wrapper">
       {/* Navbar with Project Selector */}
@@ -554,7 +574,9 @@ const EchoDashboard = () => {
           unitBreakdown={unitBreakdown}
           loading={loading}
           projectedRent={projectedRent}
-          actualRent={rentComposition.fixed + rentComposition.mg + rentComposition.revenueShare}
+          actualRent={actualRent}
+          avgRatePerSqft={avgRatePerSqft}
+          profitLoss={rateVariance}
           onTotalUnitsClick={() => navigate('/admin/units')}
           onLeasedUnitsClick={() => navigate('/admin/leases?status=active')}
           onVacantUnitsClick={() => navigate('/admin/units?status=vacant')}
@@ -577,24 +599,25 @@ const EchoDashboard = () => {
             fixedUnits={rentComposition.fixedUnits}
             mgUnits={rentComposition.mgUnits}
             revShareUnits={rentComposition.revShareUnits}
-            totalProjectRent={projectedRent}
-            opportunityLoss={opportunityLoss}
+            rateVariance={rateVariance}
             loading={loading}
           />
           <LeasingActivity 
             chartData={leasingStats.chartData}
             newLeases={leasingStats.newLeases}
             areaLeased={leasingStats.areaLeased}
-            loisSigned={leasingStats.loisSigned}
+            loiCount={leasingStats.loiCount}
+            executedCount={leasingStats.executedCount}
+            registeredCount={leasingStats.registeredCount}
             loading={loading}
           />
           <ZoningExecution zoningData={zoningData} loading={loading} />
         </div>
 
-        {/* Section Title - Lease Expiry & Lock-in */}
+        {/* Section Title - Lease Expiry, Lock-in & Escalations */}
         <div className="echo-section-title">
           <div className="echo-section-bar"></div>
-          <h2 className="echo-section-heading">Lease Expiry & Lock-in Status</h2>
+          <h2 className="echo-section-heading">Lease Expiry, Lock-In Status & Rent Escalations</h2>
         </div>
 
         {/* Lease Expiry, Lock-in & Upcoming Escalations - 3 Column Grid */}
@@ -636,7 +659,7 @@ const EchoDashboard = () => {
 
         {/* Ownership Section */}
         <div className="echo-charts-row">
-          <OwnershipSection units={allUnits} loading={loading} />
+          <OwnershipSection units={allUnits} leases={allLeases} loading={loading} />
         </div>
       </div>
     </div>

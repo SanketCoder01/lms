@@ -19,7 +19,9 @@ const Leases = () => {
         project_id: '',
         location: '',
         event: '',
-        search: ''
+        search: '',
+        rent_model: '',
+        brand: ''
     });
 
     const [projects, setProjects] = useState([]);
@@ -96,9 +98,15 @@ const Leases = () => {
 
         // Handle URL params
         const filterParam = searchParams.get('filter');
+        const statusParam = searchParams.get('status');
+        const rentModelParam = searchParams.get('rent_model');
+        const brandParam = searchParams.get('brand');
         if (filterParam === 'renewals') setFilters(prev => ({ ...prev, event: '90' })); // Matches Dashboard (Upcoming Renewals - 90 days)
         if (filterParam === 'expiries') setFilters(prev => ({ ...prev, event: '60' })); // Matches Dashboard (Upcoming Expiries - 60 days)
         if (filterParam === 'escalations') setFilters(prev => ({ ...prev, event: 'escalation' }));
+        if (statusParam) setFilters(prev => ({ ...prev, status: statusParam })); // Handle status filter
+        if (rentModelParam) setFilters(prev => ({ ...prev, rent_model: rentModelParam })); // Handle rent model filter
+        if (brandParam) setFilters(prev => ({ ...prev, brand: brandParam })); // Handle brand filter
     }, [searchParams]);
 
     // Effect for fetching leases when filters change
@@ -122,6 +130,8 @@ const Leases = () => {
                 }
             }
             if (filters.search) params.search = filters.search;
+            if (filters.rent_model) params.rent_model = filters.rent_model;
+            if (filters.brand) params.brand = filters.brand;
             params.lease_type = activeTab === 'direct' ? 'Direct lease' : 'Subtenant lease';
 
             const res = await leaseAPI.getAllLeases(params);
@@ -269,7 +279,7 @@ const Leases = () => {
                                         <option value="30">Expiring in 30 Days</option>
                                         <option value="60">Expiring in 60 Days</option>
                                         <option value="90">Expiring in 90 Days</option>
-                                        <option value="escalation">Rent Escalations Due</option>
+                                        <option value="escalation">Upcoming Rent Escalations</option>
                                     </select>
                                     <svg className="chevron-down" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
                                 </div>

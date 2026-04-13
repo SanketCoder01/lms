@@ -1,5 +1,6 @@
 import React, { useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { sanitizeBrandName, formatRent, safeFloat } from '../../../utils/formatters';
 
 const UpcomingEscalations = ({ leases = [], loading }) => {
   const navigate = useNavigate();
@@ -40,21 +41,22 @@ const UpcomingEscalations = ({ leases = [], loading }) => {
         const daysDiff = Math.ceil((escDate - now) / (1000 * 60 * 60 * 24));
 
         if (daysDiff > 0) {
-          // Get brand name - use brand_name directly from lease
-          const brandName = lease.brand_name || 
-                           lease.tenant?.brand_name || 
-                           lease.brandName || 
-                           lease.tenant?.company_name || 
-                           lease.tenant?.name || 
-                           lease.tenant_name || 
-                           lease.tenantName || 'Unknown';
-          
+          // Get brand name - use brand_name directly from lease, show '-' if not defined
+          const rawBrandName = lease.brand_name ||
+            lease.tenant?.brand_name ||
+            lease.brandName ||
+            lease.tenant?.company_name ||
+            lease.tenant?.name ||
+            lease.tenant_name ||
+            lease.tenantName || '-';
+          const brandName = sanitizeBrandName(rawBrandName);
+
           // Get unit number
           const unitNumber = lease.unit_number || lease.units?.unit_number || lease.unit?.unit_number || 'N/A';
-          
+
           // Get rent amount
           const rentAmount = lease.monthly_rent || 0;
-          
+
           escalations.push({
             leaseId: lease.id,
             unitNumber: unitNumber,
@@ -71,29 +73,30 @@ const UpcomingEscalations = ({ leases = [], loading }) => {
       if (lease.lease_start && !escalationDate) {
         const leaseStart = new Date(lease.lease_start);
         const yearsActive = (now - leaseStart) / (1000 * 60 * 60 * 24 * 365);
-        
+
         const escalationInterval = 3; // years
         const nextEscalationYear = Math.ceil(yearsActive / escalationInterval) * escalationInterval;
         const nextEscalationDate = new Date(leaseStart);
         nextEscalationDate.setFullYear(nextEscalationDate.getFullYear() + nextEscalationYear);
-        
+
         if (nextEscalationDate > now) {
           const daysDiff = Math.ceil((nextEscalationDate - now) / (1000 * 60 * 60 * 24));
-          
+
           // Avoid duplicates
           const existing = escalations.find(e => e.leaseId === lease.id);
           if (!existing && daysDiff > 0) {
-            const brandName = lease.brand_name || 
-                             lease.tenant?.brand_name || 
-                             lease.brandName || 
-                             lease.tenant?.company_name || 
-                             lease.tenant?.name || 
-                             lease.tenant_name || 
-                             lease.tenantName || 'Unknown';
-            
+            const rawBrandName = lease.brand_name ||
+              lease.tenant?.brand_name ||
+              lease.brandName ||
+              lease.tenant?.company_name ||
+              lease.tenant?.name ||
+              lease.tenant_name ||
+              lease.tenantName || '-';
+            const brandName = sanitizeBrandName(rawBrandName);
+
             const unitNumber = lease.unit_number || lease.units?.unit_number || lease.unit?.unit_number || 'N/A';
             const rentAmount = lease.monthly_rent || 0;
-            
+
             escalations.push({
               leaseId: lease.id,
               unitNumber: unitNumber,
@@ -114,11 +117,7 @@ const UpcomingEscalations = ({ leases = [], loading }) => {
   }, [leases]);
 
 
-  const formatRent = (val) => {
-    if (val >= 100000) return `\u20b9${(val / 100000).toFixed(1)}L`;
-    if (val >= 1000) return `\u20b9${(val / 1000).toFixed(1)}K`;
-    return `\u20b9${val}`;
-  };
+  // Use centralized formatRent from formatters.js
 
   return (
     <div className="echo-card" style={{ border: 'none' }}>
@@ -131,11 +130,11 @@ const UpcomingEscalations = ({ leases = [], loading }) => {
         <div style={{ textAlign: 'center', padding: '20px', color: '#64748b' }}>No upcoming escalations found</div>
       ) : (
         <>
-          <div style={{ 
-            display: 'flex', 
-            flexDirection: 'column', 
-            gap: '16px', 
-            maxHeight: '300px', 
+          <div style={{
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '16px',
+            maxHeight: '300px',
             overflowY: 'auto',
             paddingRight: '8px'
           }}>
@@ -160,12 +159,12 @@ const UpcomingEscalations = ({ leases = [], loading }) => {
             {escalationData.map((esc, i) => {
               const colorInfo = getEscalationColor(esc.days);
               return (
-                <div 
-                  key={i} 
+                <div
+                  key={i}
                   onClick={() => handleLeaseClick(esc.leaseId)}
-                  style={{ 
-                    display: 'flex', 
-                    alignItems: 'flex-start', 
+                  style={{
+                    display: 'flex',
+                    alignItems: 'flex-start',
                     gap: '12px',
                     cursor: 'pointer',
                     padding: '8px',
@@ -178,14 +177,14 @@ const UpcomingEscalations = ({ leases = [], loading }) => {
                   <span style={{ fontSize: '14px', fontWeight: 700, color: '#0f172a', minWidth: '60px' }}>{esc.unitNumber}</span>
                   <div style={{ flex: 1 }}>
                     <p style={{ fontSize: '14px', color: '#0f172a', margin: 0, fontWeight: 500 }}>{esc.brandName}</p>
-                    <p style={{ fontSize: '12px', color: '#64748b', margin: 0 }}>{formatRent(esc.currentRent)} \u2192 {formatRent(esc.newRent)}</p>
+                    <p style={{ fontSize: '12px', color: '#64748b', margin: 0 }}> {formatRent(safeFloat(esc.currentRent))} <span style={{ color: '#0ea5e9' }}>to</span>  {formatRent(safeFloat(esc.newRent))}</p>
                   </div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
                     <span style={{ fontSize: '14px', fontWeight: 500, color: colorInfo.text }}>{esc.days} days</span>
-                    <span style={{ 
-                      fontSize: '12px', 
-                      padding: '2px 8px', 
-                      borderRadius: '9999px', 
+                    <span style={{
+                      fontSize: '12px',
+                      padding: '2px 8px',
+                      borderRadius: '9999px',
                       fontWeight: 500,
                       backgroundColor: colorInfo.bg,
                       color: colorInfo.text

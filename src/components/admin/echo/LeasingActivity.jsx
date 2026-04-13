@@ -1,8 +1,8 @@
 import React from 'react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from "recharts";
 
-const LeasingActivity = ({ chartData, newLeases, areaLeased, loisSigned, loading }) => {
-  // Use the actual areaLeased prop directly (it's already calculated correctly in EchoDashboard)
+const LeasingActivity = ({ chartData, newLeases, areaLeased, loading, loiCount = 0, executedCount = 0, registeredCount = 0 }) => {
+  // Use the actual areaLeased prop directly without rounding
   const displayAreaLeased = areaLeased || 0;
 
   // Custom Tooltip Component
@@ -29,7 +29,7 @@ const LeasingActivity = ({ chartData, newLeases, areaLeased, loisSigned, loading
           {areaData && (
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
               <div style={{ width: 12, height: 12, backgroundColor: '#93c5fd', borderRadius: 2 }} />
-              <span style={{ color: '#475569', fontSize: 13 }}>{(areaData.value * 1000).toLocaleString('en-IN')} sqft leased</span>
+              <span style={{ color: '#475569', fontSize: 13 }}>{areaData.value.toLocaleString('en-IN')} sqft leased</span>
             </div>
           )}
         </div>
@@ -38,46 +38,47 @@ const LeasingActivity = ({ chartData, newLeases, areaLeased, loisSigned, loading
     return null;
   };
 
-  // Default chart data if empty - shows last 6 months dynamically
-  const getDefaultData = () => {
-    const now = new Date();
-    const data = [];
-    for (let i = 5; i >= 0; i--) {
-      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-      data.push({
-        month: d.toLocaleDateString('en-US', { month: 'short' }),
-        units: 0,
-        area: 0
-      });
-    }
-    return data;
-  };
+  // Use real data from props - no fake data
+  const hasRealData = chartData && chartData.length > 0 && chartData.some(d => d.units > 0 || d.area > 0);
+  const displayData = hasRealData ? chartData : [];
 
-  const displayData = chartData && chartData.length > 0 ? chartData : getDefaultData();
+  // Calculate date range from actual data
+  const getDateRange = () => {
+    if (!hasRealData || displayData.length === 0) return '';
+    const now = new Date();
+    const startDate = new Date(now.getFullYear(), now.getMonth() - 5, 1);
+    const startStr = startDate.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+    const endStr = now.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+    return `${startStr} - ${endStr}`;
+  };
 
   return (
     <div className="echo-card" style={{ border: 'none', height: '100%' }}>
-      <h3 className="echo-card-title">Leasing activity — last 6 months</h3>
-      <p className="echo-card-subtitle">New agreements, LOIs and area leased by month</p>
+      <h3 className="echo-card-title">Leasing Activity</h3>
+      <p className="echo-card-subtitle">
+        {hasRealData ? getDateRange() : 'No leasing activity yet'} · {displayAreaLeased.toLocaleString('en-IN')} sqft leased
+      </p>
 
+      {/* LOI, Executed, Registered stats - Above the graph */}
       <div className="echo-leasing-stats">
         <div className="echo-leasing-stat">
-          <p className="echo-leasing-stat-label">New leases</p>
-          <p className="echo-leasing-stat-value">{loading ? '...' : newLeases}</p>
-          <p className="echo-leasing-stat-change positive">in 6 months</p>
+          <p className="echo-leasing-stat-label">LOI</p>
+          <p className="echo-leasing-stat-value">{loading ? '...' : loiCount}</p>
+          <p className="echo-leasing-stat-change">pending</p>
         </div>
         <div className="echo-leasing-stat">
-          <p className="echo-leasing-stat-label">Area leased</p>
-          <p className="echo-leasing-stat-value">{loading ? '...' : displayAreaLeased.toLocaleString('en-IN')}</p>
-          <p className="echo-leasing-stat-change">sqft in 6 months</p>
+          <p className="echo-leasing-stat-label">Executed</p>
+          <p className="echo-leasing-stat-value">{loading ? '...' : executedCount}</p>
+          <p className="echo-leasing-stat-change positive">signed</p>
         </div>
         <div className="echo-leasing-stat">
-          <p className="echo-leasing-stat-label">LOIs signed</p>
-          <p className="echo-leasing-stat-value">{loading ? '...' : loisSigned}</p>
-          <p className="echo-leasing-stat-change">in pipeline</p>
+          <p className="echo-leasing-stat-label">Registered</p>
+          <p className="echo-leasing-stat-value">{loading ? '...' : registeredCount}</p>
+          <p className="echo-leasing-stat-change">completed</p>
         </div>
       </div>
 
+      {hasRealData && (
       <ResponsiveContainer width="100%" height={180}>
         <BarChart data={displayData} barGap={2}>
           <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
@@ -85,11 +86,19 @@ const LeasingActivity = ({ chartData, newLeases, areaLeased, loisSigned, loading
           <YAxis yAxisId="left" tick={{ fontSize: 10 }} axisLine={false} tickLine={false} />
           <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 10 }} axisLine={false} tickLine={false} />
           <Tooltip content={<CustomTooltip />} />
-          <Bar yAxisId="left" dataKey="units" fill="#1e40af" radius={[2, 2, 0, 0]} barSize={16} name="Units leased" />
-          <Bar yAxisId="right" dataKey="area" fill="#93c5fd" radius={[2, 2, 0, 0]} barSize={16} name="Area ('000 sqft)" />
+          <Bar yAxisId="left" dataKey="units" fill="#1e40af" radius={[2, 2, 0, 0]} barSize={16} name="Leases" />
+          <Bar yAxisId="right" dataKey="area" fill="#93c5fd" radius={[2, 2, 0, 0]} barSize={16} name="Area leased (sqft)" />
           <Legend iconSize={8} wrapperStyle={{ fontSize: 10, paddingTop: 8 }} />
         </BarChart>
       </ResponsiveContainer>
+      )}
+
+      {!hasRealData && (
+        <div style={{ textAlign: 'center', padding: '40px', color: '#64748b' }}>
+          <p style={{ margin: 0, fontSize: '14px' }}>No leasing activity recorded yet</p>
+          <p style={{ margin: '8px 0 0', fontSize: '12px', color: '#94a3b8' }}>Lease data will appear here once created</p>
+        </div>
+      )}
     </div>
   );
 };

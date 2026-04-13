@@ -1,8 +1,9 @@
 import React, { useMemo } from 'react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+import { formatRent, safeFloat, parseSafe } from '../../../utils/formatters';
 
 const FinancialValueMonthly = ({ leases = [], loading }) => {
-  // Process lease data for the 4 categories - show last 12 months in calendar order
+  // Process lease data for the 4 categories - show current month and next 11 months
   const chartData = useMemo(() => {
     if (!leases || leases.length === 0) {
       console.log('FinancialValueMonthly: No leases data');
@@ -11,12 +12,12 @@ const FinancialValueMonthly = ({ leases = [], loading }) => {
 
     console.log('FinancialValueMonthly: Processing leases:', leases.length, leases);
 
-    // Generate last 12 months in proper calendar order (Jan, Feb, Mar...)
+    // Generate current month and next 11 months (12 months total, starting from current)
     const now = new Date();
     const months = [];
     
-    for (let i = 11; i >= 0; i--) {
-      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    for (let i = 0; i < 12; i++) {
+      const d = new Date(now.getFullYear(), now.getMonth() + i, 1);
       const monthName = d.toLocaleDateString('en-US', { month: 'short' });
       const yearShort = d.getFullYear().toString().slice(-2);
       months.push({
@@ -47,11 +48,12 @@ const FinancialValueMonthly = ({ leases = [], loading }) => {
       const leaseEnd = lease.lease_end ? new Date(lease.lease_end) : new Date(2030, 11, 31);
       const leaseEndMonth = new Date(leaseEnd.getFullYear(), leaseEnd.getMonth(), 1);
       
-      const lockInMonths = parseInt(lease.lock_in_period) || 36;
-      const lockInEnd = new Date(leaseStart.getFullYear(), leaseStart.getMonth() + lockInMonths, 1);
+      // Issue #21 — no parseInt rounding; use parseSafe
+      const lockInMonths = parseSafe(lease.lock_in_period || lease.lock_in_months, 36);
+      const lockInEnd = new Date(leaseStart.getFullYear(), leaseStart.getMonth() + Math.floor(lockInMonths), 1);
 
-      const monthlyRent = parseFloat(lease.monthly_rent) || 0;
-      const mgAmount = parseFloat(lease.mg_amount) || monthlyRent;
+      const monthlyRent = parseSafe(lease.monthly_rent);
+      const mgAmount    = parseSafe(lease.mg_amount) || monthlyRent;
 
       // Determine rent model - check multiple variations
       const rentModel = (lease.rent_model || '').toLowerCase().replace(/\s+/g, '');
@@ -92,50 +94,33 @@ const FinancialValueMonthly = ({ leases = [], loading }) => {
 
     console.log('FinancialValueMonthly: Monthly data:', months);
 
-    // Calculate cumulative values for smooth increasing trend lines
-    let cumFixedLockIn = 0, cumFixedPost = 0, cumMGLockIn = 0, cumMGPost = 0;
-    
-    const result = months.map(month => {
-      cumFixedLockIn += month.fixedLockIn;
-      cumFixedPost += month.fixedPost;
-      cumMGLockIn += month.mgLockIn;
-      cumMGPost += month.mgPost;
+    // Return monthly values (not cumulative) for projection matrix
+    const result = months.map(month => ({
+      month: month.label,
+      fixedLockIn: month.fixedLockIn,
+      fixedPost: month.fixedPost,
+      mgLockIn: month.mgLockIn,
+      mgPost: month.mgPost,
+    }));
 
-      return {
-        month: month.label,
-        fixedLockIn: cumFixedLockIn,
-        fixedPost: cumFixedPost,
-        mgLockIn: cumMGLockIn,
-        mgPost: cumMGPost,
-        // Store raw monthly values for tooltip
-        rawFixedLockIn: month.fixedLockIn,
-        rawFixedPost: month.fixedPost,
-        rawMGLockIn: month.mgLockIn,
-        rawMGPost: month.mgPost,
-      };
-    });
-
-    console.log('FinancialValueMonthly: Chart data result (cumulative):', result);
+    console.log('FinancialValueMonthly: Chart data result:', result);
     return result;
   }, [leases]);
 
-  // Calculate totals from last cumulative value
+  // Calculate totals - sum of all months for annual projection
   const totals = useMemo(() => {
     if (chartData.length === 0) return { fixedLockIn: 0, fixedPost: 0, mgLockIn: 0, mgPost: 0 };
-    const last = chartData[chartData.length - 1];
-    return {
-      fixedLockIn: last.fixedLockIn,
-      fixedPost: last.fixedPost,
-      mgLockIn: last.mgLockIn,
-      mgPost: last.mgPost,
-    };
+    return chartData.reduce((acc, month) => ({
+      fixedLockIn: acc.fixedLockIn + month.fixedLockIn,
+      fixedPost: acc.fixedPost + month.fixedPost,
+      mgLockIn: acc.mgLockIn + month.mgLockIn,
+      mgPost: acc.mgPost + month.mgPost,
+    }), { fixedLockIn: 0, fixedPost: 0, mgLockIn: 0, mgPost: 0 });
   }, [chartData]);
 
+  // Use centralized formatRent from formatters.js
   const formatAmount = (val) => {
-    if (val >= 10000000) return `₹${(val / 10000000).toFixed(2)}Cr`;
-    if (val >= 100000) return `₹${(val / 100000).toFixed(1)}L`;
-    if (val >= 1000) return `₹${(val / 1000).toFixed(1)}K`;
-    return `₹${val.toLocaleString('en-IN')}`;
+    return formatRent(safeFloat(val));
   };
 
   // Custom Tooltip

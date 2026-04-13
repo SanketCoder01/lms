@@ -1,4 +1,5 @@
 import React, { useMemo } from 'react';
+import { formatRent, safeFloat } from '../../../utils/formatters';
 import { useNavigate } from 'react-router-dom';
 
 const FloorOccupancySection = ({ units = [], loading }) => {
@@ -56,8 +57,8 @@ const FloorOccupancySection = ({ units = [], loading }) => {
     
     // Convert to array and calculate percentages
     return Object.values(floorMap).map(f => {
-      const leasedPct = f.totalArea > 0 ? Math.round((f.leasedArea / f.totalArea) * 100) : 0;
-      const avgSf = f.leasedArea > 0 ? Math.round(f.totalRent / f.leasedArea) : (f.totalArea > 0 ? Math.round(f.totalRent / f.totalArea) : 0);
+      const leasedPct = f.totalArea > 0 ? parseFloat(((f.leasedArea / f.totalArea) * 100).toFixed(1)) : 0;
+      const avgSf = f.leasedArea > 0 ? parseFloat((f.totalRent / f.leasedArea).toFixed(2)) : (f.totalArea > 0 ? parseFloat((f.totalRent / f.totalArea).toFixed(2)) : 0);
       return {
         ...f,
         leasedPct,
@@ -80,17 +81,13 @@ const FloorOccupancySection = ({ units = [], loading }) => {
     return `${area.toLocaleString('en-IN')} sqft`;
   };
 
-  const formatRent = (rent) => {
-    if (rent >= 10000000) return `${(rent / 10000000).toFixed(2)} Cr/mo`;
-    if (rent >= 100000) return `${(rent / 100000).toFixed(1)}L/mo`;
-    return `${rent.toLocaleString('en-IN')}/mo`;
-  };
+  // Use centralized formatRent from formatters.js
 
   // Calculate overall summary
   const totalUnits = floorData.reduce((sum, f) => sum + f.totalUnits, 0);
   const totalArea = floorData.reduce((sum, f) => sum + f.totalArea, 0);
   const totalLeased = floorData.reduce((sum, f) => sum + f.leasedUnits, 0);
-  const overallOccupancy = totalArea > 0 ? Math.round((floorData.reduce((sum, f) => sum + f.leasedArea, 0) / totalArea) * 100) : 0;
+  const overallOccupancy = totalArea > 0 ? parseFloat(((floorData.reduce((sum, f) => sum + f.leasedArea, 0) / totalArea) * 100).toFixed(1)) : 0;
 
   return (
     <div className="echo-card" style={{ border: 'none' }}>
@@ -188,7 +185,7 @@ const FloorOccupancySection = ({ units = [], loading }) => {
                       </div>
                       <div style={{ textAlign: 'right' }}>
                         <p style={{ fontSize: '14px', fontWeight: 700, color: '#c0392b', margin: 0 }}>{f.avgSf}/sf</p>
-                        <p style={{ fontSize: '12px', color: '#64748b', margin: 0 }}>{formatRent(f.totalRent)}</p>
+                        <p style={{ fontSize: '12px', color: '#64748b', margin: 0 }}>{formatRent(safeFloat(f.totalRent))} PM</p>
                       </div>
                     </div>
 

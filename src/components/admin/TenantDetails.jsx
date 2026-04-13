@@ -145,14 +145,14 @@ const TenantDetails = () => {
                                 <div>
                                     <label style={{ display: 'block', fontSize: '13px', opacity: 0.8, marginBottom: '5px' }}>Date of Lease</label>
                                     <div style={{ fontSize: '18px', fontWeight: '600' }}>
-                                        {tenant.active_lease?.lease_start ? new Date(tenant.active_lease.lease_start).toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: '2-digit' }) : 'N/A'}
+                                        {tenant.active_lease?.lease_start ? new Date(tenant.active_lease.lease_start).toLocaleDateString('en-IN', { day: '2-digit', month: '2-digit', year: 'numeric' }) : 'N/A'}
                                     </div>
                                 </div>
                                 <div>
                                     <label style={{ display: 'block', fontSize: '13px', opacity: 0.8, marginBottom: '5px' }}>Lockin Date</label>
                                     <div style={{ fontSize: '18px', fontWeight: '600' }}>
                                         {/* Assuming lockin date logic or just showing end date if no lockin specific field */}
-                                        {tenant.active_lease?.lease_end ? new Date(tenant.active_lease.lease_end).toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: '2-digit' }) : 'N/A'}
+                                        {tenant.active_lease?.lease_end ? new Date(tenant.active_lease.lease_end).toLocaleDateString('en-IN', { day: '2-digit', month: '2-digit', year: 'numeric' }) : 'N/A'}
                                     </div>
                                 </div>
                             </div>
@@ -192,13 +192,13 @@ const TenantDetails = () => {
                                                 <div>
                                                     <label style={{ display: 'block', fontSize: '12px', color: '#666', marginBottom: '2px' }}>Lease Start:</label>
                                                     <div style={{ fontSize: '14px', fontWeight: '500' }}>
-                                                        {tenant.active_lease?.lease_start ? new Date(tenant.active_lease.lease_start).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }) : 'N/A'}
+                                                        {tenant.active_lease?.lease_start ? new Date(tenant.active_lease.lease_start).toLocaleDateString('en-IN', { day: '2-digit', month: '2-digit', year: 'numeric' }) : 'N/A'}
                                                     </div>
                                                 </div>
                                                 <div>
                                                     <label style={{ display: 'block', fontSize: '12px', color: '#666', marginBottom: '2px' }}>Lease End:</label>
                                                     <div style={{ fontSize: '14px', fontWeight: '500' }}>
-                                                        {tenant.active_lease?.lease_end ? new Date(tenant.active_lease.lease_end).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }) : 'N/A'}
+                                                        {tenant.active_lease?.lease_end ? new Date(tenant.active_lease.lease_end).toLocaleDateString('en-IN', { day: '2-digit', month: '2-digit', year: 'numeric' }) : 'N/A'}
                                                     </div>
                                                 </div>
                                             </div>

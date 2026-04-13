@@ -9,15 +9,29 @@ const Units = () => {
     const location = useLocation();
     const queryParams = new URLSearchParams(location.search);
     const initialProjectId = queryParams.get('projectId');
+    const initialStatus = queryParams.get('status');
+    const initialOwnership = queryParams.get('ownership');
 
     const [units, setUnits] = useState([]);
     const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
     const [selectedBuilding, setSelectedBuilding] = useState(initialProjectId || 'All');
-    const [selectedUnitType, setSelectedUnitType] = useState('All'); // Acts as Status Filter
+    const [selectedUnitType, setSelectedUnitType] = useState(initialStatus || 'All'); // Acts as Status Filter
+    const [selectedOwnership, setSelectedOwnership] = useState(initialOwnership || 'All'); // Ownership filter
     const [error, setError] = useState(null);
     const [projects, setProjects] = useState([]);
     const [showReportModal, setShowReportModal] = useState(false);
+
+    // Update filter when URL params change
+    useEffect(() => {
+        const queryParams = new URLSearchParams(location.search);
+        const statusParam = queryParams.get('status');
+        const projectParam = queryParams.get('projectId');
+        const ownershipParam = queryParams.get('ownership');
+        if (statusParam) setSelectedUnitType(statusParam);
+        if (projectParam) setSelectedBuilding(projectParam);
+        if (ownershipParam) setSelectedOwnership(ownershipParam);
+    }, [location.search]);
 
     // Report columns for Units - All sections
     const unitReportColumns = [
@@ -105,6 +119,7 @@ const Units = () => {
                 if (searchTerm) params.search = searchTerm;
                 if (selectedBuilding !== 'All') params.projectId = selectedBuilding;
                 if (selectedUnitType !== 'All') params.status = selectedUnitType; // Mapping Unit Type to Status filter
+                if (selectedOwnership !== 'All') params.ownership = selectedOwnership; // Ownership filter
 
                 const response = await unitAPI.getUnits(params);
                 const data = response.data.data || response.data; // Handle wrapped/unwrapped
@@ -143,7 +158,7 @@ const Units = () => {
         }, 500);
 
         return () => clearTimeout(timer);
-    }, [searchTerm, selectedBuilding, selectedUnitType]);
+    }, [searchTerm, selectedBuilding, selectedUnitType, selectedOwnership]);
 
     // Handlers
     const handleSearchChange = (e) => setSearchTerm(e.target.value);

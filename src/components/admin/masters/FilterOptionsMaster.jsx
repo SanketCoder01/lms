@@ -18,11 +18,10 @@ const FilterOptionsMaster = () => {
         { value: 'unit_condition', label: 'Unit Conditions', hint: 'Used in Add Unit → Unit Condition dropdown' },
         { value: 'plc', label: 'PLC (Premium on Lease)', hint: 'Used in Add Unit → Premium on Lease dropdown' },
         { value: 'unit_category', label: 'Unit Categories', hint: 'Used in Add Unit → Unit Category dropdown' },
-        { value: 'unit_zoning_type', label: 'Unit Zoning Types', hint: 'Used in Add Unit → Unit Zoning Type dropdown' },
+        { value: 'unit_zoning_type', label: 'Unit Zoning Types', hint: 'Used in Add Unit → Unit Zoning Type dropdown AND Add/Edit Party → Brand/Investor Category dropdown' },
         { value: 'block_tower', label: 'Block / Tower Names', hint: 'Used in Add Unit → Block/Tower dropdown' },
         { value: 'floor_number', label: 'Floor Numbers', hint: 'Used in Add Unit → Floor Number dropdown' },
         { value: 'lease_status', label: 'Lease Statuses', hint: 'Used for lease status classifications' },
-        { value: 'brand_category', label: 'Brand/Investor Categories', hint: 'Used in Add/Edit Party → Brand/Investor Category dropdown' },
         { value: 'Owner Grouping', label: 'Owner Groupings', hint: 'Used in Add/Edit Party → Grouping of Owners dropdown (when Party Type = Owner)' },
         { value: 'Party Type', label: 'Party Types', hint: 'Used in Add/Edit Party → Party Type dropdown (Tenant, Owner, Lessor, Sub-Lessee, etc.)' },
     ];

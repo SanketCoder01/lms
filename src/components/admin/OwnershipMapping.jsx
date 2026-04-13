@@ -263,8 +263,8 @@ const OwnershipMapping = () => {
                             o.company_name || `${o.first_name} ${o.last_name}`,
                             o.share_percentage || 100,
                             o.ownership_status,
-                            new Date(o.start_date).toLocaleDateString(),
-                            o.end_date ? new Date(o.end_date).toLocaleDateString() : '-'
+                            new Date(o.start_date).toLocaleDateString('en-IN', { day: '2-digit', month: '2-digit', year: 'numeric' }),
+                            o.end_date ? new Date(o.end_date).toLocaleDateString('en-IN', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '-'
                         ]);
                         let csvContent = "data:text/csv;charset=utf-8," 
                             + headers.join(",") + "\n"
@@ -327,7 +327,7 @@ const OwnershipMapping = () => {
                                                     {owner.company_name || `${owner.first_name} ${owner.last_name}`}
                                                     {owner.share_percentage ? ` - Share: ${Number(owner.share_percentage)}%` : ''}
                                                 </h4>
-                                                <p>Since: {new Date(owner.start_date).toLocaleDateString()}</p>
+                                                <p>Since: {new Date(owner.start_date).toLocaleDateString('en-IN', { day: '2-digit', month: '2-digit', year: 'numeric' })}</p>
                                             </div>
                                             <button className="remove-btn" onClick={() => handleRemoveOwner(owner)}>Remove</button>
                                         </div>

@@ -34,7 +34,7 @@ const ReportGenerator = ({
         if (!dateStr) return 'N/A';
         try {
             return new Date(dateStr).toLocaleDateString('en-IN', {
-                day: '2-digit', month: 'short', year: 'numeric'
+                day: '2-digit', month: '2-digit', year: 'numeric'
             });
         } catch { return dateStr; }
     };

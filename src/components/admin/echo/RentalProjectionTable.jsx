@@ -6,7 +6,7 @@ const RentalProjectionTable = ({ leases = [], loading }) => {
     if (!leases || leases.length === 0) {
       return [];
     }
-    
+
     const now = new Date();
     const grouped = {
       fixedLockIn: { dot: "#1e3a5f", label: "Fixed rent - lock-in", units: 0, area: 0, type: "Fixed" },
@@ -16,7 +16,7 @@ const RentalProjectionTable = ({ leases = [], loading }) => {
       revShareLockIn: { dot: "#b8860b", label: "Rev. share - lock-in", units: 0, area: 0, type: "Variable" },
       revSharePostLockIn: { dot: "#e8a830", label: "Rev. share - post lock-in", units: 0, area: 0, type: "Variable" },
     };
-    
+
     leases.forEach(lease => {
       const rentModel = (lease.rent_model || 'Fixed').toLowerCase();
       const leaseStart = new Date(lease.lease_start);
@@ -24,9 +24,9 @@ const RentalProjectionTable = ({ leases = [], loading }) => {
       const lockInExpiry = new Date(leaseStart);
       lockInExpiry.setMonth(lockInExpiry.getMonth() + lockInMonths);
       const isLockInActive = lockInExpiry > now;
-      
+
       const area = parseFloat(lease.area_leased || lease.units?.chargeable_area || 0);
-      
+
       if (rentModel === 'fixed') {
         if (isLockInActive) {
           grouped.fixedLockIn.units += 1;
@@ -45,12 +45,12 @@ const RentalProjectionTable = ({ leases = [], loading }) => {
         }
       }
     });
-    
+
     return Object.values(grouped).filter(c => c.units > 0);
   }, [leases]);
 
   const getTypeColor = (type) => {
-    return type === 'Fixed' 
+    return type === 'Fixed'
       ? { bg: '#dbeafe', text: '#1d4ed8' }
       : { bg: '#fed7aa', text: '#c2410c' };
   };
@@ -74,13 +74,13 @@ const RentalProjectionTable = ({ leases = [], loading }) => {
       ) : (
         <>
           {/* Header */}
-          <div style={{ 
-            display: 'grid', 
-            gridTemplateColumns: '1fr 60px 90px 70px', 
-            gap: '8px', 
-            fontSize: '10px', 
-            fontWeight: 700, 
-            textTransform: 'uppercase', 
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: '1fr 60px 90px 70px',
+            gap: '8px',
+            fontSize: '10px',
+            fontWeight: 700,
+            textTransform: 'uppercase',
             letterSpacing: '0.05em',
             color: '#64748b',
             marginBottom: '8px',
@@ -106,10 +106,10 @@ const RentalProjectionTable = ({ leases = [], loading }) => {
                   <span style={{ fontSize: '14px', color: '#0f172a', textAlign: 'right' }}>{c.units}</span>
                   <span style={{ fontSize: '14px', color: '#0f172a', textAlign: 'right' }}>{formatArea(c.area)}</span>
                   <span style={{ display: 'flex', justifyContent: 'center' }}>
-                    <span style={{ 
-                      fontSize: '10px', 
-                      padding: '2px 8px', 
-                      borderRadius: '9999px', 
+                    <span style={{
+                      fontSize: '10px',
+                      padding: '2px 8px',
+                      borderRadius: '9999px',
                       fontWeight: 500,
                       backgroundColor: typeColor.bg,
                       color: typeColor.text

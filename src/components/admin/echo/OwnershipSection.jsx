@@ -1,7 +1,8 @@
 import React, { useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { formatRent, safeFloat } from '../../../utils/formatters';
 
-const OwnershipSection = ({ units = [], loading }) => {
+const OwnershipSection = ({ units = [], leases = [], loading }) => {
   const navigate = useNavigate();
   // Process units directly using useMemo for efficiency
   const ownershipData = useMemo(() => {
@@ -11,16 +12,16 @@ const OwnershipSection = ({ units = [], loading }) => {
       { key: 'Group Companies', label: 'Close group / group co.', color: '#2d8a4e' },
       { key: 'Other Investors', label: 'External investors', color: '#1e3a5f' },
     ];
-    
-    console.log('OwnershipSection: Processing units:', units?.length || 0, units);
-    
+
+    console.log('OwnershipSection: Processing units:', units?.length || 0, 'leases:', leases?.length || 0);
+
     // Initialize all 3 categories with 0 values
     const grouped = {
       'Developer Units': { units: 0, totalArea: 0, totalRent: 0, parties: new Set() },
       'Group Companies': { units: 0, totalArea: 0, totalRent: 0, parties: new Set() },
       'Other Investors': { units: 0, totalArea: 0, totalRent: 0, parties: new Set() },
     };
-    
+
     if (!units || units.length === 0) {
       return standardCategories.map(cat => ({
         key: cat.key,
@@ -32,25 +33,56 @@ const OwnershipSection = ({ units = [], loading }) => {
         parties: 0,
       }));
     }
-    
-    // Group units by ownership_grouping
-    units.forEach(unit => {
-      const group = unit.ownership_grouping || unit.ownershipGrouping || unit.ownership_group || unit.owner_type || unit.ownershipType || 'Developer Units';
-      console.log(`OwnershipSection: Unit ${unit.unit_number}, ownership_grouping=${unit.ownership_grouping}, resolved group=${group}`);
-      
-      // Map to one of the 3 standard categories
-      let category = 'Developer Units';
-      if (group === 'Group Companies' || group === 'Group Company' || group === 'Close Group') {
-        category = 'Group Companies';
-      } else if (group === 'Other Investors' || group === 'External Investors' || group === 'Investor') {
-        category = 'Other Investors';
+
+    // Build a map of unit_id to actual rent from active leases
+    const leaseRentMap = {};
+    (leases || []).forEach(lease => {
+      const isActive = lease.status === 'active' || lease.status === 'Active' || lease.status === 'approved' || lease.status === 'leased';
+      if (isActive) {
+        const unitId = lease.unit_id || lease.unitId || lease.unit?.id;
+        const rent = parseFloat(lease.monthly_rent) || 0;
+        if (unitId && rent > 0) {
+          leaseRentMap[unitId] = rent;
+        }
       }
-      
+    });
+
+    // Group units by ownership_type
+    units.forEach(unit => {
+      const ownershipType = (unit.ownership_type || unit.ownershipType || unit.owner_type || unit.ownership_grouping || '').toLowerCase().trim();
+      const hasOwner = unit.owner_name || unit.ownerName || unit.owner_id || unit.ownerId;
+      console.log(`OwnershipSection: Unit ${unit.unit_number}, ownership_type=${ownershipType}, hasOwner=${!!hasOwner}`);
+
+      // Determine category based on ownership_type field
+      // Unsold = no owner assigned
+      // Others based on selected ownership_type value
+      let category;
+
+      if (!hasOwner) {
+        // No owner assigned = Unsold / Developer Units
+        category = 'Developer Units';
+      } else if (ownershipType === 'group company' || ownershipType === 'group companies' || ownershipType === 'close group') {
+        category = 'Group Companies';
+      } else if (ownershipType === 'investor' || ownershipType === 'external investor' || ownershipType === 'other investor' || ownershipType === 'other investors') {
+        category = 'Other Investors';
+      } else if (ownershipType === 'developer' || ownershipType === 'developer unit' || ownershipType === 'unsold') {
+        category = 'Developer Units';
+      } else {
+        // Default: if has owner but unclear type, check ownership_status
+        const isSold = (unit.ownership_status || '').toLowerCase() === 'sold' || (unit.ownership_status || '').toLowerCase() === 'transferred';
+        category = isSold ? 'Other Investors' : 'Developer Units';
+      }
+
       grouped[category].units += 1;
       grouped[category].totalArea += parseFloat(unit.chargeable_area || unit.area || unit.chargeableArea || 0);
-      grouped[category].totalRent += parseFloat(unit.projected_rent || unit.monthly_rent || unit.current_rent || 0);
-      if (unit.owner_name || unit.ownerName || unit.owner) {
-        grouped[category].parties.add(unit.owner_name || unit.ownerName || unit.owner);
+      
+      // Use actual rent from lease if available, otherwise 0
+      const unitId = unit.id || unit.unit_id || unit.unitId;
+      const actualRent = leaseRentMap[unitId] || 0;
+      grouped[category].totalRent += actualRent;
+      
+      if (hasOwner) {
+        grouped[category].parties.add(unit.owner_name || unit.ownerName || unit.owner || 'Owner');
       }
     });
 
@@ -66,7 +98,7 @@ const OwnershipSection = ({ units = [], loading }) => {
       totalRent: grouped[cat.key].totalRent,
       parties: grouped[cat.key].parties.size,
     }));
-  }, [units]);
+  }, [units, leases]);
 
   const handleCategoryClick = (category) => {
     navigate(`/admin/units?ownership=${encodeURIComponent(category)}`);
@@ -78,8 +110,8 @@ const OwnershipSection = ({ units = [], loading }) => {
   // Calculate percentages
   const displayData = ownershipData.map(o => ({
     ...o,
-    percentage: totalUnits > 0 ? Math.round((o.units / totalUnits) * 100) : 0,
-    avgRent: o.totalArea > 0 ? Math.round(o.totalRent / o.totalArea) : 0,
+    percentage: totalUnits > 0 ? parseFloat(((o.units / totalUnits) * 100).toFixed(1)) : 0,
+    avgRent: o.totalArea > 0 ? parseFloat((o.totalRent / o.totalArea).toFixed(2)) : 0,
   }));
 
   const formatArea = (area) => {
@@ -87,11 +119,7 @@ const OwnershipSection = ({ units = [], loading }) => {
     return `${area.toLocaleString('en-IN')} sqft`;
   };
 
-  const formatRent = (rent) => {
-    if (rent >= 10000000) return `${(rent / 10000000).toFixed(2)} Cr/mo`;
-    if (rent >= 100000) return `${(rent / 100000).toFixed(1)}L/mo`;
-    return `${rent.toLocaleString('en-IN')}/mo`;
-  };
+  // Use centralized formatRent from formatters.js
 
   return (
     <div className="echo-card" style={{ border: 'none' }}>
@@ -138,20 +166,20 @@ const OwnershipSection = ({ units = [], loading }) => {
           </div>
 
           {/* Breakdown - Scrollable */}
-          <div 
+          <div
             className="ownership-scroll-container"
-            style={{ 
-              display: 'flex', 
-              flexDirection: 'column', 
-              gap: '20px', 
-              maxHeight: '200px', 
+            style={{
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '20px',
+              maxHeight: '200px',
               overflowY: 'auto',
               paddingRight: '8px'
             }}
           >
             {displayData.map((o, i) => (
-              <div 
-                key={i} 
+              <div
+                key={i}
                 onClick={() => handleCategoryClick(o.key)}
                 style={{ display: 'flex', alignItems: 'flex-start', gap: '12px', cursor: 'pointer', padding: '4px', borderRadius: '4px', transition: 'background-color 0.2s' }}
                 onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f8fafc'}
@@ -163,8 +191,8 @@ const OwnershipSection = ({ units = [], loading }) => {
                   <p style={{ fontSize: '12px', color: '#64748b', margin: 0 }}>{o.units} units · {formatArea(o.totalArea)}{o.parties > 0 ? ` · ${o.parties} parties` : ''}</p>
                 </div>
                 <div style={{ textAlign: 'right', flexShrink: 0 }}>
-                  <p style={{ fontSize: '14px', fontWeight: 600, color: '#0f172a', margin: 0 }}>{formatRent(o.totalRent)}</p>
-                  <p style={{ fontSize: '12px', color: '#64748b', margin: 0 }}>{o.avgRent}/sqft avg</p>
+                  <p style={{ fontSize: '14px', fontWeight: 600, color: '#0f172a', margin: 0 }}>{formatRent(safeFloat(o.totalRent))} PM</p>
+                  <p style={{ fontSize: '12px', color: '#64748b', margin: 0 }}>Rs {o.avgRent}/sqft avg</p>
                 </div>
               </div>
             ))}

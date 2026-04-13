@@ -50,7 +50,7 @@ const EditParty = () => {
         const fetchFilters = async () => {
             try {
                 const [bcRes, ptRes, ogRes] = await Promise.all([
-                    filterAPI.getFilterOptions("brand_category").catch(() => ({ data: { data: [] } })),
+                    filterAPI.getFilterOptions("unit_zoning_type").catch(() => ({ data: { data: [] } })),
                     filterAPI.getFilterOptions("Party Type").catch(() => ({ data: { data: [] } })),
                     filterAPI.getFilterOptions("Owner Grouping").catch(() => ({ data: { data: [] } })),
                     axios.get('/api/locations/states').catch(() => ({ data: [] }))
@@ -253,20 +253,22 @@ const EditParty = () => {
                                         placeholder="e.g. Acme"
                                     />
                                 </div>
-                                <div className="form-group">
-                                    <label>Brand/Investor Category</label>
-                                    <select
-                                        className="form-select"
-                                        name="brand_category"
-                                        value={formData.brand_category}
-                                        onChange={handleChange}
-                                    >
-                                        <option value="">Select Category</option>
-                                        {brandCategories.map((c) => (
-                                            <option key={c.id} value={c.option_value}>{c.option_value}</option>
-                                        ))}
-                                    </select>
-                                </div>
+                                {formData.party_type !== 'Owner' && (
+                                    <div className="form-group">
+                                        <label>Brand/Investor Category</label>
+                                        <select
+                                            className="form-select"
+                                            name="brand_category"
+                                            value={formData.brand_category}
+                                            onChange={handleChange}
+                                        >
+                                            <option value="">Select Category</option>
+                                            {brandCategories.map((c) => (
+                                                <option key={c.id} value={c.option_value}>{c.option_value}</option>
+                                            ))}
+                                        </select>
+                                    </div>
+                                )}
                                 <div className="form-group">
                                     <label>Legal Entity Type</label>
                                     <select

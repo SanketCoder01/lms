@@ -25,11 +25,38 @@ const UnitDetails = () => {
                 const active = owners.find(o => o.ownership_status === 'Active');
                 setActiveOwner(active);
 
-                // Fetch Active Lease
-                const leaseRes = await leaseAPI.getAllLeases({ unit_id: id, status: 'Active', limit: 1 });
-                const leases = await leaseRes.data;
-                if (leases && leases.length > 0) {
-                    setActiveLease(leases[0]);
+                // Fetch Active Lease - only if unit is not vacant
+                const unitStatus = (res.data.data || res.data).status || '';
+                const isVacant = unitStatus.toLowerCase() === 'vacant' || unitStatus.toLowerCase() === 'available';
+                
+                if (!isVacant) {
+                    // Try multiple status values and also fetch by unit_id
+                    let activeLeaseData = null;
+                    
+                    // First try: get leases for this unit with active status
+                    for (const status of ['active', 'Active', 'leased', 'occupied', 'approved', 'Leased']) {
+                        const leaseRes = await leaseAPI.getAllLeases({ unit_id: id, status: status, limit: 1 });
+                        const leases = leaseRes.data || [];
+                        if (leases && leases.length > 0) {
+                            activeLeaseData = leases[0];
+                            break;
+                        }
+                    }
+                    
+                    // Second try: get all leases for this unit and find the most recent active one
+                    if (!activeLeaseData) {
+                        const allLeasesRes = await leaseAPI.getAllLeases({ unit_id: id, limit: 10 });
+                        const allLeases = allLeasesRes.data || [];
+                        // Find the most recent active lease
+                        activeLeaseData = allLeases.find(l => {
+                            const s = (l.status || '').toLowerCase();
+                            return s === 'active' || s === 'approved' || s === 'occupied' || s === 'leased';
+                        }) || allLeases[0]; // Fallback to most recent lease if no active found
+                    }
+                    
+                    if (activeLeaseData) {
+                        setActiveLease(activeLeaseData);
+                    }
                 }
             } catch (err) {
                 console.error("Error fetching unit:", err);
@@ -90,22 +117,22 @@ const UnitDetails = () => {
                         {/* Profiles Row (UNCHANGED UI) */}
                         <div className="profiles-row">
 
-                            {/* Tenant */}
+                            {/* Tenant - Only show lease info if unit is not vacant */}
                             <div className="profile-card tenant">
                                 <div className="card-header">
                                     <div className="user-info">
                                         <div className="avatar tenant-avatar">
                                             {activeLease ? (
                                                 <div style={{ width: '100%', height: '100%', background: '#4F46E5', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 'bold' }}>
-                                                    {(activeLease.tenant_name || 'T').charAt(0)}
+                                                    {(activeLease.brand_name || activeLease.tenant_name || activeLease.tenant?.company_name || 'T').charAt(0)}
                                                 </div>
                                             ) : (
                                                 <div style={{ width: '100%', height: '100%', background: '#e2e8f0' }}></div>
                                             )}
                                         </div>
                                         <div>
-                                            <h3>{activeLease ? activeLease.tenant_name : 'No Active Tenant'}</h3>
-                                            <span className="since">{activeLease ? `Since ${new Date(activeLease.lease_start).toLocaleDateString()}` : 'Vacant'}</span>
+                                            <h3>{activeLease ? (activeLease.brand_name || activeLease.tenant_name || activeLease.tenant?.company_name || activeLease.tenant?.brand_name || 'Active Tenant') : (unit.status?.toLowerCase() === 'vacant' ? 'Vacant' : 'No Active Tenant')}</h3>
+                                            <span className="since">{activeLease ? `Since ${new Date(activeLease.lease_start).toLocaleDateString('en-IN', { day: '2-digit', month: '2-digit', year: 'numeric' })}` : (unit.status?.toLowerCase() === 'vacant' ? 'Available for lease' : 'No lease data')}</span>
                                         </div>
                                     </div>
                                     {activeLease && <span className="badge active-lease">Active Lease</span>}
@@ -141,7 +168,7 @@ const UnitDetails = () => {
                                                     ? (activeOwner.company_name || `${activeOwner.first_name} ${activeOwner.last_name}`)
                                                     : 'No Active Owner'}
                                             </h3>
-                                            <span className="since">{activeOwner ? `Since ${new Date(activeOwner.start_date).toLocaleDateString()}` : 'Unassigned'}</span>
+                                            <span className="since">{activeOwner ? `Since ${new Date(activeOwner.start_date).toLocaleDateString('en-IN', { day: '2-digit', month: '2-digit', year: 'numeric' })}` : 'Unassigned'}</span>
                                         </div>
                                     </div>
                                     {activeOwner && <span className="badge leased">Active</span>}
@@ -223,26 +250,55 @@ const UnitDetails = () => {
                             <div className="stat-item">
                                 <label>Next Renewal:</label>
                                 <div className="stat-values red-text">
-                                    <span>Lease Expiry: Dec 31, 2025</span>
-                                    <span>Expiring in 30 days</span>
+                                    {unit.status?.toLowerCase() === 'vacant' ? (
+                                        <span>Unit is vacant</span>
+                                    ) : activeLease && activeLease.lease_end ? (
+                                        <>
+                                            <span>Lease Expiry: {new Date(activeLease.lease_end).toLocaleDateString('en-IN', { day: '2-digit', month: '2-digit', year: 'numeric' })}</span>
+                                            <span>{Math.ceil((new Date(activeLease.lease_end) - new Date()) / (1000 * 60 * 60 * 24))} days remaining</span>
+                                        </>
+                                    ) : (
+                                        <span>No active lease</span>
+                                    )}
                                 </div>
                             </div>
                         </div>
 
-                        {/* Recent Activity (UNCHANGED UI) */}
+                        {/* Recent Activity - Only show lease history for non-vacant units */}
                         <div className="activity-section">
                             <h3>Recent Activity</h3>
-                            <div className="timeline">
-                                <div className="timeline-item">
-                                    <div className="timeline-dot red"></div>
-                                    <div className="timeline-content">
-                                        <h4>Maintenance Request Created</h4>
-                                        <p>"Kitchen sink is leaking"</p>
-                                        <span className="time">2 days ago</span>
+                            {unit.status?.toLowerCase() === 'vacant' ? (
+                                <div className="timeline">
+                                    <div className="timeline-item">
+                                        <div className="timeline-dot gray"></div>
+                                        <div className="timeline-content">
+                                            <h4>Unit Available</h4>
+                                            <p>This unit is currently vacant and available for leasing.</p>
+                                        </div>
                                     </div>
                                 </div>
-                            </div>
-                            <button className="view-all-activity-btn">View All Activity</button>
+                            ) : activeLease ? (
+                                <div className="timeline">
+                                    <div className="timeline-item">
+                                        <div className="timeline-dot green"></div>
+                                        <div className="timeline-content">
+                                            <h4>Lease Created</h4>
+                                            <p>Lease #{activeLease.id} started on {new Date(activeLease.lease_start).toLocaleDateString('en-IN', { day: '2-digit', month: '2-digit', year: 'numeric' })}</p>
+                                            <span className="time">{activeLease.brand_name || activeLease.tenant_name || 'Tenant'}</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            ) : (
+                                <div className="timeline">
+                                    <div className="timeline-item">
+                                        <div className="timeline-dot gray"></div>
+                                        <div className="timeline-content">
+                                            <h4>No Lease History</h4>
+                                            <p>No active lease found for this unit.</p>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
                         </div>
 
                     </div>

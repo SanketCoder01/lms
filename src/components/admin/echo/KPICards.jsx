@@ -1,13 +1,14 @@
 import React from 'react';
+import { formatRent, safeFloat } from '../../../utils/formatters';
 
-const KPICards = ({ 
-  totalUnits, 
-  totalArea, 
-  leasedUnits, 
-  leasedArea, 
+const KPICards = ({
+  totalUnits,
+  totalArea,
+  leasedUnits,
+  leasedArea,
   leasedPercent,
-  vacantUnits, 
-  vacantArea, 
+  vacantUnits,
+  vacantArea,
   vacantPercent,
   monthlyRent,
   opportunityLoss,
@@ -15,6 +16,8 @@ const KPICards = ({
   loading,
   projectedRent,
   actualRent,
+  avgRatePerSqft,
+  profitLoss,
   onTotalUnitsClick,
   onLeasedUnitsClick,
   onVacantUnitsClick,
@@ -35,34 +38,14 @@ const KPICards = ({
     return formatNumber(area);
   };
 
-  const formatActualRent = (rent) => {
-    if (!rent || rent === 0) return '0';
-    if (rent >= 10000000) {
-      return (rent / 10000000).toFixed(2) + ' Cr';
-    }
-    if (rent >= 100000) {
-      return (rent / 100000).toFixed(1) + 'L';
-    }
-    return formatNumber(rent);
-  };
-
-  const formatProjectedRent = (rent) => {
-    if (!rent || rent === 0) return '0';
-    if (rent >= 10000000) {
-      return (rent / 10000000).toFixed(2) + ' Cr';
-    }
-    if (rent >= 100000) {
-      return (rent / 100000).toFixed(1) + 'L';
-    }
-    return formatNumber(rent);
-  };
+  // Use centralized formatRent from formatters.js
 
   const kpis = [
     {
       label: "TOTAL UNITS",
       value: loading ? '...' : formatNumber(totalUnits),
       sub: `${formatArea(totalArea)} sqft total area`,
-      badges: unitBreakdown && unitBreakdown.length > 0 
+      badges: unitBreakdown && unitBreakdown.length > 0
         ? unitBreakdown.map(b => ({ label: `${b.name}: ${b.count}`, color: "#1e3a5f" }))
         : [{ label: "No units", color: "#64748b" }],
       progress: null,
@@ -89,9 +72,9 @@ const KPICards = ({
     },
     {
       label: "TOTAL PROJECTED RENT",
-      value: loading ? '...' : formatProjectedRent(projectedRent),
-      valueSuffix: "/mo",
-      sub: "Projected rent from all units",
+      value: loading ? '...' : formatRent(safeFloat(projectedRent)),
+      valueSuffix: " PM",
+      sub: avgRatePerSqft ? `Avg Rate: ${formatNumber(avgRatePerSqft)}/sqft PM` : "Projected rent from all units",
       badges: null,
       progress: null,
       valueColor: "#1e293b",
@@ -99,10 +82,10 @@ const KPICards = ({
     },
     {
       label: "ACTUAL RENT",
-      value: loading ? '...' : formatActualRent(actualRent || projectedRent),
-      valueSuffix: "/mo",
-      sub: opportunityLoss > 0 ? `Loss: ${formatActualRent(opportunityLoss)}/mo from vacancy` : "From active leases",
-      badges: null,
+      value: loading ? '...' : formatRent(safeFloat(actualRent || projectedRent)),
+      valueSuffix: " PM",
+      sub: opportunityLoss > 0 ? `Loss: ${formatRent(safeFloat(opportunityLoss))} PM from vacancy` : "From active leases",
+      badges: profitLoss !== 0 ? [{ label: `${profitLoss > 0 ? 'Profit' : 'Loss'}: ${formatRent(safeFloat(Math.abs(profitLoss)))} PM`, color: profitLoss > 0 ? '#10b981' : '#ef4444' }] : null,
       progress: null,
       valueColor: "#0ea5e9",
       onClick: onActualRentClick,
@@ -112,8 +95,8 @@ const KPICards = ({
   return (
     <div className="echo-kpi-grid">
       {kpis.map((kpi, i) => (
-        <div 
-          key={i} 
+        <div
+          key={i}
           className="echo-kpi-card"
           onClick={kpi.onClick}
           style={{ cursor: kpi.onClick ? 'pointer' : 'default' }}
