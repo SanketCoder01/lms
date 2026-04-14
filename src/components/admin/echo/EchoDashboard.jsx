@@ -15,14 +15,13 @@ import RentalProjectionTable from './RentalProjectionTable';
 import FinancialValueMonthly from './FinancialValueMonthly';
 import BrandPerformanceSection from './BrandPerformanceSection';
 import FloorOccupancySection from './FloorOccupancySection';
-import { getProjects, getDashboardStats, leaseAPI, unitAPI } from '../../../services/api';
+import { getProjects, leaseAPI, unitAPI } from '../../../services/api';
 import './echo.css';
 
 const EchoDashboard = () => {
   const navigate = useNavigate();
   const [projects, setProjects] = useState([]);
   const [selectedProject, setSelectedProject] = useState('All');
-  const [dashboardData, setDashboardData] = useState(null);
   const [unitBreakdown, setUnitBreakdown] = useState([]);
   const [loading, setLoading] = useState(true);
   const [userInfo, setUserInfo] = useState({ name: '', initials: 'AD' });
@@ -66,14 +65,8 @@ const EchoDashboard = () => {
     const fetchData = async () => {
       setLoading(true);
       try {
-        const params = selectedProject !== 'All' ? { project_id: selectedProject } : undefined;
         const unitParams = selectedProject !== 'All' ? { projectId: selectedProject } : {};
-        const [statsRes, unitsRes] = await Promise.all([
-          getDashboardStats(params),
-          unitAPI.getUnits(unitParams)
-        ]);
-        
-        setDashboardData(statsRes.data);
+        const unitsRes = await unitAPI.getUnits(unitParams);
         
         // Calculate unit breakdown by actual unit names (unit_number)
         const units = unitsRes.data?.data || unitsRes.data || [];
@@ -165,8 +158,15 @@ const EchoDashboard = () => {
 
           let fixedTotal = 0, mgTotal = 0, revShareTotal = 0;
           let fixedUnits = 0, mgUnits = 0, revShareUnits = 0;
-          
-          leases.forEach(lease => {
+
+          // Only count ACTIVE leases for actual rent calculation
+          const activeLeases = leases.filter(lease => {
+            const status = (lease.status || '').toLowerCase().trim();
+            return status === 'active' || status === 'approved' || status === 'leased' || status === 'executed' || status === 'registered';
+          });
+          console.log('Active leases for rent calculation:', activeLeases.length, 'out of', leases.length);
+
+          activeLeases.forEach(lease => {
             console.log('Lease:', lease.id, 'rent_model:', lease.rent_model, 'monthly_rent:', lease.monthly_rent, 'mg_amount:', lease.mg_amount, 'revenue_share_amount:', lease.revenue_share_amount, 'revenue_share_percentage:', lease.revenue_share_percentage);
             const rent = parseFloat(lease.monthly_rent) || 0;
             if (lease.rent_model === 'Fixed') {
@@ -184,6 +184,10 @@ const EchoDashboard = () => {
               revShareTotal += revShareAmount;
               mgUnits += 1;
               revShareUnits += 1;
+            } else {
+              // Default: if no rent_model specified, count as fixed rent
+              fixedTotal += rent;
+              fixedUnits += 1;
             }
           });
           console.log('Rent composition totals:', { fixedTotal, mgTotal, revShareTotal, fixedUnits, mgUnits, revShareUnits });
@@ -230,21 +234,38 @@ const EchoDashboard = () => {
             area: d.area // Keep actual area in sqft, no rounding
           }));
 
-          // Calculate LOI, Executed, Registered counts from all leases
-          const loiCount = leases.filter(l => {
-            const s = (l.status || '').toLowerCase();
-            return s === 'loi' || s === 'draft' || s === 'pending' || s === 'loi_signed';
-          }).length;
+          // Calculate LOI, Executed, Registered counts - MUTUALLY EXCLUSIVE
+          // Priority: Registered > Executed > LOI
+          // Each unit is counted in ONLY ONE category based on highest stage reached
+          const getLeasingStatusCounts = (leases) => {
+            const counts = { registered: 0, executed: 0, loi: 0 };
+            const processedUnits = new Set();
 
-          const executedCount = leases.filter(l => {
-            const s = (l.status || '').toLowerCase();
-            return s === 'executed' || s === 'signed' || s === 'active' || s === 'approved';
-          }).length;
+            leases.forEach(lease => {
+              const unitId = lease.unit_id || lease.unitId;
+              // Skip if we've already counted this unit
+              if (unitId && processedUnits.has(unitId)) return;
+              if (unitId) processedUnits.add(unitId);
 
-          const registeredCount = leases.filter(l => {
-            const s = (l.status || '').toLowerCase();
-            return s === 'registered' || s === 'completed';
-          }).length;
+              const s = (lease.status || '').toLowerCase().trim();
+
+              // Priority order: Registered > Executed > LOI
+              if (s === 'registered' || s === 'completed') {
+                counts.registered += 1;
+              } else if (s === 'executed' || s === 'signed' || s === 'active' || s === 'approved' || s === 'leased') {
+                counts.executed += 1;
+              } else if (s === 'loi' || s === 'draft' || s === 'pending' || s === 'loi_signed') {
+                counts.loi += 1;
+              }
+            });
+
+            return counts;
+          };
+
+          const statusCounts = getLeasingStatusCounts(leases);
+          const loiCount = statusCounts.loi;
+          const executedCount = statusCounts.executed;
+          const registeredCount = statusCounts.registered;
           
           setLeasingStats({
             newLeases: recentLeases.length,
@@ -274,14 +295,9 @@ const EchoDashboard = () => {
       // Trigger refetch by calling fetchData again
       const fetchData = async () => {
         try {
-          const params = selectedProject !== 'All' ? { project_id: selectedProject } : undefined;
           const unitParams = selectedProject !== 'All' ? { projectId: selectedProject } : {};
-          const [statsRes, unitsRes] = await Promise.all([
-            getDashboardStats(params),
-            unitAPI.getUnits(unitParams)
-          ]);
-          
-          setDashboardData(statsRes.data);
+          const unitsRes = await unitAPI.getUnits(unitParams);
+
           const units = unitsRes.data?.data || unitsRes.data || [];
           setAllUnits(units);
 
@@ -366,7 +382,7 @@ const EchoDashboard = () => {
         ['Vacant Units', vacantUnits.toString()],
         ['Vacant Area', `${vacantArea.toLocaleString('en-IN')} sqft`],
         ['Vacant Percentage', `${vacantPercent}%`],
-        ['Monthly Rent', `₹${monthlyRent.toLocaleString('en-IN')}`],
+        ['Actual Rent', `₹${actualRent.toLocaleString('en-IN')}`],
         ['Opportunity Loss', `₹${opportunityLoss.toLocaleString('en-IN')}`],
       ];
       
@@ -492,14 +508,30 @@ const EchoDashboard = () => {
     }
   };
 
-  const totalUnits = dashboardData?.topRow?.totalUnits?.value || 0;
-  const totalArea = dashboardData?.topRow?.totalProjectArea?.value || 0;
-  const leasedUnits = dashboardData?.thirdRow?.unitsLeased?.value || 0;
-  const leasedArea = dashboardData?.thirdRow?.areaLeased?.value || 0;
-  const vacantUnits = dashboardData?.thirdRow?.unitsVacant?.value || 0;
-  const vacantArea = dashboardData?.thirdRow?.areaVacant?.value || 0;
-  const monthlyRent = dashboardData?.financials?.rentMonth?.value || 0;
-  const opportunityLoss = dashboardData?.financials?.opportunityLoss?.value || 0;
+  // Calculate ALL metrics locally from filtered units and leases
+  // This ensures correct project-specific filtering
+  const totalUnits = allUnits.length || 0;
+  const totalArea = allUnits.reduce((sum, u) => sum + (parseFloat(u.chargeable_area) || parseFloat(u.area) || 0), 0);
+
+  const leasedUnitsArr = allUnits.filter(u => {
+    const s = (u.status || '').toLowerCase();
+    return s === 'leased' || s === 'occupied' || s === 'sold';
+  });
+  const leasedUnits = leasedUnitsArr.length;
+  const leasedArea = leasedUnitsArr.reduce((sum, u) => sum + (parseFloat(u.chargeable_area) || parseFloat(u.area) || 0), 0);
+
+  const vacantUnitsArr = allUnits.filter(u => {
+    const s = (u.status || '').toLowerCase();
+    return s === 'vacant' || s === 'available';
+  });
+  const vacantUnits = vacantUnitsArr.length;
+  const vacantArea = vacantUnitsArr.reduce((sum, u) => sum + (parseFloat(u.chargeable_area) || parseFloat(u.area) || 0), 0);
+
+  // Calculate opportunity loss from vacant units
+  const opportunityLoss = vacantUnitsArr.reduce((sum, u) => {
+    const rent = parseFloat(u.projected_rent) || 0;
+    return sum + rent;
+  }, 0);
 
   // Calculate percentages
   // Leased % = (area leased / total project area) * 100
@@ -510,11 +542,11 @@ const EchoDashboard = () => {
   // Calculate average rate per sqft
   const avgRatePerSqft = totalArea > 0 ? parseFloat((projectedRent / totalArea).toFixed(2)) : 0;
 
-  // Calculate rate variance (actual rent - target rent for leased units)
+  // Calculate actual rent from rent composition
   const actualRent = (rentComposition.fixed || 0) + (rentComposition.mg || 0) + (rentComposition.revenueShare || 0);
-  const targetRentForLeased = (allUnits || [])
-    .filter(u => u.status === 'leased' || u.status === 'sold' || u.status === 'occupied')
-    .reduce((sum, u) => sum + (parseFloat(u.projected_rent) || parseFloat(u.chargeable_area * (u.rate_per_sqft || 0)) || 0), 0);
+
+  // Calculate rate variance for KPICards (actual rent - projected rent for leased units)
+  const targetRentForLeased = leasedUnitsArr.reduce((sum, u) => sum + (parseFloat(u.projected_rent) || 0), 0);
   const rateVariance = actualRent - targetRentForLeased;
 
   return (
@@ -560,7 +592,7 @@ const EchoDashboard = () => {
         </div>
 
         {/* KPI Cards */}
-        <KPICards 
+        <KPICards
           totalUnits={totalUnits}
           totalArea={totalArea}
           leasedUnits={leasedUnits}
@@ -569,7 +601,6 @@ const EchoDashboard = () => {
           vacantUnits={vacantUnits}
           vacantArea={vacantArea}
           vacantPercent={vacantPercent}
-          monthlyRent={monthlyRent}
           opportunityLoss={opportunityLoss}
           unitBreakdown={unitBreakdown}
           loading={loading}
@@ -577,11 +608,26 @@ const EchoDashboard = () => {
           actualRent={actualRent}
           avgRatePerSqft={avgRatePerSqft}
           profitLoss={rateVariance}
-          onTotalUnitsClick={() => navigate('/admin/units')}
-          onLeasedUnitsClick={() => navigate('/admin/leases?status=active')}
-          onVacantUnitsClick={() => navigate('/admin/units?status=vacant')}
-          onProjectedRentClick={() => navigate('/admin/units')}
-          onActualRentClick={() => navigate('/admin/leases')}
+          onTotalUnitsClick={() => {
+            const params = selectedProject !== 'All' ? `?projectId=${selectedProject}` : '';
+            navigate(`/admin/units${params}`);
+          }}
+          onLeasedUnitsClick={() => {
+            const projectParam = selectedProject !== 'All' ? `&project_id=${selectedProject}` : '';
+            navigate(`/admin/leases?status=active${projectParam}`);
+          }}
+          onVacantUnitsClick={() => {
+            const projectParam = selectedProject !== 'All' ? `&projectId=${selectedProject}` : '';
+            navigate(`/admin/units?status=vacant${projectParam}`);
+          }}
+          onProjectedRentClick={() => {
+            const params = selectedProject !== 'All' ? `?projectId=${selectedProject}` : '';
+            navigate(`/admin/units${params}`);
+          }}
+          onActualRentClick={() => {
+            const params = selectedProject !== 'All' ? `?project_id=${selectedProject}` : '';
+            navigate(`/admin/leases${params}`);
+          }}
         />
 
         {/* Section Title */}
@@ -592,14 +638,13 @@ const EchoDashboard = () => {
 
         {/* Bottom Charts - 3 Column Grid */}
         <div className="echo-charts-grid">
-          <RentComposition 
+          <RentComposition
             fixed={rentComposition.fixed}
             mg={rentComposition.mg}
             revenueShare={rentComposition.revenueShare}
             fixedUnits={rentComposition.fixedUnits}
             mgUnits={rentComposition.mgUnits}
             revShareUnits={rentComposition.revShareUnits}
-            rateVariance={rateVariance}
             loading={loading}
           />
           <LeasingActivity 

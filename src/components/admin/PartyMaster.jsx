@@ -242,7 +242,7 @@ const PartyMaster = () => {
                                         </td>
                                         <td>
                                             <div className="action-icon-wrapper right">
-                                                <Link to={`/admin/parties/edit/${party.id}`} className="action-icon-btn view" title="View Details">
+                                                <Link to={`/admin/parties/view/${party.id}`} className="action-icon-btn view" title="View Details">
                                                     <svg viewBox="0 0 24 24" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
                                                 </Link>
                                                 <Link to={`/admin/parties/edit/${party.id}`} className="action-icon-btn edit" title="Edit">

@@ -64,17 +64,14 @@ const LeasingActivity = ({ chartData, newLeases, areaLeased, loading, loiCount =
         <div className="echo-leasing-stat">
           <p className="echo-leasing-stat-label">LOI</p>
           <p className="echo-leasing-stat-value">{loading ? '...' : loiCount}</p>
-          <p className="echo-leasing-stat-change">pending</p>
         </div>
         <div className="echo-leasing-stat">
-          <p className="echo-leasing-stat-label">Executed</p>
+          <p className="echo-leasing-stat-label">Leasing Executed</p>
           <p className="echo-leasing-stat-value">{loading ? '...' : executedCount}</p>
-          <p className="echo-leasing-stat-change positive">signed</p>
         </div>
         <div className="echo-leasing-stat">
-          <p className="echo-leasing-stat-label">Registered</p>
+          <p className="echo-leasing-stat-label">Leased Registered</p>
           <p className="echo-leasing-stat-value">{loading ? '...' : registeredCount}</p>
-          <p className="echo-leasing-stat-change">completed</p>
         </div>
       </div>
 

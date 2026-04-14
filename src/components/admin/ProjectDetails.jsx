@@ -156,11 +156,16 @@ const ProjectDetails = () => {
                     ) : (
                         units.map(unit => (
                             <tr key={unit.id}>
-                                <td>{unit.unit_number}</td>
+                                <td>
+                                    <Link to={`/admin/view-unit/${unit.id}`} style={{ textDecoration: 'none', color: '#2e66ff', fontWeight: 600 }}>
+                                        {unit.unit_number}
+                                    </Link>
+                                </td>
                                 <td>{unit.floor_number}</td>
                                 <td>{unit.chargeable_area}</td>
                                 <td><span className={`status-badge ${unit.status}`}>{unit.status}</span></td>
                                 <td>
+                                    <Link to={`/admin/view-unit/${unit.id}`} className="action-link" style={{ marginRight: '10px' }}>View</Link>
                                     <Link to={`/admin/edit-unit/${unit.id}`} className="action-link">Edit</Link>
                                 </td>
                             </tr>

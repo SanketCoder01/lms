@@ -290,17 +290,27 @@ const Units = () => {
                             <tbody>
                                 {units.length === 0 ? (
                                     <tr>
-                                        <td colSpan="7" style={{ textAlign: 'center', padding: '20px' }}>No units found.</td>
+                                        <td colSpan="7" style={{ textAlign: 'center', padding: '40px' }}>
+                                            No units found
+                                        </td>
                                     </tr>
                                 ) : (
-                                    units.map((unit) => (
+                                    units.map(unit => (
                                         <tr key={unit.id}>
-                                            <td className="unit-id">{unit.unitNo}</td>
+                                            <td className="unit-id">
+                                                <Link to={`/admin/view-unit/${unit.id}`} style={{ textDecoration: 'none', color: '#2e66ff', fontWeight: 600 }}>
+                                                    {unit.unitNo}
+                                                </Link>
+                                            </td>
                                             <td>{unit.building}</td>
                                             <td>{unit.ownerName}</td>
                                             <td>{unit.tenantName}</td>
                                             <td>{unit.area}</td>
-                                            <td><span className={`status-badge ${unit.status}`}>{unit.status === 'occupied' ? 'Leased' : unit.status === 'vacant' ? 'Vacant' : unit.status}</span></td>
+                                            <td>
+                                                <span className={`status-badge ${unit.status}`}>
+                                                    {unit.status === 'occupied' ? 'Leased' : unit.status}
+                                                </span>
+                                            </td>
                                             <td>
                                                 <div className="action-icon-wrapper">
                                                     <Link to={`/admin/view-unit/${unit.id}`} className="action-icon-btn view" title="View">

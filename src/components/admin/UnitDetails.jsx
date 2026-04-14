@@ -184,44 +184,6 @@ const UnitDetails = () => {
 
                         </div>
 
-                        {/* Gallery Section (UNCHANGED) */}
-                        <div className="gallery-section">
-                            <div className="gallery-grid">
-                                <div className="gallery-item main">
-                                    <div className="image-placeholder main-placeholder">
-                                        {unit.unit_image ? (
-                                            <img
-                                                src={unit.unit_image.startsWith('http') ? unit.unit_image : `/uploads/${unit.unit_image}`}
-                                                alt={`Unit ${unit.unit_number}`}
-                                                style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '8px' }}
-                                                onError={(e) => {
-                                                    e.target.onerror = null;
-                                                    e.target.src = 'https://images.unsplash.com/photo-1560518883-ce09059eeffa?w=800&q=80';
-                                                }}
-                                            />
-                                        ) : (
-                                            <svg width="40" height="40" viewBox="0 0 24 24"
-                                                fill="none" stroke="#cbd5e1" strokeWidth="2"
-                                                strokeLinecap="round" strokeLinejoin="round">
-                                                <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
-                                                <circle cx="8.5" cy="8.5" r="1.5" />
-                                                <polyline points="21 15 16 10 5 21" />
-                                            </svg>
-                                        )}
-                                    </div>
-                                </div>
-                                <div className="gallery-side">
-                                    <div className="gallery-item">
-                                        <div className="image-placeholder"></div>
-                                    </div>
-                                    <div className="gallery-item">
-                                        <div className="image-placeholder">
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-
                         {/* Stats Bar (FROM DB) */}
                         <div className="stats-bar">
                             <div className="stat-item">
@@ -243,7 +205,7 @@ const UnitDetails = () => {
                             <div className="stat-item">
                                 <label>Market Rent:</label>
                                 <div className="stat-value big">
-                                    ₹{unit.projected_rent ?? 0} / month
+                                    {unit.projected_rent ?? 0} / month
                                 </div>
                             </div>
 
@@ -299,6 +261,44 @@ const UnitDetails = () => {
                                     </div>
                                 </div>
                             )}
+                        </div>
+
+                        {/* Gallery Section - At the end */}
+                        <div className="gallery-section">
+                            <div className="gallery-grid">
+                                <div className="gallery-item main">
+                                    <div className="image-placeholder main-placeholder">
+                                        {unit.unit_image ? (
+                                            <img
+                                                src={unit.unit_image.startsWith('http') ? unit.unit_image : `/uploads/${unit.unit_image}`}
+                                                alt={`Unit ${unit.unit_number}`}
+                                                style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '8px' }}
+                                                onError={(e) => {
+                                                    e.target.onerror = null;
+                                                    e.target.src = 'https://images.unsplash.com/photo-1560518883-ce09059eeffa?w=800&q=80';
+                                                }}
+                                            />
+                                        ) : (
+                                            <svg width="40" height="40" viewBox="0 0 24 24"
+                                                fill="none" stroke="#cbd5e1" strokeWidth="2"
+                                                strokeLinecap="round" strokeLinejoin="round">
+                                                <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
+                                                <circle cx="8.5" cy="8.5" r="1.5" />
+                                                <polyline points="21 15 16 10 5 21" />
+                                            </svg>
+                                        )}
+                                    </div>
+                                </div>
+                                <div className="gallery-side">
+                                    <div className="gallery-item">
+                                        <div className="image-placeholder"></div>
+                                    </div>
+                                    <div className="gallery-item">
+                                        <div className="image-placeholder">
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
 
                     </div>

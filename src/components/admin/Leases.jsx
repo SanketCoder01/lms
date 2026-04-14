@@ -99,12 +99,14 @@ const Leases = () => {
         // Handle URL params
         const filterParam = searchParams.get('filter');
         const statusParam = searchParams.get('status');
+        const projectIdParam = searchParams.get('project_id');
         const rentModelParam = searchParams.get('rent_model');
         const brandParam = searchParams.get('brand');
         if (filterParam === 'renewals') setFilters(prev => ({ ...prev, event: '90' })); // Matches Dashboard (Upcoming Renewals - 90 days)
         if (filterParam === 'expiries') setFilters(prev => ({ ...prev, event: '60' })); // Matches Dashboard (Upcoming Expiries - 60 days)
         if (filterParam === 'escalations') setFilters(prev => ({ ...prev, event: 'escalation' }));
         if (statusParam) setFilters(prev => ({ ...prev, status: statusParam })); // Handle status filter
+        if (projectIdParam) setFilters(prev => ({ ...prev, project_id: projectIdParam })); // Handle project filter
         if (rentModelParam) setFilters(prev => ({ ...prev, rent_model: rentModelParam })); // Handle rent model filter
         if (brandParam) setFilters(prev => ({ ...prev, brand: brandParam })); // Handle brand filter
     }, [searchParams]);

@@ -15,6 +15,7 @@ import PartyMaster from "./components/admin/PartyMaster"; // New Party Master Co
 
 import AddParty from "./components/admin/AddParty";
 import EditParty from "./components/admin/EditParty";
+import ViewParty from "./components/admin/ViewParty";
 import FilterOptionsMaster from "./components/admin/masters/FilterOptionsMaster";
 import OwnershipMapping from "./components/admin/OwnershipMapping";
 import ActivityLogs from "./components/admin/ActivityLogs";
@@ -130,6 +131,7 @@ function App() {
         {/* Party Master Routes (Replaces Owner/Tenant) */}
         <Route path="/admin/parties" element={<PartyMaster />} />
         <Route path="/admin/parties/add" element={<AddParty />} />
+        <Route path="/admin/parties/view/:id" element={<ViewParty />} />
         <Route path="/admin/parties/edit/:id" element={<EditParty />} />
         
         <Route path="/admin/filter-options" element={<FilterOptionsMaster />} />

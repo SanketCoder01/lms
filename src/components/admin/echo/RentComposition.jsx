@@ -3,7 +3,7 @@ import { PieChart, Pie, Cell } from 'recharts';
 import { formatRent, safeFloat } from '../../../utils/formatters';
 import { useNavigate } from 'react-router-dom';
 
-const RentComposition = ({ fixed = 0, mg = 0, revenueShare = 0, fixedUnits = 0, mgUnits = 0, revShareUnits = 0, rateVariance = 0, loading }) => {
+const RentComposition = ({ fixed = 0, mg = 0, revenueShare = 0, fixedUnits = 0, mgUnits = 0, revShareUnits = 0, loading }) => {
   const navigate = useNavigate();
   // Actual rent is the total from leases (fixed + mg + revenueShare)
   const actualRent = fixed + mg + revenueShare;
@@ -108,14 +108,6 @@ const RentComposition = ({ fixed = 0, mg = 0, revenueShare = 0, fixedUnits = 0, 
                 </div>
               );
             })}
-            {/* Rate Variance - Loss/profit from lower/higher rate */}
-            {rateVariance !== 0 && (
-              <div style={{ marginTop: '12px', paddingTop: '8px', borderTop: '1px solid #e2e8f0' }}>
-                <p style={{ fontSize: '10px', color: rateVariance > 0 ? '#10b981' : '#ef4444', margin: 0 }}>
-                  {rateVariance > 0 ? 'Profit' : 'Loss'} from rate variance: {formatLakhs(Math.abs(rateVariance))} PM
-                </p>
-              </div>
-            )}
           </div>
         </div>
       )}

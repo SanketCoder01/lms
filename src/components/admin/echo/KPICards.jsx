@@ -85,7 +85,7 @@ const KPICards = ({
       value: loading ? '...' : formatRent(safeFloat(actualRent || projectedRent)),
       valueSuffix: " PM",
       sub: opportunityLoss > 0 ? `Loss: ${formatRent(safeFloat(opportunityLoss))} PM from vacancy` : "From active leases",
-      badges: profitLoss !== 0 ? [{ label: `${profitLoss > 0 ? 'Profit' : 'Loss'}: ${formatRent(safeFloat(Math.abs(profitLoss)))} PM`, color: profitLoss > 0 ? '#10b981' : '#ef4444' }] : null,
+      badges: profitLoss !== 0 ? [{ label: `Gained ${formatRent(safeFloat(Math.abs(profitLoss)))} from projected rent`, color: profitLoss > 0 ? '#10b981' : '#ef4444' }] : null,
       progress: null,
       valueColor: "#0ea5e9",
       onClick: onActualRentClick,
