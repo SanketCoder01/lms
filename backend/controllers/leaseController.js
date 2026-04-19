@@ -404,6 +404,8 @@ const createLease = async (req, res) => {
             agreement_date: payload.agreement_date || null,
             registration_date: payload.registration_date || null
         };
+        // Multi-tenant: stamp company_id on new leases
+        if (req.companyId) dbPayload.company_id = req.companyId;
 
         // File handling
         if (req.files) {
@@ -463,9 +465,12 @@ const getAllLeases = async (req, res) => {
             owner:parties!leases_party_owner_id_fkey(id, company_name, first_name, last_name, brand_name)
         `).order('created_at', { ascending: false });
 
+        // Multi-tenant: company users only see their own leases
+        if (req.companyId) query = query.eq('company_id', req.companyId);
+
+        // Don't filter by lease_type by default - show all leases for dashboard
         if (status) query = query.eq('status', status);
         if (project_id) query = query.eq('project_id', project_id);
-        // Don't filter by lease_type by default - show all leases for dashboard
 
         let { data, error } = await query;
         if (error) throw error;

@@ -25,6 +25,9 @@ const getUnits = async (req, res) => {
       `)
       .order('id', { ascending: false });
 
+    // Multi-tenant: company users only see their own units
+    if (req.companyId) query = query.eq('company_id', req.companyId);
+
     if (projectId && projectId !== 'All') {
       query = query.eq('project_id', parseInt(projectId));
     }
@@ -35,7 +38,7 @@ const getUnits = async (req, res) => {
       query = query.or(`unit_number.ilike.%${search}%`);
     }
     if (excludeSold === 'true') {
-      // Exclude units with active ownership — handled client-side filter
+      // Exclude units with active ownership — handled client-side
     }
 
     const { data, error } = await query;
@@ -140,24 +143,28 @@ const createUnit = async (req, res) => {
       return res.status(400).json({ message: 'project_id and unit_number are required' });
     }
 
+    const insertPayload = {
+      project_id:    parseInt(project_id),
+      unit_number,
+      floor_number:  floor_number  || null,
+      block_tower:   block_tower   || null,
+      chargeable_area: chargeable_area ? parseFloat(chargeable_area) : null,
+      carpet_area:   carpet_area   ? parseFloat(carpet_area) : null,
+      covered_area:  covered_area  ? parseFloat(covered_area) : null,
+      builtup_area:  builtup_area  ? parseFloat(builtup_area) : null,
+      unit_condition: unit_condition || 'bare_shell',
+      plc:           plc           || null,
+      unit_category: unit_category || null,
+      unit_zoning_type: unit_zoning_type || null,
+      projected_rent: projected_rent ? parseFloat(projected_rent) : null,
+      status:        'vacant',
+    };
+    // Multi-tenant: stamp company_id on new units
+    if (req.companyId) insertPayload.company_id = req.companyId;
+
     const { data, error } = await supabase
       .from('units')
-      .insert({
-        project_id:    parseInt(project_id),
-        unit_number,
-        floor_number:  floor_number  || null,
-        block_tower:   block_tower   || null,
-        chargeable_area: chargeable_area ? parseFloat(chargeable_area) : null,
-        carpet_area:   carpet_area   ? parseFloat(carpet_area) : null,
-        covered_area:  covered_area  ? parseFloat(covered_area) : null,
-        builtup_area:  builtup_area  ? parseFloat(builtup_area) : null,
-        unit_condition: unit_condition || 'bare_shell',
-        plc:           plc           || null,
-        unit_category: unit_category || null,
-        unit_zoning_type: unit_zoning_type || null,
-        projected_rent: projected_rent ? parseFloat(projected_rent) : null,
-        status:        'vacant',
-      })
+      .insert(insertPayload)
       .select()
       .single();
 

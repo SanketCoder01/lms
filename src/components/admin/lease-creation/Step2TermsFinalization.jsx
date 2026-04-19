@@ -50,16 +50,16 @@ const calcTenureMonths = (startStr, endStr) => {
     if (!startStr || !endStr) return 0;
     const start = new Date(startStr);
     const end = new Date(endStr);
-    
+
     // Calculate total months difference
     let years = end.getFullYear() - start.getFullYear();
     let months = end.getMonth() - start.getMonth();
     let totalMonths = years * 12 + months;
-    
+
     // Adjust based on day of month
     const startDay = start.getDate();
     const endDay = end.getDate();
-    
+
     // If end day >= start day, we have completed the partial month, so +1
     // If end day < start day, we haven't completed the month yet
     if (endDay >= startDay) {
@@ -67,7 +67,7 @@ const calcTenureMonths = (startStr, endStr) => {
         totalMonths += 1;
     }
     // If end day < start day, the month is not complete, don't add
-    
+
     return Math.max(1, totalMonths); // Minimum 1 month if dates are valid
 };
 
@@ -107,14 +107,14 @@ const Step2TermsFinalization = ({
     // ── Derived computed dates ──────────────────────────────────────────────
     const rentFreeEnd = formData.has_rent_free_period ? formData.rent_free_end_date : '';
     const rentCommBase = formData.rent_commencement_date || formData.lease_start || '';
-    const lesseeLockDays  = parseInt(formData.lessee_lockin_period_days || 0, 10);
-    const lessorLockDays  = parseInt(formData.lessor_lockin_period_days || 0, 10);
-    const lesseeLockEnd  = lesseeLockDays ? addDays(rentCommBase, lesseeLockDays) : '';
-    const lessorLockEnd  = lessorLockDays ? addDays(rentCommBase, lessorLockDays) : '';
+    const lesseeLockMonths = parseInt(formData.lessee_lockin_period_months || 0, 10);
+    const lessorLockMonths = parseInt(formData.lessor_lockin_period_months || 0, 10);
+    const lesseeLockEnd = lesseeLockMonths ? addMonths(rentCommBase, lesseeLockMonths) : '';
+    const lessorLockEnd = lessorLockMonths ? addMonths(rentCommBase, lessorLockMonths) : '';
 
     // Notice periods in DAYS → computed deadline date
-    const lesseeNoticeDays   = parseInt(formData.lessee_notice_period_days || 0, 10);
-    const lessorNoticeDays   = parseInt(formData.lessor_notice_period_days || 0, 10);
+    const lesseeNoticeDays = parseInt(formData.lessee_notice_period_days || 0, 10);
+    const lessorNoticeDays = parseInt(formData.lessor_notice_period_days || 0, 10);
     const lesseeNoticeDeadline = formData.lease_end && lesseeNoticeDays
         ? subDays(formData.lease_end, lesseeNoticeDays) : '';
     const lessorNoticeDeadline = formData.lease_end && lessorNoticeDays
@@ -181,7 +181,7 @@ const Step2TermsFinalization = ({
                     {formData.lease_start && formData.lease_end && (
                         <small style={{ color: '#16a34a', fontSize: '11px', fontWeight: '500' }}>
                             {calcTenureMonths(formData.lease_start, formData.lease_end)} months
-                            <br/><span style={{ color: '#64748b', fontWeight: '400' }}>({fmtDate(formData.lease_start)} → {fmtDate(formData.lease_end)})</span>
+                            <br /><span style={{ color: '#64748b', fontWeight: '400' }}>({fmtDate(formData.lease_start)} → {fmtDate(formData.lease_end)})</span>
                         </small>
                     )}
                 </div>
@@ -385,15 +385,15 @@ const Step2TermsFinalization = ({
             {/* ── Lock-in & Notice Periods ── */}
             <h4 style={{ margin: '24px 0 10px', borderBottom: '1px solid #eee', paddingBottom: '5px' }}>Lock-in &amp; Notice Periods</h4>
 
-            {/* Lock-in Periods (in Days) */}
+            {/* Lock-in Periods (in Months) */}
             <div className="form-row" style={{ gap: '12px' }}>
                 <div className="form-group" style={{ flex: 1 }}>
-                    <label>Lessee Lock-in Period (Days)</label>
-                    <input type="number" step="1" className="form-control" placeholder="e.g. 365" min="0"
-                        value={formData.lessee_lockin_period_days || ''}
-                        onChange={(e) => setFormData({ ...formData, lessee_lockin_period_days: e.target.value })}
+                    <label>Lessee Lock-in Period (Months)</label>
+                    <input type="number" step="1" className="form-control" placeholder="e.g. 12" min="0"
+                        value={formData.lessee_lockin_period_months || ''}
+                        onChange={(e) => setFormData({ ...formData, lessee_lockin_period_months: e.target.value })}
                     />
-                    {formData.lessee_lockin_period_days > 0 && rentCommBase && (
+                    {formData.lessee_lockin_period_months > 0 && rentCommBase && (
                         <div style={{ marginTop: '6px', padding: '8px 10px', background: '#eff6ff', borderRadius: '6px', border: '1px solid #bfdbfe' }}>
                             <span style={{ color: '#1e40af', fontSize: '12px', fontWeight: '600' }}>Lock-in Ends:</span>
                             <span style={{ color: '#1e40af', fontSize: '12px', marginLeft: '6px' }}>{fmtDate(lesseeLockEnd)}</span>
@@ -401,12 +401,12 @@ const Step2TermsFinalization = ({
                     )}
                 </div>
                 <div className="form-group" style={{ flex: 1 }}>
-                    <label>Lessor Lock-in Period (Days)</label>
-                    <input type="number" step="1" className="form-control" placeholder="e.g. 365" min="0"
-                        value={formData.lessor_lockin_period_days || ''}
-                        onChange={(e) => setFormData({ ...formData, lessor_lockin_period_days: e.target.value })}
+                    <label>Lessor Lock-in Period (Months)</label>
+                    <input type="number" step="1" className="form-control" placeholder="e.g. 12" min="0"
+                        value={formData.lessor_lockin_period_months || ''}
+                        onChange={(e) => setFormData({ ...formData, lessor_lockin_period_months: e.target.value })}
                     />
-                    {formData.lessor_lockin_period_days > 0 && rentCommBase && (
+                    {formData.lessor_lockin_period_months > 0 && rentCommBase && (
                         <div style={{ marginTop: '6px', padding: '8px 10px', background: '#eff6ff', borderRadius: '6px', border: '1px solid #bfdbfe' }}>
                             <span style={{ color: '#1e40af', fontSize: '12px', fontWeight: '600' }}>Lock-in Ends:</span>
                             <span style={{ color: '#1e40af', fontSize: '12px', marginLeft: '6px' }}>{fmtDate(lessorLockEnd)}</span>

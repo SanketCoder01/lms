@@ -1,147 +1,169 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { supabase } from '../../lib/supabase';
 import './Login.css';
+
+// Use the company-auth backend, NOT Supabase Auth directly for company users
+const getApiBase = () => {
+  const url = process.env.REACT_APP_API_URL || '/api';
+  return url.endsWith('/api') ? url : `${url}/api`;
+};
+const API = getApiBase();
 
 const Login = () => {
   const navigate = useNavigate();
   const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [mode, setMode] = useState('login'); // 'login' | 'register' | 'forgot'
-  const [formData, setFormData] = useState({
-    email: '',
-    password: '',
-    first_name: '',
-    last_name: '',
-    role: 'Admin',
-  });
+  const [mode, setMode] = useState('login'); // 'login' | 'register'
 
-  // If already logged in, redirect
+  // Login form state
+  const [loginData, setLoginData] = useState({ email: '', password: '' });
+
+  // Register form state — company fields
+  const [regData, setRegData] = useState({
+    company_name: '',
+    email: '',
+    phone: '',
+    password: '',
+    confirm_password: '',
+  });
+  const [proofFile, setProofFile] = useState(null);
+
+  // ── Always show login page — clear any stale session on load ──────────────
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session) {
-        const role = session.user.user_metadata?.role || 'Admin';
-        redirectByRole(role);
-      }
-    });
+    // Clear stored tokens so the login page always shows fresh.
+    // Users must actively log in every time they visit the site.
+    localStorage.removeItem('company_token');
+    localStorage.removeItem('company_user');
+    localStorage.removeItem('token');
+    localStorage.removeItem('user');
   }, []); // eslint-disable-line
 
-  const redirectByRole = (role) => {
-    if (role === 'Lease Manager') return navigate('/lease-manager/dashboard');
-    if (role === 'Management Rep') return navigate('/management/dashboard');
-    if (role === 'Data Entry') return navigate('/data-entry/dashboard');
-    return navigate('/admin/dashboard');
-  };
-
-  const handleChange = (e) => {
-    setFormData({ ...formData, [e.target.name]: e.target.value });
-    setError('');
-  };
-
-  // ─── LOGIN ─────────────────────────────────────────────────────────────────
+  // ─── COMPANY USER LOGIN ─────────────────────────────────────────────────────
   const handleLogin = async (e) => {
     e.preventDefault();
     setLoading(true);
     setError('');
 
     try {
-      const { data, error: authError } = await supabase.auth.signInWithPassword({
-        email: formData.email,
-        password: formData.password,
+      const res = await fetch(`${API}/company-auth/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(loginData),
       });
+      const data = await res.json();
 
-      if (authError) throw authError;
+      if (!data.success) {
+        if (data.code === 'PENDING_APPROVAL') {
+          setError('⏳ Your account is pending admin approval. Please try again after approval.');
+        } else if (data.code === 'SUSPENDED') {
+          setError('🚫 Your account has been suspended. Please contact your administrator.');
+        } else if (data.code === 'REJECTED') {
+          setError('❌ Your registration was rejected. Please contact your administrator.');
+        } else {
+          setError(data.message || 'Invalid email or password.');
+        }
+        return;
+      }
 
-      const user = data.user;
-      const role = user.user_metadata?.role || formData.role || 'Admin';
-
-      // Persist user info for the app
-      localStorage.setItem('token', data.session.access_token);
+      // Store company user session
+      localStorage.setItem('company_token', data.token);
+      localStorage.setItem('token', data.token); // also set as 'token' for API interceptor
+      localStorage.setItem('company_user', JSON.stringify({
+        ...data.user,
+        session_id: data.session_id,
+      }));
       localStorage.setItem('user', JSON.stringify({
-        id: user.id,
-        email: user.email,
-        first_name: user.user_metadata?.first_name || user.email.split('@')[0],
-        last_name: user.user_metadata?.last_name || '',
-        role,
+        id: data.user.id,
+        email: data.user.email,
+        first_name: data.user.company_name,
+        last_name: '',
+        role: data.user.role || 'Admin',
+        company_name: data.user.company_name,
+        phone: data.user.phone,
+        address: data.user.address,
+        modules_access: data.user.modules_access,
       }));
 
-      redirectByRole(role);
-    } catch (err) {
-      setError(err.message || 'Login failed. Check your credentials.');
+      navigate('/admin/dashboard');
+    } catch {
+      setError('Network error. Please check your connection and try again.');
     } finally {
       setLoading(false);
     }
   };
 
-  // ─── REGISTER ──────────────────────────────────────────────────────────────
+  // ─── COMPANY REGISTRATION ───────────────────────────────────────────────────
   const handleRegister = async (e) => {
     e.preventDefault();
     setLoading(true);
     setError('');
 
+    if (regData.password !== regData.confirm_password) {
+      setError('Passwords do not match.');
+      setLoading(false);
+      return;
+    }
+    if (regData.password.length < 6) {
+      setError('Password must be at least 6 characters.');
+      setLoading(false);
+      return;
+    }
+
     try {
-      const { data, error: authError } = await supabase.auth.signUp({
-        email: formData.email,
-        password: formData.password,
-        options: {
-          data: {
-            first_name: formData.first_name,
-            last_name: formData.last_name,
-            role: formData.role,
-          },
-        },
+      const body = new FormData();
+      body.append('company_name', regData.company_name);
+      body.append('email', regData.email);
+      body.append('phone', regData.phone);
+      body.append('password', regData.password);
+      if (proofFile) body.append('proof_document', proofFile);
+
+      const res = await fetch(`${API}/company-auth/register`, {
+        method: 'POST',
+        body,
       });
+      const data = await res.json();
 
-      if (authError) throw authError;
-
-      if (data.user && !data.session) {
-        // Email confirmation required
-        setError('✅ Registration successful! Check your email to confirm your account.');
-        setMode('login');
-      } else if (data.session) {
-        // Auto-confirmed
-        localStorage.setItem('token', data.session.access_token);
-        localStorage.setItem('user', JSON.stringify({
-          id: data.user.id,
-          email: data.user.email,
-          role: formData.role,
-        }));
-        redirectByRole(formData.role);
+      if (!data.success) {
+        setError(data.message || 'Registration failed. Please try again.');
+        return;
       }
-    } catch (err) {
-      setError(err.message || 'Registration failed.');
+
+      // Success — show pending message
+      setMode('pending');
+    } catch {
+      setError('Network error. Please try again.');
     } finally {
       setLoading(false);
     }
   };
 
-  // ─── FORGOT PASSWORD ────────────────────────────────────────────────────────
-  const handleForgotPassword = async (e) => {
-    e.preventDefault();
-    setLoading(true);
-    setError('');
-
-    try {
-      const { error: resetError } = await supabase.auth.resetPasswordForEmail(
-        formData.email,
-        { redirectTo: `${window.location.origin}/login` }
-      );
-      if (resetError) throw resetError;
-      setError('✅ Password reset link sent! Check your email.');
-      setTimeout(() => setMode('login'), 3000);
-    } catch (err) {
-      setError(err.message || 'Failed to send reset email.');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const submitHandler = mode === 'register'
-    ? handleRegister
-    : mode === 'forgot'
-      ? handleForgotPassword
-      : handleLogin;
+  // ─── PENDING MESSAGE PAGE ────────────────────────────────────────────────────
+  if (mode === 'pending') {
+    return (
+      <div className="login-page">
+        <div className="login-container" style={{ maxWidth: 560 }}>
+          <div className="login-right" style={{ padding: '60px 48px', textAlign: 'center' }}>
+            <div style={{ fontSize: 64, marginBottom: 24 }}>✅</div>
+            <h2 style={{ marginBottom: 12, color: '#1a56db' }}>Registration Submitted!</h2>
+            <p style={{ color: '#6b7280', lineHeight: 1.7, marginBottom: 24 }}>
+              Your request has been sent to the administrator for approval.<br />
+              <strong>Please try to login after 24 hours.</strong><br />
+              You will be notified once your account is approved.
+            </p>
+            <button
+              className="login-button"
+              onClick={() => setMode('login')}
+              style={{ maxWidth: 220, margin: '0 auto' }}
+            >
+              Back to Login
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="login-page">
@@ -172,75 +194,48 @@ const Login = () => {
         {/* Right Side */}
         <div className="login-right">
           <div className="login-header">
-            <h2>
-              {mode === 'register' ? 'Create Account' : mode === 'forgot' ? 'Reset Password' : 'Welcome Back'}
-            </h2>
+            <h2>{mode === 'register' ? 'Create Account' : 'Welcome Back'}</h2>
             <p>
               {mode === 'register'
-                ? 'Fill in the details to create your account.'
-                : mode === 'forgot'
-                  ? "We'll send a password reset link to your email."
-                  : 'Please enter your details to log in.'}
+                ? 'Fill in your company details to request access.'
+                : 'Please enter your credentials to log in.'}
             </p>
           </div>
 
           {error && (
-            <div className={`error-message ${error.startsWith('✅') ? 'success' : 'error'}`}>
+            <div className={`error-message ${error.startsWith('✅') || error.startsWith('⏳') ? 'success' : 'error'}`}>
               {error}
             </div>
           )}
 
-          <form className="login-form" onSubmit={submitHandler}>
-
-            {/* Name fields (register only) */}
-            {mode === 'register' && (
-              <div className="name-row">
-                <div className="form-group">
-                  <label>First Name</label>
-                  <div className="input-wrapper">
-                    <span className="input-icon">
-                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
-                    </span>
-                    <input type="text" name="first_name" placeholder="First Name"
-                      value={formData.first_name} onChange={handleChange} required />
-                  </div>
-                </div>
-                <div className="form-group">
-                  <label>Last Name</label>
-                  <div className="input-wrapper">
-                    <span className="input-icon">
-                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
-                    </span>
-                    <input type="text" name="last_name" placeholder="Last Name"
-                      value={formData.last_name} onChange={handleChange} />
-                  </div>
+          {/* ── LOGIN FORM ── */}
+          {mode === 'login' && (
+            <form className="login-form" onSubmit={handleLogin}>
+              <div className="form-group">
+                <label>Email Address</label>
+                <div className="input-wrapper">
+                  <span className="input-icon">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path><polyline points="22,6 12,13 2,6"></polyline></svg>
+                  </span>
+                  <input
+                    type="email" placeholder="Enter your email"
+                    value={loginData.email} required
+                    onChange={e => setLoginData({ ...loginData, email: e.target.value })}
+                  />
                 </div>
               </div>
-            )}
 
-            {/* Email */}
-            <div className="form-group">
-              <label>Email</label>
-              <div className="input-wrapper">
-                <span className="input-icon">
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path><polyline points="22,6 12,13 2,6"></polyline></svg>
-                </span>
-                <input type="email" name="email" placeholder="Enter your email"
-                  value={formData.email} onChange={handleChange} required />
-              </div>
-            </div>
-
-            {/* Password (not for forgot) */}
-            {mode !== 'forgot' && (
               <div className="form-group">
                 <label>Password</label>
                 <div className="input-wrapper">
                   <span className="input-icon">
                     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
                   </span>
-                  <input type={showPassword ? 'text' : 'password'} name="password"
-                    placeholder="Enter your password" value={formData.password}
-                    onChange={handleChange} required={mode !== 'forgot'} />
+                  <input
+                    type={showPassword ? 'text' : 'password'} placeholder="Enter your password"
+                    value={loginData.password} required
+                    onChange={e => setLoginData({ ...loginData, password: e.target.value })}
+                  />
                   <button type="button" className="password-toggle" onClick={() => setShowPassword(!showPassword)}>
                     {showPassword
                       ? <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path><line x1="1" y1="1" x2="23" y2="23"></line></svg>
@@ -249,54 +244,107 @@ const Login = () => {
                   </button>
                 </div>
               </div>
-            )}
 
-            {/* Role selector (login + register) */}
-            {mode !== 'forgot' && (
+              <button type="submit" className="login-button" disabled={loading}>
+                {loading ? 'Signing in...' : 'Login'}
+                {!loading && <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline></svg>}
+              </button>
+            </form>
+          )}
+
+          {/* ── REGISTER FORM ── */}
+          {mode === 'register' && (
+            <form className="login-form" onSubmit={handleRegister}>
               <div className="form-group">
-                <label>Role</label>
+                <label>Company Name *</label>
                 <div className="input-wrapper">
                   <span className="input-icon">
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path></svg>
                   </span>
-                  <select name="role" value={formData.role} onChange={handleChange} className="role-select">
-                    <option value="Admin">Admin</option>
-                    <option value="Data Entry">Data Entry</option>
-                    <option value="Lease Manager">Lease Manager</option>
-                    <option value="Management Rep">Management Representative</option>
-                  </select>
-                  <span className="select-arrow">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="6 9 12 15 18 9"></polyline></svg>
-                  </span>
+                  <input type="text" placeholder="Your company name"
+                    value={regData.company_name} required
+                    onChange={e => setRegData({ ...regData, company_name: e.target.value })} />
                 </div>
               </div>
-            )}
 
-            {/* Forgot password link */}
-            {mode === 'login' && (
-              <div className="form-actions">
-                <label className="remember-me">
-                  <input type="checkbox" /> Remember me
-                </label>
-                <button type="button" className="forgot-password" onClick={() => setMode('forgot')}>
-                  Forgot Password?
-                </button>
+              <div className="form-group">
+                <label>Email Address *</label>
+                <div className="input-wrapper">
+                  <span className="input-icon">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path><polyline points="22,6 12,13 2,6"></polyline></svg>
+                  </span>
+                  <input type="email" placeholder="company@example.com"
+                    value={regData.email} required
+                    onChange={e => setRegData({ ...regData, email: e.target.value })} />
+                </div>
               </div>
-            )}
 
-            <button type="submit" className="login-button" disabled={loading}>
-              {loading
-                ? 'Please wait...'
-                : mode === 'register'
-                  ? 'Create Account'
-                  : mode === 'forgot'
-                    ? 'Send Reset Link'
-                    : 'Login'}
-              {!loading && (
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline></svg>
-              )}
-            </button>
-          </form>
+              <div className="form-group">
+                <label>Phone Number *</label>
+                <div className="input-wrapper">
+                  <span className="input-icon">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 12 19.79 19.79 0 0 1 1.61 3.18 2 2 0 0 1 3.6 1h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 8.91a16 16 0 0 0 6 6l.6-.6a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"></path></svg>
+                  </span>
+                  <input type="tel" placeholder="+91 XXXXX XXXXX"
+                    value={regData.phone} required
+                    onChange={e => setRegData({ ...regData, phone: e.target.value })} />
+                </div>
+              </div>
+
+              <div className="form-group">
+                <label>Proof Document <span style={{ color: '#9ca3af', fontWeight: 400 }}>(optional)</span></label>
+                <div className="input-wrapper" style={{ padding: '4px 12px' }}>
+                  <span className="input-icon">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline></svg>
+                  </span>
+                  <input type="file" accept=".pdf,.jpg,.jpeg,.png,.doc,.docx"
+                    style={{ border: 'none', background: 'transparent', flex: 1, fontSize: 13 }}
+                    onChange={e => setProofFile(e.target.files[0])} />
+                </div>
+              </div>
+
+              <div className="form-group">
+                <label>Password *</label>
+                <div className="input-wrapper">
+                  <span className="input-icon">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
+                  </span>
+                  <input type={showPassword ? 'text' : 'password'} placeholder="Choose a password (min 6 chars)"
+                    value={regData.password} required
+                    onChange={e => setRegData({ ...regData, password: e.target.value })} />
+                  <button type="button" className="password-toggle" onClick={() => setShowPassword(!showPassword)}>
+                    {showPassword
+                      ? <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path><line x1="1" y1="1" x2="23" y2="23"></line></svg>
+                      : <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+                    }
+                  </button>
+                </div>
+              </div>
+
+              <div className="form-group">
+                <label>Confirm Password *</label>
+                <div className="input-wrapper">
+                  <span className="input-icon">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
+                  </span>
+                  <input type={showConfirmPassword ? 'text' : 'password'} placeholder="Re-enter your password"
+                    value={regData.confirm_password} required
+                    onChange={e => setRegData({ ...regData, confirm_password: e.target.value })} />
+                  <button type="button" className="password-toggle" onClick={() => setShowConfirmPassword(!showConfirmPassword)}>
+                    {showConfirmPassword
+                      ? <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"></path><line x1="1" y1="1" x2="23" y2="23"></line></svg>
+                      : <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+                    }
+                  </button>
+                </div>
+              </div>
+
+              <button type="submit" className="login-button" disabled={loading}>
+                {loading ? 'Submitting...' : 'Create Account & Request Access'}
+                {!loading && <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline></svg>}
+              </button>
+            </form>
+          )}
 
           <div className="signup-link">
             {mode === 'login' ? (

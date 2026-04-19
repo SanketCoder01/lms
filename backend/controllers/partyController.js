@@ -4,7 +4,11 @@ const { handleDbError } = require('../utils/errorHandler');
 // Get all parties
 exports.getAllParties = async (req, res) => {
     try {
-        const { data, error } = await supabase.from('parties').select('*').order('created_at', { ascending: false });
+        let query = supabase.from('parties').select('*').order('created_at', { ascending: false });
+        // Multi-tenant: company users only see their own parties
+        if (req.companyId) query = query.eq('company_id', req.companyId);
+
+        const { data, error } = await query;
         if (error) throw error;
         res.json(data || []);
     } catch (err) {
@@ -38,13 +42,17 @@ exports.createParty = async (req, res) => {
     } = req.body;
 
     try {
-        const { data, error } = await supabase.from('parties').insert({
-            type: type || 'Individual', party_type: party_type || 'Tenant', 
+        const insertPayload = {
+            type: type || 'Individual', party_type: party_type || 'Tenant',
             company_name, brand_name, brand_category, legal_entity_type, title, first_name, last_name,
             email, phone, alt_phone, identification_type, identification_number,
             address_line1, address_line2, city, state, postal_code, country,
             representative_designation, owner_group
-        }).select('id').single();
+        };
+        // Multi-tenant: stamp company_id on new parties
+        if (req.companyId) insertPayload.company_id = req.companyId;
+
+        const { data, error } = await supabase.from('parties').insert(insertPayload).select('id').single();
 
         if (error) return res.status(500).json(handleDbError(error));
         

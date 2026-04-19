@@ -15,6 +15,7 @@ import RentalProjectionTable from './RentalProjectionTable';
 import FinancialValueMonthly from './FinancialValueMonthly';
 import BrandPerformanceSection from './BrandPerformanceSection';
 import FloorOccupancySection from './FloorOccupancySection';
+import CriticalNotificationTicker from './CriticalNotificationTicker';
 import { getProjects, leaseAPI, unitAPI } from '../../../services/api';
 import './echo.css';
 
@@ -234,28 +235,21 @@ const EchoDashboard = () => {
             area: d.area // Keep actual area in sqft, no rounding
           }));
 
-          // Calculate LOI, Executed, Registered counts - MUTUALLY EXCLUSIVE
-          // Priority: Registered > Executed > LOI
-          // Each unit is counted in ONLY ONE category based on highest stage reached
-          const getLeasingStatusCounts = (leases) => {
-            const counts = { registered: 0, executed: 0, loi: 0 };
-            const processedUnits = new Set();
+          // ── Leasing Activity Counts ─────────────────────────────────
+          // Executed  = total leases created (all of them)
+          // Registered = registration_date filled by admin
+          // LOI        = no agreement AND no registration date
+          const getLeasingStatusCounts = (leaseList) => {
+            const counts = { registered: 0, executed: leaseList.length, loi: 0 };
 
-            leases.forEach(lease => {
-              const unitId = lease.unit_id || lease.unitId;
-              // Skip if we've already counted this unit
-              if (unitId && processedUnits.has(unitId)) return;
-              if (unitId) processedUnits.add(unitId);
+            leaseList.forEach(lease => {
+              const hasRegistration = !!(lease.registration_date && String(lease.registration_date).trim());
+              const hasAgreement   = !!(lease.agreement_date    && String(lease.agreement_date).trim());
 
-              const s = (lease.status || '').toLowerCase().trim();
-
-              // Priority order: Registered > Executed > LOI
-              if (s === 'registered' || s === 'completed') {
+              if (hasRegistration) {
                 counts.registered += 1;
-              } else if (s === 'executed' || s === 'signed' || s === 'active' || s === 'approved' || s === 'leased') {
-                counts.executed += 1;
-              } else if (s === 'loi' || s === 'draft' || s === 'pending' || s === 'loi_signed') {
-                counts.loi += 1;
+              } else if (!hasAgreement) {
+                counts.loi += 1;    // no agreement, no registration → LOI
               }
             });
 
@@ -306,6 +300,21 @@ const EchoDashboard = () => {
           const leasesRes = await leaseAPI.getAllLeases(leaseParams);
           let leases = Array.isArray(leasesRes.data) ? leasesRes.data : (leasesRes.data?.data || []);
           setAllLeases(leases);
+
+          // Recalculate leasing counts on focus (real-time update)
+          const focusCounts = { registered: 0, executed: leases.length, loi: 0 };
+          leases.forEach(lease => {
+            const hasReg = !!(lease.registration_date && String(lease.registration_date).trim());
+            const hasAgr = !!(lease.agreement_date    && String(lease.agreement_date).trim());
+            if (hasReg)       focusCounts.registered += 1;
+            else if (!hasAgr) focusCounts.loi        += 1;
+          });
+          setLeasingStats(prev => ({
+            ...prev,
+            executedCount:    focusCounts.executed,
+            registeredCount:  focusCounts.registered,
+            loiCount:         focusCounts.loi,
+          }));
 
           // Calculate zoning from unit_zoning_type
           const zoningMap = {};
@@ -569,6 +578,12 @@ const EchoDashboard = () => {
             <ChevronDown className="echo-chevron" />
           </div>
         </div>
+
+        {/* Critical notification ticker — floats between logo and avatar */}
+        <div style={{ flex: 1, minWidth: 0, margin: '0 16px' }}>
+          <CriticalNotificationTicker leases={allLeases} />
+        </div>
+
         <div className="echo-navbar-right">
           <div className="echo-avatar" onClick={() => navigate('/admin/settings')} title={userInfo.name || 'Admin'} style={{ cursor: 'pointer' }}>{userInfo.initials}</div>
         </div>
@@ -613,19 +628,19 @@ const EchoDashboard = () => {
             navigate(`/admin/units${params}`);
           }}
           onLeasedUnitsClick={() => {
-            const projectParam = selectedProject !== 'All' ? `&project_id=${selectedProject}` : '';
-            navigate(`/admin/leases?status=active${projectParam}`);
+            const proj = selectedProject !== 'All' ? `&projectId=${selectedProject}` : '';
+            navigate(`/admin/units?status=leased${proj}`);
           }}
           onVacantUnitsClick={() => {
-            const projectParam = selectedProject !== 'All' ? `&projectId=${selectedProject}` : '';
-            navigate(`/admin/units?status=vacant${projectParam}`);
+            const proj = selectedProject !== 'All' ? `&projectId=${selectedProject}` : '';
+            navigate(`/admin/units?status=vacant${proj}`);
           }}
           onProjectedRentClick={() => {
             const params = selectedProject !== 'All' ? `?projectId=${selectedProject}` : '';
             navigate(`/admin/units${params}`);
           }}
           onActualRentClick={() => {
-            const params = selectedProject !== 'All' ? `?project_id=${selectedProject}` : '';
+            const params = selectedProject !== 'All' ? `?projectId=${selectedProject}` : '';
             navigate(`/admin/leases${params}`);
           }}
         />
@@ -633,11 +648,11 @@ const EchoDashboard = () => {
         {/* Section Title */}
         <div className="echo-section-title">
           <div className="echo-section-bar"></div>
-          <h2 className="echo-section-heading">Rent Composition, Leasing Activity & Zoning Execution</h2>
+          <h2 className="echo-section-heading">Rent Composition &amp; Leasing Activity</h2>
         </div>
 
-        {/* Bottom Charts - 3 Column Grid */}
-        <div className="echo-charts-grid">
+        {/* 2-Column: Rent Composition + Leasing Activity */}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.5fr', gap: '24px' }}>
           <RentComposition
             fixed={rentComposition.fixed}
             mg={rentComposition.mg}
@@ -656,7 +671,6 @@ const EchoDashboard = () => {
             registeredCount={leasingStats.registeredCount}
             loading={loading}
           />
-          <ZoningExecution zoningData={zoningData} loading={loading} />
         </div>
 
         {/* Section Title - Lease Expiry, Lock-in & Escalations */}
@@ -696,15 +710,16 @@ const EchoDashboard = () => {
           <FloorOccupancySection units={allUnits} loading={loading} />
         </div>
 
-        {/* Section Title - Unit Sales & Ownership */}
+        {/* Section Title - Unit Sales & Ownership + Zoning Plan */}
         <div className="echo-section-title">
           <div className="echo-section-bar"></div>
-          <h2 className="echo-section-heading">Unit Sales & Ownership</h2>
+          <h2 className="echo-section-heading">Unit Sales &amp; Ownership · Zoning Plan vs Actual</h2>
         </div>
 
-        {/* Ownership Section */}
-        <div className="echo-charts-row">
+        {/* Ownership (narrower, left) + Zoning Chart (wider, right) */}
+        <div style={{ display: 'grid', gridTemplateColumns: '0.85fr 2fr', gap: '24px', alignItems: 'start' }}>
           <OwnershipSection units={allUnits} leases={allLeases} loading={loading} />
+          <ZoningExecution zoningData={zoningData} loading={loading} />
         </div>
       </div>
     </div>

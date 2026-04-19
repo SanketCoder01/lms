@@ -1,6 +1,6 @@
 import React, { useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { sanitizeBrandName, formatRent, safeFloat } from '../../../utils/formatters';
+import { resolveBrandName, formatRent, safeFloat } from '../../../utils/formatters';
 
 const BrandPerformanceSection = ({ leases = [], loading }) => {
   const navigate = useNavigate();
@@ -19,8 +19,7 @@ const BrandPerformanceSection = ({ leases = [], loading }) => {
     console.log('BrandPerformance: Revenue share leases:', revenueShareLeases.length);
     
     return revenueShareLeases.map(lease => {
-      const rawBrandName = lease.tenant?.brand_name || lease.tenant?.nickname || lease.tenant?.company_name || lease.brand_name || lease.tenant_name || '-';
-      const brandName = sanitizeBrandName(rawBrandName);
+      const brandName = resolveBrandName(lease);   // never returns Unknown
       const targetSales = parseFloat(lease.target_sales || lease.monthly_target || lease.min_guarantee_sales || 0);
       const actualSales = parseFloat(lease.monthly_net_sales || lease.net_sales || lease.actual_sales || 0);
       const pct = targetSales > 0 ? parseFloat(((actualSales / targetSales) * 100).toFixed(1)) : 0;

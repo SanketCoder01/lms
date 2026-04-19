@@ -90,10 +90,34 @@ export const cleanUnitLabel = (str) => {
   return str.replace(/\bu\/\d+\b/gi, '').trim() || str;
 };
 
-/** Alias used by UpcomingEscalations after user revert */
+/** Clean a raw brand/company string — strips internal unit codes, trims. Returns the value if truthy, else empty string. Never returns "Unknown". */
 export const sanitizeBrandName = (str) => {
-  if (!str || str === '-') return '—';
-  return str.replace(/\bu\/\d+\b/gi, '').trim() || '—';
+  if (!str || str === '-' || str.toLowerCase() === 'unknown') return '';
+  const cleaned = str.replace(/\bu\/\d+\b/gi, '').trim();
+  return cleaned || str.trim();
+};
+
+/**
+ * Resolve the best available display name from a lease object.
+ * Priority: brand_name → tenant.brand_name → tenant.company_name → tenant.name → tenant_name → unit_number fallback
+ * Never returns 'Unknown' or blank — falls back to the unit number as label.
+ */
+export const resolveBrandName = (lease) => {
+  const candidates = [
+    lease?.brand_name,
+    lease?.tenant?.brand_name,
+    lease?.tenant?.company_name,
+    lease?.tenant?.name,
+    lease?.tenant_name,
+    lease?.tenantName,
+    lease?.company_name,
+  ];
+  for (const c of candidates) {
+    const s = sanitizeBrandName(c);
+    if (s) return s;
+  }
+  // Fallback: use unit number so it's never empty
+  return lease?.unit_number || lease?.units?.unit_number || 'Lease #' + (lease?.id || '?');
 };
 
 // ─── Rent composition tooltip data ──────────────────────────────────────────

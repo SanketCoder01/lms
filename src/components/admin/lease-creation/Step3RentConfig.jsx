@@ -21,24 +21,32 @@ const Step3RentConfig = ({
         return parseFloat(selectedUnit.chargeable_area) || 0;
     };
 
-    // Issue 61: Allow MG = 0. Only auto-calc if mg_amount_sqft is set (including 0)
     React.useEffect(() => {
         const rate = formData.mg_amount_sqft;
-        // Only auto-calc if the value is explicitly provided (string "0" or positive number)
         if (rate === '' || rate === null || rate === undefined) return;
-        const usableArea = getUsableArea();
+
+        // Inline area calculation to avoid stale closure
+        let usableArea = 0;
+        if (isSubLease && formData.sub_lease_area_sqft) {
+            usableArea = parseFloat(formData.sub_lease_area_sqft) || 0;
+        } else if (selectedUnit) {
+            const calcType = selectedProject?.calculation_type || 'Chargeable Area';
+            if (calcType === 'Covered Area')    usableArea = parseFloat(selectedUnit.covered_area)     || 0;
+            else if (calcType === 'Carpet Area') usableArea = parseFloat(selectedUnit.carpet_area)      || 0;
+            else                                 usableArea = parseFloat(selectedUnit.chargeable_area)  || 0;
+        }
+
         const totalMG = (parseFloat(rate) || 0) * usableArea;
+        const newMGAmount = parseFloat(totalMG.toFixed(2));
+
         setFormData(prev => {
-            const newMGAmount = totalMG.toFixed(2);
-            if (prev.mg_amount === newMGAmount) return prev;
-            return {
-                ...prev,
-                mg_amount: newMGAmount,
-                monthly_rent: newMGAmount
-            };
+            const prevMG = parseFloat(prev.mg_amount) || 0;
+            if (prevMG === newMGAmount) return prev;
+            const amtStr = newMGAmount.toFixed(2);
+            return { ...prev, mg_amount: amtStr, monthly_rent: amtStr };
         });
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [formData.mg_amount_sqft, formData.sub_lease_area_sqft, isSubLease]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [formData.mg_amount_sqft, formData.sub_lease_area_sqft, isSubLease, selectedUnit, selectedProject]);
 
     // Issue 36/42/67: Revenue Share Amount calculation
     React.useEffect(() => {

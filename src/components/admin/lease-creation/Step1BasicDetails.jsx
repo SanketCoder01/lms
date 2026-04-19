@@ -174,11 +174,18 @@ const Step1BasicDetails = ({
                         className="form-control"
                     >
                         <option value="">Select Lessee</option>
-                        {parties.map(party => (
-                            <option key={party.id} value={party.id}>
-                                {party.company_name || `${party.first_name} ${party.last_name}`} ({party.type})
-                            </option>
-                        ))}
+                        {parties
+                            .filter(party => {
+                                const t = (party.party_type || party.type || '').toLowerCase();
+                                // Exclude pure Owners — only show Tenants / Lessees
+                                return t !== 'owner' && t !== 'landlord';
+                            })
+                            .map(party => (
+                                <option key={party.id} value={party.id}>
+                                    {party.company_name || `${party.first_name} ${party.last_name}`} ({party.party_type || party.type})
+                                </option>
+                            ))
+                        }
                     </select>
                     {!isSubLease && formData.party_tenant_id && formData.party_owner_id && parseInt(formData.party_tenant_id) === parseInt(formData.party_owner_id) && (
                         <small className="error-text" style={{ color: 'red' }}>Owner and Tenant cannot be the same party.</small>

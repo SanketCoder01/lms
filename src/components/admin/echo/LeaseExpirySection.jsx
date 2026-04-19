@@ -1,6 +1,6 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
-import { sanitizeBrandName, formatRent, safeFloat } from '../../../utils/formatters';
+import { resolveBrandName, formatRent, safeFloat } from '../../../utils/formatters';
 
 const LeaseExpirySection = ({ leases = [], loading }) => {
   const navigate = useNavigate();
@@ -40,15 +40,7 @@ const LeaseExpirySection = ({ leases = [], loading }) => {
         const diffTime = expiryDate - now;
         const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
 
-        // Get brand name from tenant/company details - use brand_name directly from lease
-        const rawBrandName = lease.brand_name ||
-          lease.tenant?.brand_name ||
-          lease.brandName ||
-          lease.tenant?.company_name ||
-          lease.tenant?.name ||
-          lease.tenant_name ||
-          lease.tenantName || '-';
-        const brandName = sanitizeBrandName(rawBrandName);
+        const brandName = resolveBrandName(lease);
 
         console.log(`LeaseExpiry: Lease ${lease.id}, brand_name: ${lease.brand_name}, tenant:`, lease.tenant, `resolved: ${brandName}`);
 

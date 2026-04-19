@@ -84,8 +84,13 @@ const KPICards = ({
       label: "ACTUAL RENT",
       value: loading ? '...' : formatRent(safeFloat(actualRent || projectedRent)),
       valueSuffix: " PM",
-      sub: opportunityLoss > 0 ? `Loss: ${formatRent(safeFloat(opportunityLoss))} PM from vacancy` : "From active leases",
-      badges: profitLoss !== 0 ? [{ label: `Gained ${formatRent(safeFloat(Math.abs(profitLoss)))} from projected rent`, color: profitLoss > 0 ? '#10b981' : '#ef4444' }] : null,
+      sub: profitLoss > 0
+        ? `Gained: ${formatRent(safeFloat(Math.abs(profitLoss)))} vs Projected`
+        : profitLoss < 0
+          ? `Loss: ${formatRent(safeFloat(Math.abs(profitLoss)))} vs Projected`
+          : 'Matches projected rent',
+      subColor: profitLoss !== 0 ? '#ef4444' : '#64748b',
+      badges: null,
       progress: null,
       valueColor: "#0ea5e9",
       onClick: onActualRentClick,
@@ -106,7 +111,7 @@ const KPICards = ({
             {kpi.value}
             {kpi.valueSuffix && <span className="echo-kpi-suffix">{kpi.valueSuffix}</span>}
           </p>
-          <p className="echo-kpi-sub">{kpi.sub}</p>
+          <p className="echo-kpi-sub" style={{ color: kpi.subColor || undefined }}>{kpi.sub}</p>
 
           {kpi.badges && (
             <div className="echo-kpi-badges">

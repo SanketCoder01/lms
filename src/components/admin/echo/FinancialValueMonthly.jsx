@@ -1,313 +1,249 @@
 import React, { useMemo } from 'react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
-import { formatRent, safeFloat, parseSafe } from '../../../utils/formatters';
+import { formatRent, safeFloat } from '../../../utils/formatters';
+
+/*
+ ─────────────────────────────────────────────────────────────────
+  BY FINANCIAL VALUE (MONTHLY) — 5-line chart
+ ─────────────────────────────────────────────────────────────────
+  GROUP 1 – RENT LINES (Y = INR/month):
+    1. MG / Fixed Rent (blue solid)      — lease_start → lease_end
+    2. Revenue Share   (orange dashed)   — lease_start → lease_end  (0 for Fixed)
+    3. Total Rent      (green solid, top)— lease_start → lease_end
+
+  GROUP 2 – TIMELINE INDICATORS (Y = 5% of maxRent, flat):
+    4. Lease Duration  (grey dashed)     — lease_start → lease_end
+    5. Lock-in Period  (yellow dashed)   — lease_start → lock-in end
+
+  OVERLAP RULES:
+  • Lines rendered bottom→top (SVG z-order): timeline → MG → revShare → Total
+  • Total Rent always on top;  when Fixed-only, MG=Total → natural overlap
+  • connectNulls=false so each line stops at its own end date
+  • No artificial Y offsets
+ ─────────────────────────────────────────────────────────────────
+*/
+
+const COLORS = {
+  mg:       '#2563eb',   // blue       — MG / Fixed Rent
+  revShare: '#f97316',   // orange     — Revenue Share
+  total:    '#16a34a',   // green      — Total Rent  (top z-order)
+  lease:    '#94a3b8',   // grey       — Lease Duration
+  lockIn:   '#eab308',   // yellow     — Lock-in Period
+};
+
+const fmtY = (v) => {
+  if (!v) return '0';
+  if (v >= 100000) return `${(v / 100000).toFixed(1)}L`;
+  if (v >= 1000)   return `${(v / 1000).toFixed(0)}K`;
+  return v.toLocaleString('en-IN');
+};
+
+const CustomTooltip = ({ active, payload, label }) => {
+  if (!active || !payload?.length) return null;
+  const visible = payload.filter(p => p.value != null && p.value > 0);
+  if (!visible.length) return null;
+  return (
+    <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 8, padding: '10px 14px', boxShadow: '0 4px 12px rgba(0,0,0,.1)', fontSize: 12 }}>
+      <p style={{ fontWeight: 700, color: '#0f172a', margin: '0 0 6px' }}>{label}</p>
+      {visible.map((p, i) => (
+        <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 3 }}>
+          <div style={{ width: 10, height: 10, borderRadius: 2, background: p.color }} />
+          <span style={{ color: '#475569' }}>
+            {p.name}:{' '}
+            {p.dataKey === 'leaseDuration' || p.dataKey === 'lockInLine' ? '—' : formatRent(safeFloat(p.value))}
+          </span>
+        </div>
+      ))}
+    </div>
+  );
+};
+
+const SERIES = [
+  // Rendered bottom→top for correct SVG z-order
+  { key: 'leaseDuration', name: 'Lease Duration',   color: COLORS.lease,    width: 2,   dash: '6 4' },
+  { key: 'lockInLine',    name: 'Lock-in Period',   color: COLORS.lockIn,   width: 2,   dash: '6 4' },
+  { key: 'mg',            name: 'MG / Fixed Rent',  color: COLORS.mg,       width: 2.5, dash: '' },
+  { key: 'revShare',      name: 'Revenue Share',    color: COLORS.revShare, width: 2.5, dash: '4 3' },
+  { key: 'total',         name: 'Total Rent',       color: COLORS.total,    width: 3,   dash: '' },
+];
 
 const FinancialValueMonthly = ({ leases = [], loading }) => {
-  // Process lease data for the 4 categories - show current month and next 11 months
-  const chartData = useMemo(() => {
-    if (!leases || leases.length === 0) {
-      console.log('FinancialValueMonthly: No leases data');
-      return [];
-    }
 
-    console.log('FinancialValueMonthly: Processing leases:', leases.length, leases);
+  const { chartData, totals } = useMemo(() => {
+    if (!leases || leases.length === 0) return { chartData: [], totals: { mg: 0, revShare: 0, total: 0 } };
 
-    // Generate current month and next 11 months (12 months total, starting from current)
-    const now = new Date();
-    const months = [];
-    
-    for (let i = 0; i < 12; i++) {
-      const d = new Date(now.getFullYear(), now.getMonth() + i, 1);
-      const monthName = d.toLocaleDateString('en-US', { month: 'short' });
-      const yearShort = d.getFullYear().toString().slice(-2);
-      months.push({
-        key: d.toISOString().slice(0, 7),
-        label: `${monthName} ${yearShort}`,
-        fixedLockIn: 0,
-        fixedPost: 0,
-        mgLockIn: 0,
-        mgPost: 0,
-      });
-    }
-
-    console.log('FinancialValueMonthly: Generated months:', months.map(m => m.label));
-
-    // Categorize leases and calculate monthly values
+    // ── Step 1: find real date range across all leases ──────────────
+    let minDate = null, maxDate = null;
     leases.forEach(lease => {
-      // Skip leases without proper dates
-      if (!lease.lease_start) {
-        console.log(`FinancialValueMonthly: Skipping lease ${lease.id} - missing lease_start`);
-        return;
-      }
-      
-      // Normalize dates to first of month for comparison
-      const leaseStart = new Date(lease.lease_start);
-      const leaseStartMonth = new Date(leaseStart.getFullYear(), leaseStart.getMonth(), 1);
-      
-      // If no lease_end, assume it's ongoing (use current date or far future)
-      const leaseEnd = lease.lease_end ? new Date(lease.lease_end) : new Date(2030, 11, 31);
-      const leaseEndMonth = new Date(leaseEnd.getFullYear(), leaseEnd.getMonth(), 1);
-      
-      // Issue #21 — no parseInt rounding; use parseSafe
-      const lockInMonths = parseSafe(lease.lock_in_period || lease.lock_in_months, 36);
-      const lockInEnd = new Date(leaseStart.getFullYear(), leaseStart.getMonth() + Math.floor(lockInMonths), 1);
+      if (!lease.lease_start) return;
+      const s = new Date(lease.lease_start);
+      const e = lease.lease_end ? new Date(lease.lease_end) : new Date(s.getFullYear() + 3, s.getMonth(), 1);
+      if (!minDate || s < minDate) minDate = s;
+      if (!maxDate || e > maxDate) maxDate = e;
+    });
+    if (!minDate) return { chartData: [], totals: { mg: 0, revShare: 0, total: 0 } };
 
-      const monthlyRent = parseSafe(lease.monthly_rent);
-      const mgAmount    = parseSafe(lease.mg_amount) || monthlyRent;
+    // ── Step 2: generate monthly buckets ────────────────────────────
+    const months = [];
+    const cur = new Date(minDate.getFullYear(), minDate.getMonth(), 1);
+    const endLimit = new Date(maxDate.getFullYear(), maxDate.getMonth(), 1);
+    while (cur <= endLimit) {
+      months.push({
+        key:   cur.toISOString().slice(0, 7),
+        label: cur.toLocaleDateString('en-US', { month: 'short', year: '2-digit' }),
+        mg: 0, revShare: 0, total: 0, leaseDuration: null, lockInLine: null,
+      });
+      cur.setMonth(cur.getMonth() + 1);
+    }
 
-      // Determine rent model - check multiple variations
-      const rentModel = (lease.rent_model || '').toLowerCase().replace(/\s+/g, '');
-      const isFixed = rentModel === 'fixed';
-      const isMG = rentModel === 'revenueshare' || rentModel === 'hybrid' || rentModel === 'mg';
+    // ── Step 3: accumulate rent values per month per lease ──────────
+    leases.forEach(lease => {
+      if (!lease.lease_start) return;
 
-      console.log(`FinancialValueMonthly: Lease ${lease.id}`);
-      console.log(`  - rent_model: "${lease.rent_model}" -> isFixed=${isFixed}, isMG=${isMG}`);
-      console.log(`  - monthly_rent: ${monthlyRent}, mg_amount: ${mgAmount}`);
-      console.log(`  - lease_start: ${lease.lease_start}, lease_end: ${lease.lease_end}`);
-      console.log(`  - lock_in_period: ${lease.lock_in_period} months, lock_in_ends: ${lockInEnd.toISOString().slice(0, 10)}`);
+      const leaseStart    = new Date(lease.lease_start);
+      const leaseStartMon = new Date(leaseStart.getFullYear(), leaseStart.getMonth(), 1);
+      const leaseEnd      = lease.lease_end ? new Date(lease.lease_end) : new Date(leaseStart.getFullYear() + 3, leaseStart.getMonth(), 1);
+      const leaseEndMon   = new Date(leaseEnd.getFullYear(), leaseEnd.getMonth(), 1);
 
-      months.forEach(month => {
-        const monthDate = new Date(month.key + '-01');
-        
-        // Check if lease is active in this month (compare year-month)
-        const isActive = monthDate >= leaseStartMonth && monthDate <= leaseEndMonth;
-        
+      // Lock-in: prefer lessee_lockin_period_months, fallback to lockin_period_months
+      const lockInMonths = parseInt(
+        lease.lessee_lockin_period_months || lease.lockin_period_months || 0, 10
+      );
+      const lockInEnd = new Date(leaseStart.getFullYear(), leaseStart.getMonth() + lockInMonths, 1);
+
+      const model     = (lease.rent_model || '').toLowerCase().replace(/\s+/g, '');
+      const isFixed   = model === 'fixed';
+      const isRS      = model === 'revenueshare';
+      const isHybrid  = model === 'hybrid';
+
+      const mgRent        = safeFloat(lease.mg_amount)  || safeFloat(lease.monthly_rent) || 0;
+      const fixedRent     = safeFloat(lease.monthly_rent) || mgRent;
+      const revSharePct   = safeFloat(lease.revenue_share_percentage) || 0;
+      const monthlySales  = safeFloat(lease.monthly_net_sales) || 0;
+
+      const mgVal       = isFixed ? fixedRent : mgRent;
+      const rsVal       = (isRS || isHybrid) ? (monthlySales * revSharePct / 100) : 0;
+      const totalVal    = isFixed ? fixedRent : Math.max(mgVal, rsVal);
+
+      months.forEach(m => {
+        const mDate     = new Date(m.key + '-01');
+        const isActive  = mDate >= leaseStartMon && mDate <= leaseEndMon;
+        const inLockIn  = mDate >= leaseStartMon && mDate <  lockInEnd;
+
         if (isActive) {
-          const isLockInPeriod = monthDate < lockInEnd;
-
-          if (isFixed) {
-            if (isLockInPeriod) {
-              month.fixedLockIn += monthlyRent;
-            } else {
-              month.fixedPost += monthlyRent;
-            }
-          } else if (isMG) {
-            if (isLockInPeriod) {
-              month.mgLockIn += mgAmount;
-            } else {
-              month.mgPost += mgAmount;
-            }
-          }
+          m.mg           += mgVal;
+          m.revShare     += rsVal;
+          m.total        += totalVal;
+          m.leaseDuration = 1;  // will be scaled
         }
+        if (inLockIn) m.lockInLine = 1;  // will be scaled
       });
     });
 
-    console.log('FinancialValueMonthly: Monthly data:', months);
+    // ── Step 4: scale timeline indicators to 5% of max rent ────────
+    let maxRent = 0;
+    months.forEach(m => { if (m.total > maxRent) maxRent = m.total; });
+    const barH = maxRent > 0 ? maxRent * 0.05 : 0;
 
-    // Return monthly values (not cumulative) for projection matrix
-    const result = months.map(month => ({
-      month: month.label,
-      fixedLockIn: month.fixedLockIn,
-      fixedPost: month.fixedPost,
-      mgLockIn: month.mgLockIn,
-      mgPost: month.mgPost,
+    const result = months.map(m => ({
+      month:         m.label,
+      mg:            m.mg       > 0 ? m.mg       : null,
+      revShare:      m.revShare > 0 ? m.revShare : null,
+      total:         m.total    > 0 ? m.total    : null,
+      leaseDuration: m.leaseDuration != null ? barH  : null,
+      lockInLine:    m.lockInLine    != null ? barH  : null,
     }));
 
-    console.log('FinancialValueMonthly: Chart data result:', result);
-    return result;
+    const totalsAcc = months.reduce((acc, m) => ({
+      mg:       acc.mg       + m.mg,
+      revShare: acc.revShare + m.revShare,
+      total:    acc.total    + m.total,
+    }), { mg: 0, revShare: 0, total: 0 });
+
+    return { chartData: result, totals: totalsAcc };
   }, [leases]);
 
-  // Calculate totals - sum of all months for annual projection
-  const totals = useMemo(() => {
-    if (chartData.length === 0) return { fixedLockIn: 0, fixedPost: 0, mgLockIn: 0, mgPost: 0 };
-    return chartData.reduce((acc, month) => ({
-      fixedLockIn: acc.fixedLockIn + month.fixedLockIn,
-      fixedPost: acc.fixedPost + month.fixedPost,
-      mgLockIn: acc.mgLockIn + month.mgLockIn,
-      mgPost: acc.mgPost + month.mgPost,
-    }), { fixedLockIn: 0, fixedPost: 0, mgLockIn: 0, mgPost: 0 });
-  }, [chartData]);
-
-  // Use centralized formatRent from formatters.js
-  const formatAmount = (val) => {
-    return formatRent(safeFloat(val));
-  };
-
-  // Custom Tooltip
-  const CustomTooltip = ({ active, payload, label }) => {
-    if (active && payload && payload.length) {
-      return (
-        <div style={{
-          background: '#fff',
-          border: '1px solid #e2e8f0',
-          borderRadius: '8px',
-          padding: '12px',
-          boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
-        }}>
-          <p style={{ margin: 0, fontWeight: 600, color: '#1e293b', marginBottom: '8px' }}>{label}</p>
-          {payload.map((p, i) => (
-            <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
-              <div style={{ width: 12, height: 12, backgroundColor: p.color, borderRadius: 2 }} />
-              <span style={{ color: '#475569', fontSize: 12 }}>
-                {p.name}: {formatAmount(p.value)}
-              </span>
-            </div>
-          ))}
-        </div>
-      );
-    }
-    return null;
-  };
+  const hasData = chartData.length > 0 && chartData.some(d => d.mg != null || d.total != null);
 
   return (
     <div className="echo-card" style={{ border: 'none', height: '100%' }}>
-      <h3 style={{ fontSize: '14px', fontWeight: 600, color: '#0f172a', marginBottom: '2px' }}>
+      <h3 style={{ fontSize: 14, fontWeight: 700, color: '#0f172a', margin: '0 0 2px' }}>
         By Financial Value (Monthly)
       </h3>
-      <p style={{ fontSize: '12px', color: '#64748b', marginBottom: '12px' }}>
-        Fixed & MG rent by lock-in status
+      <p style={{ fontSize: 12, color: '#64748b', margin: '0 0 10px' }}>
+        Rent projection — lines start at lease start, diverge by model &amp; lock-in
       </p>
 
       {loading ? (
-        <div style={{ textAlign: 'center', padding: '20px', color: '#64748b' }}>Loading...</div>
-      ) : chartData.length === 0 ? (
-        <div style={{ textAlign: 'center', padding: '20px', color: '#64748b' }}>No lease data available</div>
+        <div style={{ textAlign: 'center', padding: 20, color: '#64748b' }}>Loading...</div>
+      ) : !hasData ? (
+        <div style={{ textAlign: 'center', padding: 20, color: '#64748b' }}>No lease data available</div>
       ) : (
         <>
-          {/* Legend - Compact */}
-          <div style={{ display: 'flex', gap: '8px', marginBottom: '8px', flexWrap: 'wrap' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-              <div style={{ width: 10, height: 3, backgroundColor: '#1e40af', borderRadius: 2 }} />
-              <span style={{ fontSize: '10px', color: '#475569' }}>Fixed lock-in</span>
-            </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-              <div style={{ width: 10, height: 3, backgroundColor: '#3b82f6', borderRadius: 2 }} />
-              <span style={{ fontSize: '10px', color: '#475569' }}>Fixed post</span>
-            </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-              <div style={{ width: 10, height: 3, backgroundColor: '#059669', borderRadius: 2 }} />
-              <span style={{ fontSize: '10px', color: '#475569' }}>MG lock-in</span>
-            </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-              <div style={{ width: 10, height: 3, backgroundColor: '#10b981', borderRadius: 2 }} />
-              <span style={{ fontSize: '10px', color: '#475569' }}>MG post</span>
-            </div>
-          </div>
-
-          {/* Scrollable Chart Container */}
-          <style>
-            {`
-              .financial-scroll-container::-webkit-scrollbar {
-                height: 6px;
-              }
-              .financial-scroll-container::-webkit-scrollbar-track {
-                background: #f1f5f9;
-                border-radius: 3px;
-              }
-              .financial-scroll-container::-webkit-scrollbar-thumb {
-                background: #cbd5e1;
-                border-radius: 3px;
-              }
-              .financial-scroll-container::-webkit-scrollbar-thumb:hover {
-                background: #94a3b8;
-              }
-            `}
-          </style>
-          <div 
-            className="financial-scroll-container"
-            style={{ 
-              overflowX: 'auto',
-              paddingBottom: '4px',
-              width: '100%'
-            }}
-          >
-            <div style={{ minWidth: '720px', height: 180 }}>
+          {/* Scrollable chart area */}
+          <div style={{ overflowX: 'auto', paddingBottom: 4, width: '100%' }}>
+            <div style={{ minWidth: Math.max(720, chartData.length * 30), height: 200 }}>
               <ResponsiveContainer width="100%" height="100%">
-                <LineChart 
-                  data={chartData} 
-                  margin={{ top: 5, right: 20, left: 10, bottom: 5 }}
-                >
-                  <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />
-                  <XAxis 
-                    dataKey="month" 
-                    tick={{ fontSize: 10 }} 
-                    axisLine={false} 
-                    tickLine={false}
-                  />
-                  <YAxis 
-                    tick={{ fontSize: 10 }} 
-                    axisLine={false} 
-                    tickLine={false}
-                    tickFormatter={formatAmount}
-                  />
+                <LineChart data={chartData} margin={{ top: 10, right: 20, left: 0, bottom: 5 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
+                  <XAxis dataKey="month" tick={{ fontSize: 9, fill: '#64748b' }} axisLine={false} tickLine={false} />
+                  <YAxis tick={{ fontSize: 9, fill: '#64748b' }} axisLine={false} tickLine={false} tickFormatter={fmtY} width={48} />
                   <Tooltip content={<CustomTooltip />} />
-                  
-                  {/* Fixed Lock-in - Dark Blue */}
-                  <Line 
-                    type="linear"
-                    dataKey="fixedLockIn" 
-                    stroke="#1e40af" 
-                    strokeWidth={2.5}
-                    dot={false}
-                    name="Fixed lock-in"
-                  />
-                  {/* Fixed Post - Light Blue */}
-                  <Line 
-                    type="linear"
-                    dataKey="fixedPost" 
-                    stroke="#3b82f6" 
-                    strokeWidth={2.5}
-                    strokeDasharray="5 5"
-                    dot={false}
-                    name="Fixed post"
-                  />
-                  {/* MG Lock-in - Dark Green */}
-                  <Line 
-                    type="linear"
-                    dataKey="mgLockIn" 
-                    stroke="#059669" 
-                    strokeWidth={2.5}
-                    dot={false}
-                    name="MG lock-in"
-                  />
-                  {/* MG Post - Light Green */}
-                  <Line 
-                    type="linear"
-                    dataKey="mgPost" 
-                    stroke="#10b981" 
-                    strokeWidth={2.5}
-                    strokeDasharray="5 5"
-                    dot={false}
-                    name="MG post"
-                  />
+
+                  {SERIES.map(s => (
+                    <Line
+                      key={s.key}
+                      type="linear"
+                      dataKey={s.key}
+                      name={s.name}
+                      stroke={s.color}
+                      strokeWidth={s.width}
+                      strokeDasharray={s.dash || undefined}
+                      dot={false}
+                      connectNulls={false}
+                      activeDot={{ r: 4, strokeWidth: 0 }}
+                      isAnimationActive={false}
+                    />
+                  ))}
                 </LineChart>
               </ResponsiveContainer>
             </div>
           </div>
 
-          {/* Summary Stats - Compact */}
-          <div style={{ 
-            display: 'grid', 
-            gridTemplateColumns: 'repeat(4, 1fr)', 
-            gap: '8px', 
-            marginTop: '8px',
-            paddingTop: '8px',
-            borderTop: '1px solid #e2e8f0'
+          {/* Legend — 2-column grid, outside scrollable div, never clips */}
+          <div style={{
+            display: 'grid', gridTemplateColumns: '1fr 1fr',
+            gap: '4px 12px', padding: '8px 0 4px', width: '100%',
           }}>
-            <div style={{ textAlign: 'center' }}>
-              <p style={{ fontSize: '14px', fontWeight: 700, color: '#1e40af', margin: 0 }}>
-                {formatAmount(totals.fixedLockIn)}
-              </p>
-              <p style={{ fontSize: '9px', color: '#64748b', margin: '2px 0 0' }}>Fixed lock-in</p>
-            </div>
-            <div style={{ textAlign: 'center' }}>
-              <p style={{ fontSize: '14px', fontWeight: 700, color: '#3b82f6', margin: 0 }}>
-                {formatAmount(totals.fixedPost)}
-              </p>
-              <p style={{ fontSize: '9px', color: '#64748b', margin: '2px 0 0' }}>Fixed post</p>
-            </div>
-            <div style={{ textAlign: 'center' }}>
-              <p style={{ fontSize: '14px', fontWeight: 700, color: '#059669', margin: 0 }}>
-                {formatAmount(totals.mgLockIn)}
-              </p>
-              <p style={{ fontSize: '9px', color: '#64748b', margin: '2px 0 0' }}>MG lock-in</p>
-            </div>
-            <div style={{ textAlign: 'center' }}>
-              <p style={{ fontSize: '14px', fontWeight: 700, color: '#10b981', margin: 0 }}>
-                {formatAmount(totals.mgPost)}
-              </p>
-              <p style={{ fontSize: '9px', color: '#64748b', margin: '2px 0 0' }}>MG post</p>
-            </div>
+            {SERIES.map(s => (
+              <div key={s.key} style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
+                <svg width="20" height="10" style={{ flexShrink: 0 }}>
+                  <line x1="0" y1="5" x2="20" y2="5"
+                    stroke={s.color} strokeWidth={s.width + 0.5}
+                    strokeDasharray={s.dash || undefined} strokeLinecap="round"
+                  />
+                </svg>
+                <span style={{ fontSize: 11, color: '#475569', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {s.name}
+                </span>
+              </div>
+            ))}
+          </div>
+
+          {/* Summary totals */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8, marginTop: 6, paddingTop: 8, borderTop: '1px solid #e2e8f0' }}>
+            {[
+              { label: 'MG / Fixed Rent', val: totals.mg,       color: COLORS.mg },
+              { label: 'Revenue Share',   val: totals.revShare,  color: COLORS.revShare },
+              { label: 'Total Rent',      val: totals.total,     color: COLORS.total },
+            ].map(item => (
+              <div key={item.label} style={{ textAlign: 'center' }}>
+                <p style={{ fontSize: 13, fontWeight: 700, color: item.color, margin: 0 }}>
+                  {formatRent(safeFloat(item.val))}
+                </p>
+                <p style={{ fontSize: 9, color: '#64748b', margin: '2px 0 0' }}>{item.label}</p>
+              </div>
+            ))}
           </div>
         </>
       )}

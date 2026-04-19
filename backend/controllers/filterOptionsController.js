@@ -1,6 +1,7 @@
 /**
  * filterOptionsController.js
  * Full CRUD for filter_options table via Supabase service_role client.
+ * Multi-tenant: company users only see/modify their own filter options.
  */
 
 const supabase = require('../config/db');
@@ -16,6 +17,9 @@ exports.getFilterOptions = async (req, res) => {
       .select('*')
       .eq('status', 'active')
       .order('option_value', { ascending: true });
+
+    // Multi-tenant: company users only see their own filter options
+    if (req.companyId) query = query.eq('company_id', req.companyId);
 
     if (category) {
       query = query.eq('category', category);
@@ -44,9 +48,17 @@ exports.addFilterOption = async (req, res) => {
       return res.status(400).json({ success: false, error: 'Category and option_value are required' });
     }
 
+    const insertPayload = {
+      category: category.trim(),
+      option_value: option_value.trim(),
+      status: 'active'
+    };
+    // Multi-tenant: stamp company_id on new options
+    if (req.companyId) insertPayload.company_id = req.companyId;
+
     const { data, error } = await supabase
       .from('filter_options')
-      .insert({ category: category.trim(), option_value: option_value.trim(), status: 'active' })
+      .insert(insertPayload)
       .select();
 
     if (error) {
@@ -71,10 +83,15 @@ exports.updateFilterOption = async (req, res) => {
       return res.status(400).json({ success: false, error: 'option_value is required' });
     }
 
-    const { error } = await supabase
+    let query = supabase
       .from('filter_options')
       .update({ option_value: option_value.trim() })
       .eq('id', id);
+
+    // Safety: only update own company's options
+    if (req.companyId) query = query.eq('company_id', req.companyId);
+
+    const { error } = await query;
 
     if (error) {
       console.error('[FilterOptions PUT]', error);
@@ -96,10 +113,11 @@ exports.deleteFilterOption = async (req, res) => {
   try {
     const { id } = req.params;
 
-    const { error } = await supabase
-      .from('filter_options')
-      .delete()
-      .eq('id', id);
+    let query = supabase.from('filter_options').delete().eq('id', id);
+    // Safety: only delete own company's options
+    if (req.companyId) query = query.eq('company_id', req.companyId);
+
+    const { error } = await query;
 
     if (error) {
       console.error('[FilterOptions DELETE]', error);

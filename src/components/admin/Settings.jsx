@@ -26,32 +26,56 @@ const Settings = () => {
     ============================ */
     useEffect(() => {
         try {
-            const rawUser = localStorage.getItem('user');
-            if (rawUser) {
-                const parsed = JSON.parse(rawUser);
-                setUser({
-                    id: parsed.id || 1,
-                    first_name: parsed.first_name || '',
-                    last_name: parsed.last_name || '',
-                    email: parsed.email || '',
-                    role: parsed.role || 'Admin',
-                    profile_image: parsed.profile_image || null
-                });
+            // Check if this is a company user (new auth flow)
+            const companyUserRaw = localStorage.getItem('company_user');
+            const regularUserRaw = localStorage.getItem('user');
+
+            let parsed = null;
+            if (companyUserRaw) {
+                // Company user — has company_name, phone, address, email, role
+                const cu = JSON.parse(companyUserRaw);
+                parsed = {
+                    id: cu.id || 1,
+                    first_name: cu.company_name || cu.first_name || '',
+                    last_name: cu.last_name || '',
+                    email: cu.email || '',
+                    role: cu.role || 'Admin',
+                    company_name: cu.company_name || '',
+                    phone: cu.phone || '',
+                    address: cu.address || '',
+                    profile_image: cu.profile_image || null,
+                };
+            } else if (regularUserRaw) {
+                const u = JSON.parse(regularUserRaw);
+                parsed = {
+                    id: u.id || 1,
+                    first_name: u.first_name || '',
+                    last_name: u.last_name || '',
+                    email: u.email || '',
+                    role: u.role || 'Admin',
+                    company_name: u.company_name || '',
+                    phone: u.phone || '',
+                    address: u.address || '',
+                    profile_image: u.profile_image || null,
+                };
+            }
+
+            if (parsed) {
+                setUser(parsed);
                 setFormData({
                     first_name: parsed.first_name || '',
                     last_name: parsed.last_name || '',
-                    email: parsed.email || ''
+                    email: parsed.email || '',
+                    company_name: parsed.company_name || '',
+                    phone: parsed.phone || '',
+                    address: parsed.address || '',
                 });
                 if (parsed.id) setUserId(parsed.id);
             } else {
-                // Fallback if no user in localStorage
                 setUser({
-                    id: 1,
-                    first_name: "Admin",
-                    last_name: "User",
-                    email: "admin@example.com",
-                    role: "Super Admin",
-                    profile_image: null
+                    id: 1, first_name: "Admin", last_name: "User",
+                    email: "admin@example.com", role: "Admin",
+                    company_name: '', phone: '', address: '', profile_image: null
                 });
             }
         } catch (e) {
@@ -260,9 +284,35 @@ const Settings = () => {
 
                 {/* ================= PERSONAL INFO (Form Input) ================= */}
                 <section className="settings-section">
-                    <h3>Personal Information</h3>
+                    <h3>Account Information</h3>
 
                     <div className="form-grid">
+                        {/* Email — always show prominently */}
+                        <div className="form-field" style={{ gridColumn: '1 / -1' }}>
+                            <label>Email Address</label>
+                            <input
+                                type="email"
+                                name="email"
+                                value={formData.email || ''}
+                                readOnly
+                                style={{ background: '#f9fafb', cursor: 'default', color: '#374151' }}
+                            />
+                        </div>
+
+                        {/* Company Name */}
+                        {formData.company_name && (
+                            <div className="form-field" style={{ gridColumn: '1 / -1' }}>
+                                <label>Company Name</label>
+                                <input
+                                    type="text"
+                                    name="company_name"
+                                    value={formData.company_name || ''}
+                                    readOnly
+                                    style={{ background: '#f9fafb', cursor: 'default', color: '#374151' }}
+                                />
+                            </div>
+                        )}
+
                         <div className="form-field">
                             <label>First Name</label>
                             <input
@@ -284,22 +334,22 @@ const Settings = () => {
                         </div>
 
                         <div className="form-field">
-                            <label>Job Title</label>
-                            <input
-                                type="text"
-                                name="job_title"
-                                value={formData.job_title || ""}
-                                onChange={handleChange}
-                            />
-                        </div>
-
-                        <div className="form-field">
                             <label>Phone Number</label>
                             <input
                                 type="text"
                                 name="phone"
                                 value={formData.phone || ""}
                                 onChange={handleChange}
+                            />
+                        </div>
+
+                        <div className="form-field">
+                            <label>Role</label>
+                            <input
+                                type="text"
+                                value={user?.role || 'Admin'}
+                                readOnly
+                                style={{ background: '#f9fafb', cursor: 'default', color: '#374151' }}
                             />
                         </div>
                     </div>

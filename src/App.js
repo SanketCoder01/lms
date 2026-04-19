@@ -52,6 +52,17 @@ import LeaseNotifications from "./components/lease-management/LeaseNotifications
 import DocRepo from "./components/management-rep/doc-repo";
 import Login from "./components/Login/Login";
 import Logout from "./components/Logout/Logout";
+
+// ── Super Admin Panel ──
+import SuperAdminLogin from "./components/super-admin/SuperAdminLogin";
+import SADashboard from "./components/super-admin/SADashboard";
+import UserManagement from "./components/super-admin/UserManagement";
+import RegistrationApprovals from "./components/super-admin/RegistrationApprovals";
+import LiveActivity from "./components/super-admin/LiveActivity";
+import Announcements from "./components/super-admin/Announcements";
+
+import GlobalHeartbeat from './components/GlobalHeartbeat';
+import TopBanner from './components/TopBanner';
 import './App.css';
 
 // Force Rebuild
@@ -83,6 +94,8 @@ import TestKycModal from "./components/admin/TestKycModal";
 function App() {
   return (
     <BrowserRouter>
+      <GlobalHeartbeat />
+      <TopBanner />
       <Routes>
         <Route path="/test-kyc-modal" element={<TestKycModal />} />
         {/* Default route redirects to Login or Dashboard */}
@@ -93,7 +106,16 @@ function App() {
         <Route path="/logout" element={<Logout />} />
         <Route path="/create-user" element={<CreateUser />} />
 
-        {/* Admin Routes */}
+        {/* ── Super Admin Panel ── */}
+        {/* Login page at /admin (static: sanketg367@gmail.com / sanket@99) */}
+        <Route path="/admin" element={<SuperAdminLogin />} />
+        <Route path="/super-admin/dashboard" element={<SADashboard />} />
+        <Route path="/super-admin/users" element={<UserManagement />} />
+        <Route path="/super-admin/approvals" element={<RegistrationApprovals />} />
+        <Route path="/super-admin/live-activity" element={<LiveActivity />} />
+        <Route path="/super-admin/announcements" element={<Announcements />} />
+
+        {/* Admin Routes (Company Users) */}
         <Route path="/admin/dashboard" element={<Dashboard />} />
         <Route path="/admin/projects" element={<Projects />} />
         <Route path="/admin/projects/:id" element={<ProjectDetails />} />

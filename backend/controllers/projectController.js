@@ -21,19 +21,19 @@ const addProject = async (req, res) => {
     if (req.file && req.file.buffer) {
       const fileExt = req.file.originalname.split('.').pop();
       const fileName = `projects/project_${Date.now()}.${fileExt}`;
-      
+
       const { data: uploadData, error: uploadError } = await supabase.storage
-          .from('lms-storage')
-          .upload(fileName, req.file.buffer, {
-              contentType: req.file.mimetype,
-              upsert: true
-          });
+        .from('lms-storage')
+        .upload(fileName, req.file.buffer, {
+          contentType: req.file.mimetype,
+          upsert: true
+        });
 
       if (uploadError) throw uploadError;
 
       const { data: publicUrlData } = supabase.storage
-          .from('lms-storage')
-          .getPublicUrl(fileName);
+        .from('lms-storage')
+        .getPublicUrl(fileName);
 
       imageUrl = publicUrlData.publicUrl;
     }
@@ -41,14 +41,18 @@ const addProject = async (req, res) => {
     const floors = total_floors ? parseInt(total_floors) : 0;
     const area = total_project_area ? parseFloat(total_project_area) : 0;
 
+    // Multi-tenant: stamp company_id on new records
+    const insertPayload = {
+      project_name, location: location || null, address: address || null,
+      project_type: project_type || null, calculation_type: calculation_type || 'Chargeable Area',
+      total_floors: floors, total_project_area: area, project_image: imageUrl,
+      description: description || null, status: 'active'
+    };
+    if (req.companyId) insertPayload.company_id = req.companyId;
+
     const { data: result, error } = await supabase
       .from('projects')
-      .insert({
-        project_name, location: location || null, address: address || null,
-        project_type: project_type || null, calculation_type: calculation_type || 'Chargeable Area',
-        total_floors: floors, total_project_area: area, project_image: imageUrl,
-        description: description || null, status: 'active'
-      })
+      .insert(insertPayload)
       .select('id')
       .single();
 
@@ -69,6 +73,9 @@ const getProjects = async (req, res) => {
 
     let query = supabase.from('projects').select('*');
 
+    // Multi-tenant: company users only see their own data
+    if (req.companyId) query = query.eq('company_id', req.companyId);
+
     if (location && location !== 'All') query = query.eq('location', location);
     if (type && type !== 'All') query = query.eq('project_type', type);
     if (status && status !== 'All') query = query.eq('status', status);
@@ -87,8 +94,11 @@ const getProjects = async (req, res) => {
       );
     }
 
-    // Fetch units to add total_units properly resolving Issue 11
-    const { data: units } = await supabase.from('units').select('project_id');
+    // Fetch units to add total_units properly
+    let unitsQ = supabase.from('units').select('project_id');
+    if (req.companyId) unitsQ = unitsQ.eq('company_id', req.companyId);
+    const { data: units } = await unitsQ;
+
     const unitCounts = {};
     if (units) {
       units.forEach(u => {
@@ -111,10 +121,13 @@ const getProjects = async (req, res) => {
 /* ================= GET PROJECT LOCATIONS ================= */
 const getProjectLocations = async (req, res) => {
   try {
-    const { data, error } = await supabase.from('projects').select('location').not('location', 'is', null);
+    let query = supabase.from('projects').select('location').not('location', 'is', null);
+    if (req.companyId) query = query.eq('company_id', req.companyId);
+
+    const { data, error } = await query;
     if (error) throw error;
 
-    const uniqueLocations = [...new Set(data.filter(d => d.location.trim() !== '').map(d => d.location))].sort();
+    const uniqueLocations = [...new Set(data.filter(d => d.location && d.location.trim() !== '').map(d => d.location))].sort();
     res.json(uniqueLocations);
   } catch (error) {
     console.error("Get project locations error:", error);
@@ -205,19 +218,19 @@ const updateProject = async (req, res) => {
     if (req.file && req.file.buffer) {
       const fileExt = req.file.originalname.split('.').pop();
       const fileName = `projects/project_${Date.now()}.${fileExt}`;
-      
+
       const { data: uploadData, error: uploadError } = await supabase.storage
-          .from('lms-storage')
-          .upload(fileName, req.file.buffer, {
-              contentType: req.file.mimetype,
-              upsert: true
-          });
+        .from('lms-storage')
+        .upload(fileName, req.file.buffer, {
+          contentType: req.file.mimetype,
+          upsert: true
+        });
 
       if (uploadError) throw uploadError;
 
       const { data: publicUrlData } = supabase.storage
-          .from('lms-storage')
-          .getPublicUrl(fileName);
+        .from('lms-storage')
+        .getPublicUrl(fileName);
 
       imageUrl = publicUrlData.publicUrl;
     }

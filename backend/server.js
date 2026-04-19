@@ -27,9 +27,15 @@ const roleRoutes = require("./routes/roleRoutes");
 const partyRoutes = require("./routes/partyRoutes");
 const ownershipRoutes = require("./routes/ownershipRoutes");
 const filterOptionsRoutes = require("./routes/filterOptionsRoutes");
+const companyAuthRoutes = require("./routes/companyAuthRoutes");  // Company login/register/heartbeat
+const superAdminRoutes  = require("./routes/superAdminRoutes");   // Super admin panel API
 
 const app = express();
 const PORT = process.env.PORT || 5000;
+
+// Multi-tenant company isolation middleware
+// Reads JWT → sets req.companyId (null for legacy/admin tokens)
+const companyAuth = require('./middleware/companyAuth');
 
 /* =========================
    MIDDLEWARE
@@ -85,6 +91,9 @@ app.get("/", (req, res) => {
 /* =========================
    API ROUTES
 ========================= */
+// Apply multi-tenant isolation to all API routes (safe: graceful if no token)
+app.use('/api', companyAuth);
+
 app.use("/api/auth", authRoutes);
 app.use("/api/users", userRoutes);
 app.use("/api/projects", projectRoutes);
@@ -102,7 +111,11 @@ app.use("/api/parties", partyRoutes);
 app.use("/api/ownerships", ownershipRoutes);
 app.use("/api/filters", filterOptionsRoutes);
 app.use("/api/locations", require("./routes/locationRoutes"));
-// Ownership routes registered - Restart Trigger 7 (Path Fix)
+// Company auth: login, register, heartbeat, announcements
+app.use("/api/company-auth", companyAuthRoutes);
+// Super admin panel API
+app.use("/api/super-admin", superAdminRoutes);
+// Ownership routes registered
 
 /* =========================
    HEALTH CHECK (RENDER)

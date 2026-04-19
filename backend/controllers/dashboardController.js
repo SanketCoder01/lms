@@ -42,12 +42,19 @@ const getDashboardStats = async (req, res) => {
     today.setHours(0, 0, 0, 0);
 
     // ==========================================
-    // 1. Fetch Core Data
+    // 1. Fetch Core Data (with multi-tenant isolation)
     // ==========================================
     let projectsQuery = supabase.from('projects').select('id, project_name');
     let unitsQuery = supabase.from('units').select('id, project_id, chargeable_area, projected_rent');
     let ownershipsQuery = supabase.from('unit_ownerships').select('unit_id, party_id, ownership_status');
     let leasesQuery = supabase.from('leases').select('id, project_id, unit_id, party_tenant_id, monthly_rent, status, lease_start, lease_end');
+
+    // Company users only see their own company's data
+    if (req.companyId) {
+      projectsQuery = projectsQuery.eq('company_id', req.companyId);
+      unitsQuery    = unitsQuery.eq('company_id', req.companyId);
+      leasesQuery   = leasesQuery.eq('company_id', req.companyId);
+    }
 
     // Apply Project Filter if selected (and not "All")
     if (projectId && projectId !== 'All') {
