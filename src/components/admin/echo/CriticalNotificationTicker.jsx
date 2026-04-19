@@ -32,7 +32,7 @@ const CriticalNotificationTicker = ({ leases = [] }) => {
         const end  = new Date(lease.lease_end);
         const days = Math.ceil((end - now) / 86400000);
         if (days > 0 && days < 30) {
-          list.push({ type: 'Lease Expiry', brand, unit, days, icon: '📅' });
+          list.push({ type: 'Lease Expiry', priority: 1, brand, unit, days, icon: '📅' });
         }
       }
 
@@ -47,23 +47,41 @@ const CriticalNotificationTicker = ({ leases = [] }) => {
           const lockEnd = new Date(start.getFullYear(), start.getMonth() + lockMonths, start.getDate());
           const days   = Math.ceil((lockEnd - now) / 86400000);
           if (days > 0 && days < 30) {
-            list.push({ type: 'Lock-in Expiry', brand, unit, days, icon: '🔒' });
+            list.push({ type: 'Lock-in Expiry', priority: 2, brand, unit, days, icon: '🔒' });
           }
         }
       }
 
       // 3. Upcoming escalation
-      const escDate = lease.next_escalation_date || lease.escalation_date;
+      let escDate = lease.next_escalation_date || lease.escalation_date;
+      
+      // Fallback: 3 year implicit calculation matching UpcomingEscalations.jsx
+      if (lease.lease_start && !escDate) {
+        const leaseStart = new Date(lease.lease_start);
+        const yearsActive = (now - leaseStart) / (1000 * 60 * 60 * 24 * 365);
+        const escalationInterval = 3; 
+        const nextEscalationYear = Math.ceil(yearsActive / escalationInterval) * escalationInterval;
+        const nextEscalationDate = new Date(leaseStart);
+        nextEscalationDate.setFullYear(nextEscalationDate.getFullYear() + nextEscalationYear);
+        if (nextEscalationDate > now) {
+          escDate = nextEscalationDate;
+        }
+      }
+
       if (escDate) {
         const esc  = new Date(escDate);
         const days = Math.ceil((esc - now) / 86400000);
-        if (days > 0 && days < 30) {
-          list.push({ type: 'Escalation Due', brand, unit, days, icon: '📈' });
+        if (days > 0 && days <= 30) {
+          list.push({ type: 'Escalation Due', priority: 3, brand, unit, days, icon: '📈' });
         }
       }
     });
 
-    return list.sort((a, b) => a.days - b.days);
+    return list.sort((a, b) => {
+      // 1st Leasing (1), 2nd Lock in (2), 3rd Escalations (3)
+      if (a.priority !== b.priority) return a.priority - b.priority;
+      return a.days - b.days;
+    });
   }, [leases]);
 
   const count = alerts.length;
