@@ -85,9 +85,9 @@ const KPICards = ({
       value: loading ? '...' : formatRent(safeFloat(actualRent || projectedRent)),
       valueSuffix: " PM",
       sub: profitLoss > 0
-        ? `Gained: ${formatRent(safeFloat(Math.abs(profitLoss)))} vs Projected`
+        ? `Gained: ${formatRent(safeFloat(Math.abs(profitLoss)))} compared to projected rent`
         : profitLoss < 0
-          ? `Loss: ${formatRent(safeFloat(Math.abs(profitLoss)))} vs Projected`
+          ? `Loss: ${formatRent(safeFloat(Math.abs(profitLoss)))} compared to projected rent`
           : 'Matches projected rent',
       subColor: profitLoss !== 0 ? '#ef4444' : '#64748b',
       badges: null,

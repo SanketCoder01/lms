@@ -25,13 +25,7 @@ const subDays = (dateStr, days) => {
     return d.toISOString().slice(0, 10);
 };
 
-/** Add days to a date. Returns YYYY-MM-DD. */
-const addDays = (dateStr, days) => {
-    if (!dateStr || !days) return '';
-    const d = new Date(dateStr);
-    d.setDate(d.getDate() + parseInt(days, 10));
-    return d.toISOString().slice(0, 10);
-};
+
 
 /** Format date for display. */
 const fmtDate = (dateStr) => {

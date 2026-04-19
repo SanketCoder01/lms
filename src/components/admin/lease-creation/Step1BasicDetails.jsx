@@ -177,8 +177,7 @@ const Step1BasicDetails = ({
                         {parties
                             .filter(party => {
                                 const t = (party.party_type || party.type || '').toLowerCase();
-                                // Exclude pure Owners — only show Tenants / Lessees
-                                return t !== 'owner' && t !== 'landlord';
+                                return t.includes('tenant') || t.includes('lessee') || t.includes('brand');
                             })
                             .map(party => (
                                 <option key={party.id} value={party.id}>

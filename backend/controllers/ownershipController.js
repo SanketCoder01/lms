@@ -8,14 +8,14 @@ exports.getAllOwnerships = async (req, res) => {
             .select('*, units(unit_number, projects(project_name)), parties(first_name, last_name, company_name)')
             .eq('ownership_status', 'Active')
             .order('created_at', { ascending: false });
-        
+
         const { data, error } = await query;
         if (error) throw error;
-        
+
         let filtered = data || [];
         if (search) {
             const s = search.toLowerCase();
-            filtered = filtered.filter(row => 
+            filtered = filtered.filter(row =>
                 (row.parties?.first_name?.toLowerCase() || '').includes(s) ||
                 (row.parties?.last_name?.toLowerCase() || '').includes(s) ||
                 (row.parties?.company_name?.toLowerCase() || '').includes(s) ||
@@ -51,9 +51,9 @@ exports.assignOwner = async (req, res) => {
         const partyIds = owners.map(o => o.party_id);
         const { data: existing, error: eErr } = await supabase.from('unit_ownerships')
             .select('party_id').eq('unit_id', unit_id).eq('ownership_status', 'Active').in('party_id', partyIds);
-            
+
         if (eErr) throw eErr;
-        
+
         if (existing && existing.length > 0) {
             return res.status(400).json({ message: 'One or more parties is already an active owner.' });
         }
@@ -149,9 +149,14 @@ exports.getUnitsByParty = async (req, res) => {
 exports.uploadOwnershipDocument = async (req, res) => {
     try {
         const { unit_id, party_id, document_type_id, document_date } = req.body;
-        
+
+        // Validate required fields
+        if (!unit_id || !party_id) {
+            return res.status(400).json({ message: 'Unit ID and Party ID are required' });
+        }
+
         if (!req.file || !req.file.buffer) {
-            return res.status(400).json({ message: 'No file uploaded' });
+            return res.status(400).json({ message: 'No file uploaded. Please select a file.' });
         }
 
         const fileExt = req.file.originalname.split('.').pop();
@@ -165,7 +170,10 @@ exports.uploadOwnershipDocument = async (req, res) => {
                 upsert: true
             });
 
-        if (uploadError) throw uploadError;
+        if (uploadError) {
+            console.error("Supabase storage upload error:", uploadError);
+            return res.status(500).json({ message: 'Failed to upload file to storage', error: uploadError.message });
+        }
 
         // Get Public URL
         const { data: publicUrlData } = supabase.storage
@@ -174,17 +182,59 @@ exports.uploadOwnershipDocument = async (req, res) => {
 
         const filePath = publicUrlData.publicUrl;
 
-        const { error } = await supabase.from('unit_ownership_documents').insert({
-            unit_id,
-            party_id,
-            document_type_id,
-            document_date: document_date || null,
-            file_path: filePath
-        });
+        // Validate document_type_id exists if provided
+        let validDocTypeId = document_type_id ? parseInt(document_type_id) : null;
+        console.log('Upload - unit_id:', unit_id, 'party_id:', party_id, 'document_type_id:', document_type_id, 'validDocTypeId:', validDocTypeId);
 
-        if (error) throw error;
+        // Check if document of same type already exists for this unit+party
+        let existingDocQuery = supabase.from('unit_ownership_documents')
+            .select('id')
+            .eq('unit_id', parseInt(unit_id))
+            .eq('party_id', parseInt(party_id));
 
-        res.status(201).json({ message: 'Document uploaded successfully', file_path: filePath });
+        if (validDocTypeId) {
+            existingDocQuery = existingDocQuery.eq('document_type_id', validDocTypeId);
+        } else {
+            existingDocQuery = existingDocQuery.is('document_type_id', null);
+        }
+
+        const { data: existingDocs, error: existingError } = await existingDocQuery;
+        const existingDoc = existingDocs && existingDocs.length > 0 ? existingDocs[0] : null;
+
+        if (existingError && existingError.code !== 'PGRST116') {
+            console.warn('Error checking existing doc:', existingError);
+        }
+
+        let error;
+        if (existingDoc) {
+            // Update existing document record with new file and date
+            const { error: updateError } = await supabase.from('unit_ownership_documents')
+                .update({
+                    document_date: document_date || null,
+                    file_path: filePath,
+                    updated_at: new Date().toISOString()
+                })
+                .eq('id', existingDoc.id);
+            error = updateError;
+        } else {
+            // Insert new document record
+            const { error: insertError } = await supabase.from('unit_ownership_documents').insert({
+                unit_id: parseInt(unit_id),
+                party_id: parseInt(party_id),
+                document_type_id: validDocTypeId,
+                document_date: document_date || null,
+                file_path: filePath
+            });
+            error = insertError;
+        }
+
+        if (error) {
+            console.error("Database error:", error);
+            return res.status(500).json({ message: 'Failed to save document record', error: error.message, details: error.details });
+        }
+
+        console.log('Document saved successfully:', { file_path: filePath, updated: !!existingDoc, document_date });
+        res.status(201).json({ message: 'Document uploaded successfully', file_path: filePath, updated: !!existingDoc });
     } catch (err) {
         console.error("uploadOwnershipDocument Error:", err);
         res.status(500).json({ message: 'Server Error', error: err.message });
@@ -196,8 +246,8 @@ exports.getOwnershipDocuments = async (req, res) => {
     try {
         const { unitId, partyId } = req.params;
         let query = supabase.from('unit_ownership_documents')
-            .select('*, ownership_document_types(name)')
-            .order('created_at', { ascending: false });
+            .select('id, unit_id, party_id, document_type_id, document_date, file_path, created_at, updated_at, ownership_document_types(name)')
+            .order('updated_at', { ascending: false });
 
         if (unitId) query = query.eq('unit_id', unitId);
         if (partyId) query = query.eq('party_id', partyId);
@@ -206,7 +256,14 @@ exports.getOwnershipDocuments = async (req, res) => {
         if (error) throw error;
 
         const formatted = data.map(d => ({
-            ...d,
+            id: d.id,
+            unit_id: d.unit_id,
+            party_id: d.party_id,
+            document_type_id: d.document_type_id,
+            document_date: d.document_date,
+            file_path: d.file_path,
+            created_at: d.created_at,
+            updated_at: d.updated_at,
             document_type_name: d.ownership_document_types?.name
         }));
 
@@ -222,7 +279,7 @@ exports.getDocumentTypes = async (req, res) => {
     try {
         const { data, error } = await supabase.from('ownership_document_types')
             .select('*').eq('is_active', true).order('name', { ascending: true });
-            
+
         if (error) throw error;
         res.json(data);
     } catch (err) {

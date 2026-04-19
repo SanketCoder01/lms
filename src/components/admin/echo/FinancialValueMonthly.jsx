@@ -140,18 +140,14 @@ const FinancialValueMonthly = ({ leases = [], loading }) => {
       });
     });
 
-    // ── Step 4: scale timeline indicators to 5% of max rent ────────
-    let maxRent = 0;
-    months.forEach(m => { if (m.total > maxRent) maxRent = m.total; });
-    const barH = maxRent > 0 ? maxRent * 0.05 : 0;
-
+    // ── Step 4: Map values directly without artificial offsets ────────
     const result = months.map(m => ({
       month:         m.label,
       mg:            m.mg       > 0 ? m.mg       : null,
       revShare:      m.revShare > 0 ? m.revShare : null,
       total:         m.total    > 0 ? m.total    : null,
-      leaseDuration: m.leaseDuration != null ? barH  : null,
-      lockInLine:    m.lockInLine    != null ? barH  : null,
+      leaseDuration: m.leaseDuration != null ? m.total : null,
+      lockInLine:    m.lockInLine    != null ? m.total : null,
     }));
 
     const totalsAcc = months.reduce((acc, m) => ({

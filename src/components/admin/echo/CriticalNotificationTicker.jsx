@@ -72,7 +72,64 @@ const CriticalNotificationTicker = ({ leases = [] }) => {
   const handleMouseEnter = () => setPaused(true);
   const handleMouseLeave = () => setPaused(false);
 
-  if (count === 0) return null; // hide entirely when no critical alerts
+  // Show "No alerts" message when empty
+  if (count === 0) {
+    return (
+      <div style={{ display: 'flex', alignItems: 'center', flex: 1, minWidth: 0 }}>
+        <button
+          disabled
+          style={{
+            position:    'relative',
+            background:  '#f1f5f9',
+            border:      'none',
+            padding:     '6px 8px',
+            flexShrink:  0,
+            color:       '#94a3b8',
+            fontSize:    20,
+            lineHeight:  1,
+            borderRadius: '50%',
+            marginRight: '8px',
+            cursor:      'default'
+          }}
+        >
+          🔔
+          <span style={{
+            position:    'absolute',
+            top:         -2,
+            right:       -2,
+            background:  '#94a3b8',
+            color:       '#fff',
+            fontSize:    9,
+            fontWeight:  800,
+            borderRadius: 999,
+            minWidth:    16,
+            height:      16,
+            display:     'flex',
+            alignItems:  'center',
+            justifyContent: 'center',
+          }}>
+            0
+          </span>
+        </button>
+        <div
+          style={{
+            flex:       1,
+            background: '#f8fafc',
+            borderRadius: 20,
+            height:     30,
+            display:    'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            color:      '#64748b',
+            fontSize:   12,
+            fontWeight: 500,
+          }}
+        >
+          ✓ No critical alerts at this time
+        </div>
+      </div>
+    );
+  }
 
   // ── Ticker content (duplicated for seamless loop) ────────────────────────────
   const TickerItem = ({ alert }) => (
@@ -82,20 +139,21 @@ const CriticalNotificationTicker = ({ leases = [] }) => {
       gap:          6,
       whiteSpace:   'nowrap',
       padding:      '0 28px',
-      borderRight:  '1px solid rgba(255,255,255,0.2)',
+      borderRight:  '1px solid rgba(0,0,0,0.1)',
     }}>
       <span>{alert.icon}</span>
-      <span style={{ fontWeight: 700, color: '#fff' }}>{alert.type}</span>
-      <span style={{ color: '#fecaca' }}>·</span>
-      <span style={{ color: '#fee2e2' }}>{alert.brand}</span>
-      {alert.unit && <span style={{ color: '#fca5a5' }}>({alert.unit})</span>}
+      <span style={{ fontWeight: 700, color: '#000' }}>{alert.type}</span>
+      <span style={{ color: '#475569' }}>·</span>
+      <span style={{ color: '#0f172a', fontWeight: 500 }}>{alert.brand}</span>
+      {alert.unit && <span style={{ color: '#64748b' }}>({alert.unit})</span>}
       <span style={{
-        background:   '#7f1d1d',
-        color:        '#fecaca',
+        background:   '#fef2f2',
+        color:        '#b91c1c',
         borderRadius: 4,
         padding:      '1px 6px',
         fontSize:     11,
         fontWeight:   700,
+        border:       '1px solid #fca5a5',
       }}>
         {alert.days}d left
       </span>
@@ -113,21 +171,24 @@ const CriticalNotificationTicker = ({ leases = [] }) => {
         title={`${count} critical alert${count > 1 ? 's' : ''}`}
         style={{
           position:    'relative',
-          background:  'none',
+          background:  '#fff',
           border:      'none',
           cursor:      'pointer',
-          padding:     '4px 8px',
+          padding:     '6px 8px',
           flexShrink:  0,
           color:       '#ef4444',
           fontSize:    20,
           lineHeight:  1,
+          borderRadius: '50%',
+          marginRight: '8px',
+          boxShadow:   '0 1px 3px rgba(0,0,0,0.1)'
         }}
       >
         🔔
         <span style={{
           position:    'absolute',
-          top:         0,
-          right:       0,
+          top:         -2,
+          right:       -2,
           background:  '#ef4444',
           color:       '#fff',
           fontSize:    9,
@@ -149,12 +210,13 @@ const CriticalNotificationTicker = ({ leases = [] }) => {
         style={{
           flex:       1,
           overflow:   'hidden',
-          background: '#991b1b',
-          borderRadius: 6,
+          background: '#fff',
+          borderRadius: 20,
           height:     30,
           display:    'flex',
           alignItems: 'center',
           cursor:     'pointer',
+          boxShadow:  '0 1px 3px rgba(0,0,0,0.1)'
         }}
         onMouseEnter={handleMouseEnter}
         onMouseLeave={handleMouseLeave}

@@ -456,9 +456,10 @@ const getAllLeases = async (req, res) => {
 
         let query = supabase.from('leases').select(`
             id, lease_type, rent_model, lease_start, lease_end, monthly_rent, security_deposit, status,
-            mg_amount, mg_amount_sqft, revenue_share_amount, revenue_share_percentage,
+            mg_amount, mg_amount_sqft, revenue_share_percentage,
             monthly_net_sales, sub_lease_area_sqft, lockin_period_months, created_at,
             project_id, unit_id, party_tenant_id, party_owner_id,
+            loi_date, agreement_date, registration_date,
             projects(project_name, location, address),
             units(unit_number, chargeable_area),
             tenant:parties!leases_party_tenant_id_fkey(id, company_name, first_name, last_name, brand_name),
@@ -492,23 +493,30 @@ const getAllLeases = async (req, res) => {
             status: l.status,
             mg_amount: l.mg_amount,
             mg_amount_sqft: l.mg_amount_sqft,
-            revenue_share_amount: l.revenue_share_amount,
             revenue_share_percentage: l.revenue_share_percentage,
             sub_lease_area_sqft: l.sub_lease_area_sqft,
             lock_in_period: l.lockin_period_months,
             lockin_period_months: l.lockin_period_months,
             area_leased: l.sub_lease_area_sqft || l.units?.chargeable_area || 0,
             created_at: l.created_at,
+            loi_date: l.loi_date,
+            agreement_date: l.agreement_date,
+            registration_date: l.registration_date,
             project_name: l.projects?.project_name,
             project_location: l.projects?.location,
             project_address: l.projects?.address,
             unit_number: l.units?.unit_number,
-            tenant_name: l.tenant?.company_name || 
-                         `${l.tenant?.first_name || ''} ${l.tenant?.last_name || ''}`.trim() || 'Unknown',
-            owner_name: l.owner?.company_name || 
-                        `${l.owner?.first_name || ''} ${l.owner?.last_name || ''}`.trim() || 'Unknown',
-            brand_name: l.tenant?.brand_name || 
-                        l.tenant?.company_name || 'Unknown',
+            tenant_name: l.tenant?.company_name ||
+                `${l.tenant?.first_name || ''} ${l.tenant?.last_name || ''}`.trim() ||
+                l.tenant?.brand_name ||
+                l.units?.unit_number || `Lease #${l.id}`,
+            owner_name: l.owner?.company_name ||
+                `${l.owner?.first_name || ''} ${l.owner?.last_name || ''}`.trim() ||
+                l.units?.unit_number || 'Owner',
+            brand_name: l.tenant?.brand_name ||
+                l.tenant?.company_name ||
+                `${l.tenant?.first_name || ''} ${l.tenant?.last_name || ''}`.trim() ||
+                l.units?.unit_number || `Lease #${l.id}`,
             tenant: {
                 company_name: l.tenant?.company_name,
                 first_name: l.tenant?.first_name,

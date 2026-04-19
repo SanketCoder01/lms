@@ -236,21 +236,26 @@ const EchoDashboard = () => {
           }));
 
           // ── Leasing Activity Counts ─────────────────────────────────
-          // Executed  = total leases created (all of them)
+          // Executed  = total leases created (all active/approved leases)
           // Registered = registration_date filled by admin
-          // LOI        = no agreement AND no registration date
+          // LOI        = only loi_date filled (no agreement_date or registration_date)
           const getLeasingStatusCounts = (leaseList) => {
-            const counts = { registered: 0, executed: leaseList.length, loi: 0 };
+            const counts = { registered: 0, executed: 0, loi: 0 };
 
-            leaseList.forEach(lease => {
-              const hasRegistration = !!(lease.registration_date && String(lease.registration_date).trim());
-              const hasAgreement   = !!(lease.agreement_date    && String(lease.agreement_date).trim());
+            // Count all active/approved leases as executed
+            const activeLeasesList = leaseList.filter(l => {
+              const status = (l.status || '').toLowerCase();
+              return status === 'active' || status === 'approved' || status === 'leased' || status === 'executed' || status === 'registered';
+            });
+            counts.executed = activeLeasesList.length;
 
-              if (hasRegistration) {
-                counts.registered += 1;
-              } else if (!hasAgreement) {
-                counts.loi += 1;    // no agreement, no registration → LOI
-              }
+            activeLeasesList.forEach(lease => {
+              const hasReg = !!(lease.registration_date && String(lease.registration_date).trim());
+              const hasAgr = !!(lease.agreement_date    && String(lease.agreement_date).trim());
+              const hasLoi = !!(lease.loi_date          && String(lease.loi_date).trim());
+
+              if (hasReg) counts.registered += 1;
+              if (hasLoi && !hasReg && !hasAgr) counts.loi += 1;
             });
 
             return counts;
@@ -302,12 +307,20 @@ const EchoDashboard = () => {
           setAllLeases(leases);
 
           // Recalculate leasing counts on focus (real-time update)
-          const focusCounts = { registered: 0, executed: leases.length, loi: 0 };
-          leases.forEach(lease => {
+          const focusCounts = { registered: 0, executed: 0, loi: 0 };
+          const activeLeasesList = leases.filter(l => {
+            const status = (l.status || '').toLowerCase();
+            return status === 'active' || status === 'approved' || status === 'leased' || status === 'executed' || status === 'registered';
+          });
+          focusCounts.executed = activeLeasesList.length;
+          
+          activeLeasesList.forEach(lease => {
             const hasReg = !!(lease.registration_date && String(lease.registration_date).trim());
             const hasAgr = !!(lease.agreement_date    && String(lease.agreement_date).trim());
-            if (hasReg)       focusCounts.registered += 1;
-            else if (!hasAgr) focusCounts.loi        += 1;
+            const hasLoi = !!(lease.loi_date          && String(lease.loi_date).trim());
+            
+            if (hasReg) focusCounts.registered += 1;
+            if (hasLoi && !hasReg && !hasAgr) focusCounts.loi += 1;
           });
           setLeasingStats(prev => ({
             ...prev,
@@ -563,7 +576,6 @@ const EchoDashboard = () => {
       {/* Navbar with Project Selector */}
       <nav className="echo-navbar">
         <div className="echo-navbar-left">
-          <span className="echo-logo">LeaseOS</span>
           <div className="echo-project-dropdown">
             <select 
               value={selectedProject} 

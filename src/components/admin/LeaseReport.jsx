@@ -171,7 +171,7 @@ const LeaseReport = ({ lease, onGenerated }) => {
                 ['Rent Commencement Date', formatDate(lease.rent_commencement_date)],
                 ['Fitout Period End', formatDate(lease.fitout_period_end)],
                 ['Tenure (Months)', lease.tenure_months || 'N/A'],
-                ['Lock-in Period (Days)', lease.lessee_lockin_period_days || lease.lockin_period_months || 'N/A'],
+                ['Lock-in Period (Months)', lease.lessee_lockin_period_days || lease.lockin_period_months || 'N/A'],
                 ['Notice Period (Days)', lease.lessee_notice_period_days || lease.notice_period_months ? `${lease.lessee_notice_period_days || lease.notice_period_months}` : 'N/A'],
                 ['Billing Frequency', lease.billing_frequency || 'Monthly'],
                 ['Days Remaining', lease.days_remaining ? `${lease.days_remaining} days` : 'N/A'],

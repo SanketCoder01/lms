@@ -137,7 +137,23 @@ const Leases = () => {
             params.lease_type = activeTab === 'direct' ? 'Direct lease' : 'Subtenant lease';
 
             const res = await leaseAPI.getAllLeases(params);
-            setLeases(res.data);
+            
+            let fetchedLeases = [];
+            if (Array.isArray(res.data)) {
+                fetchedLeases = res.data;
+            } else if (res.data?.data && Array.isArray(res.data.data)) {
+                fetchedLeases = res.data.data;
+            } else if (res.data?.leases && Array.isArray(res.data.leases)) {
+                fetchedLeases = res.data.leases;
+            } else if (res.data?.result && Array.isArray(res.data.result)) {
+                fetchedLeases = res.data.result;
+            }
+
+            // Client-side filtering because backend prioritizes showing all leases for Dashboard 
+            const expType = activeTab === 'direct' ? 'Direct lease' : 'Subtenant lease';
+            fetchedLeases = fetchedLeases.filter(l => l.lease_type === expType);
+
+            setLeases(fetchedLeases);
         } catch (err) {
             console.error('Failed to fetch leases:', err);
             setLeases([]);

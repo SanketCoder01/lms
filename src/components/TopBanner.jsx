@@ -36,7 +36,7 @@ const TopBanner = () => {
       whiteSpace: 'nowrap',
       width: '100%',
       position: 'fixed',
-      top: 0,
+      top: '56px',
       left: 0,
       zIndex: 1000,
       display: 'flex',

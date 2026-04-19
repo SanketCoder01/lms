@@ -30,7 +30,17 @@ const LeaseList = () => {
             } else {
                 res = await leaseAPI.getAllLeases({});
             }
-            setLeases(res.data);
+            let fetchedLeases = [];
+            if (Array.isArray(res.data)) {
+                fetchedLeases = res.data;
+            } else if (res.data?.data && Array.isArray(res.data.data)) {
+                fetchedLeases = res.data.data;
+            } else if (res.data?.leases && Array.isArray(res.data.leases)) {
+                fetchedLeases = res.data.leases;
+            } else if (res.data?.result && Array.isArray(res.data.result)) {
+                fetchedLeases = res.data.result;
+            }
+            setLeases(fetchedLeases);
         } catch (error) {
             console.error("Error fetching leases:", error);
         } finally {

@@ -151,8 +151,11 @@ const OwnershipMapping = () => {
     const fetchDocuments = async (unitId, partyId) => {
         try {
             const res = await ownershipAPI.getDocuments(unitId, partyId);
+            console.log('Fetched documents:', res.data);
             setDocuments(res.data || []);
-        } catch (error) { console.error("Failed to fetch docs", error); }
+        } catch (error) { 
+            console.error("Failed to fetch docs", error); 
+        }
     };
 
     const handleRemoveOwner = async (owner) => {
@@ -173,10 +176,14 @@ const OwnershipMapping = () => {
         const file = e.target.files[0];
         if (!file || activeOwners.length === 0) return;
 
-        // Prompt for date, defaulting to today
-        const defaultDate = new Date().toISOString().split('T')[0];
-        const date = prompt("Enter Document Date (YYYY-MM-DD)", defaultDate);
-        if (!date) return;
+        // Check file size (10MB limit)
+        if (file.size > 10 * 1024 * 1024) {
+            alert("File is too large. Maximum size is 10MB.");
+            return;
+        }
+
+        // Auto-assign today's date
+        const date = new Date().toISOString().split('T')[0];
 
         const formData = new FormData();
         formData.append('unit_id', selectedUnit);
@@ -186,19 +193,33 @@ const OwnershipMapping = () => {
         formData.append('document', file);
 
         try {
-            await ownershipAPI.uploadDocument(formData);
+            const response = await ownershipAPI.uploadDocument(formData);
+            const isUpdate = response.data?.updated;
+            alert(isUpdate ? "Document replaced successfully with new date" : "Document uploaded successfully");
             setRefreshDocs(prev => prev + 1);
         } catch (error) {
-            alert("Failed to upload: " + (error.response?.data?.message || error.message));
+            const errorMsg = error.response?.data?.message || error.response?.data?.error || error.message || "Unknown error";
+            console.error("Upload error:", error.response?.data || error);
+            alert("Failed to upload: " + errorMsg);
         }
     };
 
     const viewDocument = (doc) => {
         if (doc?.file_path) {
-            const url = doc.file_path.startsWith('http') 
-                ? doc.file_path 
-                : `${FILE_BASE_URL.replace('/api', '')}${doc.file_path.startsWith('/') ? '' : '/'}${doc.file_path}`;
-            window.open(url, '_blank');
+            // Supabase storage URLs are already complete URLs
+            let url = doc.file_path;
+            
+            // If it's already a full URL, use it directly
+            if (url.startsWith('http://') || url.startsWith('https://')) {
+                window.open(url, '_blank');
+            } else {
+                // Otherwise construct from FILE_BASE_URL
+                const baseUrl = FILE_BASE_URL.replace('/api', '');
+                url = `${baseUrl}${url.startsWith('/') ? '' : '/'}${url}`;
+                window.open(url, '_blank');
+            }
+        } else {
+            alert('Document file not found');
         }
     };
 
@@ -365,7 +386,11 @@ const OwnershipMapping = () => {
 
                                             {/* Document Rows */}
                                             {documentTypes.map((type, index) => {
-                                                const doc = documents.find(d => d.document_type_id === type.id);
+                                                // Match document by document_type_id (handle both string and number comparison)
+                                                const doc = documents.find(d => 
+                                                    String(d.document_type_id) === String(type.id)
+                                                );
+                                                console.log(`Type: ${type.name} (id=${type.id}), Found doc:`, doc);
 
                                                 return (
                                                     <div key={index} className="doc-row" style={{
@@ -381,35 +406,42 @@ const OwnershipMapping = () => {
                                                             </span>
                                                         </div>
 
-                                                        {/* Upload Column */}
+                                                        {/* Upload Column - Show upload option always (replace if exists) */}
                                                         <div style={{ textAlign: 'center' }}>
+                                                            <label className="upload-plus-btn" style={{
+                                                                display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                                                                width: '28px', height: '28px', background: doc ? '#22c55e' : '#3b82f6', color: 'white',
+                                                                borderRadius: '4px', cursor: 'pointer', transition: 'background 0.2s'
+                                                            }} title={doc ? "Replace Document" : "Upload Document"}>
+                                                                {doc ? (
+                                                                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
+                                                                ) : (
+                                                                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                                                                )}
+                                                                <input type="file" hidden accept=".pdf,application/pdf" onChange={(e) => handleFileUpload(e, type.id)} />
+                                                            </label>
+                                                        </div>
+
+                                                        {/* Date Column - Show latest document date */}
+                                                        <div style={{ textAlign: 'center', fontSize: '14px', color: '#64748b' }}>
                                                             {doc ? (
-                                                                <span style={{ color: '#16a34a' }}>
-                                                                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                                                                <span style={{ color: '#166534', fontWeight: 500 }}>
+                                                                    {new Date(doc.document_date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
                                                                 </span>
                                                             ) : (
-                                                                <label className="upload-plus-btn" style={{
-                                                                    display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-                                                                    width: '28px', height: '28px', background: '#3b82f6', color: 'white',
-                                                                    borderRadius: '4px', cursor: 'pointer', transition: 'background 0.2s'
-                                                                }} title="Upload Document">
-                                                                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
-                                                                    <input type="file" hidden accept=".pdf,application/pdf" onChange={(e) => handleFileUpload(e, type.id)} />
-                                                                </label>
+                                                                <span style={{ color: '#cbd5e1' }}>-</span>
                                                             )}
                                                         </div>
 
-                                                        {/* Date Column */}
-                                                        <div style={{ textAlign: 'center', fontSize: '14px', color: '#64748b' }}>
-                                                            {doc ? new Date(doc.document_date).toLocaleDateString() : <span style={{ color: '#cbd5e1' }}>-</span>}
-                                                        </div>
-
-                                                        {/* Action Column */}
+                                                        {/* Action Column - Eye icon to view document */}
                                                         <div style={{ textAlign: 'center' }}>
                                                             {doc ? (
-                                                                <div className="action-icon-wrapper center">
-                                                                    <button className="action-icon-btn view" onClick={() => viewDocument(doc)} title="View Document">
-                                                                        <svg viewBox="0 0 24 24" width="20" height="20" stroke="currentColor" fill="none" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+                                                                <div className="action-icon-wrapper center" style={{ display: 'flex', gap: '8px', justifyContent: 'center' }}>
+                                                                    <button className="action-icon-btn view" onClick={() => viewDocument(doc)} title="View Document" style={{
+                                                                        background: '#f0f9ff', border: '1px solid #bae6fd', borderRadius: '4px',
+                                                                        padding: '4px', cursor: 'pointer', display: 'flex', alignItems: 'center'
+                                                                    }}>
+                                                                        <svg viewBox="0 0 24 24" width="20" height="20" stroke="#0369a1" fill="none" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
                                                                     </button>
                                                                 </div>
                                                             ) : (

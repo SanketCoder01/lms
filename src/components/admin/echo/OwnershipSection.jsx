@@ -4,19 +4,20 @@ import { formatRent, safeFloat } from '../../../utils/formatters';
 
 const OwnershipSection = ({ units = [], leases = [], loading }) => {
   const navigate = useNavigate();
-  // Process units directly using useMemo for efficiency
   const ownershipData = useMemo(() => {
-    // Define the 3 standard ownership categories
+    // Define the 4 standard ownership categories requested
     const standardCategories = [
-      { key: 'Developer Units', label: 'Unsold / developer retained', color: '#e8a830' },
-      { key: 'Group Companies', label: 'Close group / group co.', color: '#2d8a4e' },
-      { key: 'Other Investors', label: 'External investors', color: '#1e3a5f' },
+      { key: 'Unsold', label: 'Unsold', color: '#94a3b8' },
+      { key: 'Developer Units', label: 'Developer Units', color: '#e8a830' },
+      { key: 'Group Companies', label: 'Close Group', color: '#2d8a4e' },
+      { key: 'Other Investors', label: 'External Investors', color: '#1e3a5f' },
     ];
 
     console.log('OwnershipSection: Processing units:', units?.length || 0, 'leases:', leases?.length || 0);
 
-    // Initialize all 3 categories with 0 values
+    // Initialize all 4 categories with 0 values
     const grouped = {
+      'Unsold': { units: 0, totalArea: 0, totalRent: 0, parties: new Set() },
       'Developer Units': { units: 0, totalArea: 0, totalRent: 0, parties: new Set() },
       'Group Companies': { units: 0, totalArea: 0, totalRent: 0, parties: new Set() },
       'Other Investors': { units: 0, totalArea: 0, totalRent: 0, parties: new Set() },
@@ -53,34 +54,35 @@ const OwnershipSection = ({ units = [], leases = [], loading }) => {
       const hasOwner = unit.owner_name || unit.ownerName || unit.owner_id || unit.ownerId;
       console.log(`OwnershipSection: Unit ${unit.unit_number}, ownership_type=${ownershipType}, hasOwner=${!!hasOwner}`);
 
-      // Determine category based on ownership_type field
-      // Unsold = no owner assigned
-      // Others based on selected ownership_type value
+      // Determine category based on exactly 4 rules
       let category;
 
       if (!hasOwner) {
-        // No owner assigned = Unsold / Developer Units
+        // 1. No owner assigned = Unsold
+        category = 'Unsold';
+      } else if (ownershipType.includes('developer')) {
+        // 2. Developer unit to developer
         category = 'Developer Units';
-      } else if (ownershipType === 'group company' || ownershipType === 'group companies' || ownershipType === 'close group') {
+      } else if (ownershipType.includes('group') || ownershipType.includes('close')) {
+        // 3. Close group to close group
         category = 'Group Companies';
-      } else if (ownershipType === 'investor' || ownershipType === 'external investor' || ownershipType === 'other investor' || ownershipType === 'other investors') {
+      } else if (ownershipType.includes('investor') || ownershipType.includes('external') || ownershipType.includes('outsider')) {
+        // 4. External investors to external/outsider
         category = 'Other Investors';
-      } else if (ownershipType === 'developer' || ownershipType === 'developer unit' || ownershipType === 'unsold') {
-        category = 'Developer Units';
       } else {
-        // Default: if has owner but unclear type, check ownership_status
+        // Default fallback if it has an owner but type is unknown
         const isSold = (unit.ownership_status || '').toLowerCase() === 'sold' || (unit.ownership_status || '').toLowerCase() === 'transferred';
         category = isSold ? 'Other Investors' : 'Developer Units';
       }
 
       grouped[category].units += 1;
       grouped[category].totalArea += parseFloat(unit.chargeable_area || unit.area || unit.chargeableArea || 0);
-      
+
       // Use actual rent from lease if available, otherwise 0
       const unitId = unit.id || unit.unit_id || unit.unitId;
       const actualRent = leaseRentMap[unitId] || 0;
       grouped[category].totalRent += actualRent;
-      
+
       if (hasOwner) {
         grouped[category].parties.add(unit.owner_name || unit.ownerName || unit.owner || 'Owner');
       }
@@ -88,7 +90,7 @@ const OwnershipSection = ({ units = [], leases = [], loading }) => {
 
     console.log('OwnershipSection: Grouped data:', grouped);
 
-    // Return all 3 categories in standard order
+    // Return all 4 categories in standard order
     return standardCategories.map(cat => ({
       key: cat.key,
       label: cat.label,
