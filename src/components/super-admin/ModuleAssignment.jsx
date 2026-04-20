@@ -1,0 +1,561 @@
+import React, { useState, useEffect, useCallback } from 'react';
+import SuperAdminLayout, { SA_API, saFetch } from './SuperAdminLayout';
+
+// ─── Per-module feature labels ───────────────────────────────────────────────
+const MODULE_DEFS = {
+  dashboard: {
+    label: 'Dashboard',
+    icon: '📊',
+    color: '#6366f1',
+    features: {
+      view:   'View Access',
+      edit:   'Create/Edit',
+      delete: 'Delete/Remove',
+    },
+  },
+  masters: {
+    label: 'Masters',
+    icon: '🗂️',
+    color: '#f59e0b',
+    features: {
+      view:   'View Access',
+      edit:   'Create/Edit',
+      delete: 'Delete/Remove',
+    },
+  },
+  leases: {
+    label: 'Leases',
+    icon: '📋',
+    color: '#10b981',
+    features: {
+      view:   'View Access',
+      edit:   'Create/Edit',
+      delete: 'Delete/Remove',
+    },
+  },
+  ownership: {
+    label: 'Ownership',
+    icon: '🏠',
+    color: '#ec4899',
+    features: {
+      view:   'View Access',
+      edit:   'Create/Edit',
+      delete: 'Delete/Remove',
+    },
+  },
+  projects: {
+    label: 'Projects',
+    icon: '🏗️',
+    color: '#8b5cf6',
+    features: {
+      view:   'View Access',
+      edit:   'Create/Edit',
+      delete: 'Delete/Remove',
+    },
+  },
+};
+
+const MODULE_KEYS = Object.keys(MODULE_DEFS);
+
+// ─── Assign Modal ─────────────────────────────────────────────────────────────
+const AssignModal = ({ company, moduleName, onClose, onSave }) => {
+  const def = MODULE_DEFS[moduleName];
+  const [email, setEmail]       = useState('');
+  const [password, setPassword] = useState('');
+  const [perms, setPerms]       = useState({
+    view: true,
+    edit: false,
+    delete: false
+  });
+  const [saving, setSaving] = useState(false);
+  const [err, setErr]       = useState('');
+
+  const toggleAll = (val) => {
+    const p = {};
+    Object.keys(def.features).forEach(k => { p[k] = val; });
+    setPerms(p);
+  };
+
+  const handleSave = async () => {
+    if (!email || !password) { setErr('Email and password are required.'); return; }
+    setSaving(true); setErr('');
+    try {
+      const res = await saFetch(`${SA_API}/api/super-admin/module-users`, {
+        method: 'POST',
+        body: JSON.stringify({
+          company_id: company.id,
+          module_name: moduleName,
+          email,
+          password,
+          permissions: perms,
+        }),
+      });
+      if (res.success) { onSave(); onClose(); }
+      else setErr(res.message || 'Failed to assign user.');
+    } catch (e) { setErr(e.message || 'Network error.'); }
+    setSaving(false);
+  };
+
+  return (
+    <div className="sa-modal-overlay" onClick={onClose}>
+      <div className="sa-modal" style={{ width: 520, maxHeight: '90vh', overflowY: 'auto' }} onClick={e => e.stopPropagation()}>
+        <div className="sa-modal-header">
+          <h3>{def.icon} Assign User — {def.label}</h3>
+          <button className="sa-modal-close" onClick={onClose}>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+            </svg>
+          </button>
+        </div>
+
+        <div style={{ padding: '0 4px' }}>
+          <p style={{ color: 'var(--sa-muted)', fontSize: 13, marginBottom: 16 }}>
+            Company: <strong style={{ color: 'var(--sa-text)' }}>{company.company_name}</strong>
+          </p>
+
+          {err && (
+            <div style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.3)', color: '#fca5a5', padding: '10px 14px', borderRadius: 8, fontSize: 13, marginBottom: 14 }}>
+              {err}
+            </div>
+          )}
+
+          <div className="sa-form-group">
+            <label>Email Address *</label>
+            <input type="email" placeholder="user@company.com" value={email} onChange={e => setEmail(e.target.value)} />
+          </div>
+          <div className="sa-form-group">
+            <label>Password *</label>
+            <input type="password" placeholder="Set login password" value={password} onChange={e => setPassword(e.target.value)} />
+          </div>
+
+          {/* Feature Permissions */}
+          <div style={{ marginTop: 16 }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+              <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--sa-text)' }}>Feature Permissions</span>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button className="sa-btn sa-btn-ghost sa-btn-sm" onClick={() => toggleAll(true)}>Select All</button>
+                <button className="sa-btn sa-btn-ghost sa-btn-sm" onClick={() => toggleAll(false)}>Clear All</button>
+              </div>
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+              {Object.entries(def.features).map(([key, label]) => (
+                <label key={key} style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', padding: '8px 10px', borderRadius: 8, border: '1px solid var(--sa-border)', background: perms[key] ? 'rgba(99,102,241,0.08)' : 'transparent', transition: 'all 0.15s' }}>
+                  <input
+                    type="checkbox"
+                    checked={!!perms[key]}
+                    onChange={e => setPerms({ ...perms, [key]: e.target.checked })}
+                    style={{ accentColor: 'var(--sa-primary)', width: 15, height: 15 }}
+                  />
+                  <span style={{ fontSize: 12.5, color: perms[key] ? 'var(--sa-text)' : 'var(--sa-muted)' }}>{label}</span>
+                </label>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        <div className="sa-modal-actions" style={{ marginTop: 20 }}>
+          <button className="sa-btn sa-btn-ghost" onClick={onClose}>Cancel</button>
+          <button className="sa-btn sa-btn-primary" disabled={saving} onClick={handleSave}>
+            {saving ? <><span className="sa-spinner" />Saving…</> : '✅ Assign User'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// ─── Edit Permissions Modal ───────────────────────────────────────────────────
+const EditPermsModal = ({ moduleUser, moduleName, onClose, onSave }) => {
+  const def = MODULE_DEFS[moduleName];
+  const [perms, setPerms]   = useState({ ...moduleUser.permissions });
+  const [password, setPass] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [err, setErr]       = useState('');
+
+  const toggleAll = (val) => {
+    const p = {};
+    Object.keys(def.features).forEach(k => { p[k] = val; });
+    setPerms(p);
+  };
+
+  const handleSave = async () => {
+    setSaving(true); setErr('');
+    try {
+      const body = { permissions: perms };
+      if (password) body.password = password;
+      const res = await saFetch(`${SA_API}/api/super-admin/module-users/${moduleUser.id}`, {
+        method: 'PUT',
+        body: JSON.stringify(body),
+      });
+      if (res.success) { onSave(); onClose(); }
+      else setErr(res.message || 'Failed to update.');
+    } catch (e) { setErr(e.message || 'Network error.'); }
+    setSaving(false);
+  };
+
+  return (
+    <div className="sa-modal-overlay" onClick={onClose}>
+      <div className="sa-modal" style={{ width: 520, maxHeight: '90vh', overflowY: 'auto' }} onClick={e => e.stopPropagation()}>
+        <div className="sa-modal-header">
+          <h3>✏️ Edit — {def.icon} {def.label}</h3>
+          <button className="sa-modal-close" onClick={onClose}>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+            </svg>
+          </button>
+        </div>
+
+        <div style={{ padding: '0 4px' }}>
+          <p style={{ color: 'var(--sa-muted)', fontSize: 13, marginBottom: 16 }}>
+            Assigned to: <strong style={{ color: 'var(--sa-text)' }}>{moduleUser.email}</strong>
+          </p>
+
+          {err && (
+            <div style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.3)', color: '#fca5a5', padding: '10px 14px', borderRadius: 8, fontSize: 13, marginBottom: 14 }}>
+              {err}
+            </div>
+          )}
+
+          <div className="sa-form-group">
+            <label>New Password <span style={{ color: 'var(--sa-muted)', fontWeight: 400, fontSize: 12 }}>(leave blank to keep current)</span></label>
+            <input type="password" placeholder="New password (optional)" value={password} onChange={e => setPass(e.target.value)} />
+          </div>
+
+          <div style={{ marginTop: 16 }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+              <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--sa-text)' }}>Feature Permissions</span>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button className="sa-btn sa-btn-ghost sa-btn-sm" onClick={() => toggleAll(true)}>Select All</button>
+                <button className="sa-btn sa-btn-ghost sa-btn-sm" onClick={() => toggleAll(false)}>Clear All</button>
+              </div>
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+              {Object.entries(def.features).map(([key, label]) => (
+                <label key={key} style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', padding: '8px 10px', borderRadius: 8, border: '1px solid var(--sa-border)', background: perms[key] ? 'rgba(99,102,241,0.08)' : 'transparent', transition: 'all 0.15s' }}>
+                  <input
+                    type="checkbox"
+                    checked={!!perms[key]}
+                    onChange={e => setPerms({ ...perms, [key]: e.target.checked })}
+                    style={{ accentColor: 'var(--sa-primary)', width: 15, height: 15 }}
+                  />
+                  <span style={{ fontSize: 12.5, color: perms[key] ? 'var(--sa-text)' : 'var(--sa-muted)' }}>{label}</span>
+                </label>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        <div className="sa-modal-actions" style={{ marginTop: 20 }}>
+          <button className="sa-btn sa-btn-ghost" onClick={onClose}>Cancel</button>
+          <button className="sa-btn sa-btn-primary" disabled={saving} onClick={handleSave}>
+            {saving ? <><span className="sa-spinner" />Saving…</> : '💾 Save Changes'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// ─── Module Card ──────────────────────────────────────────────────────────────
+const ModuleCard = ({ moduleName, assignedUser, selected, onSelect, onAssign, onEdit, onRemove }) => {
+  const def = MODULE_DEFS[moduleName];
+  const isAssigned = !!assignedUser;
+
+  return (
+    <div
+      onClick={() => onSelect(moduleName)}
+      style={{
+        border: `1.5px solid ${selected ? def.color : 'var(--sa-border)'}`,
+        borderRadius: 12,
+        padding: '14px 16px',
+        cursor: 'pointer',
+        background: selected ? `rgba(${hexToRgb(def.color)}, 0.06)` : 'var(--sa-card)',
+        transition: 'all 0.2s',
+        position: 'relative',
+      }}
+    >
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
+        <span style={{ fontSize: 22 }}>{def.icon}</span>
+        <div>
+          <div style={{ fontWeight: 700, fontSize: 14, color: 'var(--sa-text)' }}>{def.label}</div>
+          <div style={{ fontSize: 11, color: 'var(--sa-muted)' }}>{Object.keys(def.features).length} features</div>
+        </div>
+        <span style={{
+          marginLeft: 'auto',
+          padding: '3px 8px',
+          borderRadius: 20,
+          fontSize: 11,
+          fontWeight: 700,
+          background: isAssigned ? 'rgba(16,185,129,0.15)' : 'rgba(156,163,175,0.15)',
+          color: isAssigned ? '#34d399' : 'var(--sa-muted)',
+        }}>
+          {isAssigned ? '✅ Assigned' : '⬜ Empty'}
+        </span>
+      </div>
+
+      {isAssigned ? (
+        <div style={{ fontSize: 12, color: 'var(--sa-muted)', marginBottom: 10 }}>
+          👤 {assignedUser.email}
+        </div>
+      ) : (
+        <div style={{ fontSize: 12, color: 'var(--sa-muted)', marginBottom: 10 }}>No user assigned</div>
+      )}
+
+      {/* Permissions summary */}
+      {isAssigned && (
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginBottom: 10 }}>
+          {Object.entries(assignedUser.permissions).filter(([,v]) => v).map(([k]) => (
+            <span key={k} style={{ fontSize: 10, padding: '2px 6px', borderRadius: 4, background: `rgba(${hexToRgb(def.color)}, 0.12)`, color: def.color, fontWeight: 600 }}>
+              {k.replace(/_/g,' ')}
+            </span>
+          ))}
+        </div>
+      )}
+
+      <div style={{ display: 'flex', gap: 6 }}>
+        {isAssigned ? (
+          <>
+            <button className="sa-btn sa-btn-ghost sa-btn-sm" onClick={e => { e.stopPropagation(); onEdit(assignedUser, moduleName); }}>✏️ Edit</button>
+            <button className="sa-btn sa-btn-danger sa-btn-sm" onClick={e => { e.stopPropagation(); onRemove(assignedUser.id); }}>🗑️ Remove</button>
+          </>
+        ) : (
+          <button
+            className="sa-btn sa-btn-primary sa-btn-sm"
+            onClick={e => { e.stopPropagation(); onAssign(moduleName); }}
+          >
+            + Assign User
+          </button>
+        )}
+      </div>
+    </div>
+  );
+};
+
+// Utility: hex to rgb for rgba() usage
+function hexToRgb(hex) {
+  const r = parseInt(hex.slice(1,3),16);
+  const g = parseInt(hex.slice(3,5),16);
+  const b = parseInt(hex.slice(5,7),16);
+  return `${r},${g},${b}`;
+}
+
+// ─── Main Page ────────────────────────────────────────────────────────────────
+const ModuleAssignment = () => {
+  const [companies, setCompanies]         = useState([]);
+  const [selectedCompany, setSelected]    = useState(null);
+  const [moduleUsers, setModuleUsers]     = useState([]);
+  const [loadingCompanies, setLoadingC]   = useState(true);
+  const [loadingModules, setLoadingM]     = useState(false);
+  const [assignModal, setAssignModal]     = useState(null); // moduleName
+  const [editModal, setEditModal]         = useState(null); // {moduleUser, moduleName}
+  const [deleteId, setDeleteId]           = useState(null);
+  const [search, setSearch]               = useState('');
+  const [msg, setMsg]                     = useState(null);
+
+  const notify = (type, text) => {
+    setMsg({ type, text });
+    setTimeout(() => setMsg(null), 3500);
+  };
+
+  // Load all companies
+  const loadCompanies = useCallback(async () => {
+    setLoadingC(true);
+    try {
+      const res = await saFetch(`${SA_API}/api/super-admin/users`);
+      if (res.success) setCompanies(res.users || []);
+    } catch (e) { console.error(e); }
+    setLoadingC(false);
+  }, []);
+
+  useEffect(() => { loadCompanies(); }, [loadCompanies]);
+
+  // Load module users for selected company
+  const loadModuleUsers = useCallback(async (companyId) => {
+    setLoadingM(true);
+    try {
+      const res = await saFetch(`${SA_API}/api/super-admin/module-users/${companyId}`);
+      if (res.success) setModuleUsers(res.moduleUsers || []);
+    } catch (e) { console.error(e); }
+    setLoadingM(false);
+  }, []);
+
+  const selectCompany = (company) => {
+    setSelected(company);
+    setModuleUsers([]);
+    loadModuleUsers(company.id);
+  };
+
+  const handleRemove = async (id) => {
+    try {
+      const res = await saFetch(`${SA_API}/api/super-admin/module-users/${id}`, { method: 'DELETE' });
+      if (res.success) {
+        notify('success', 'Module user removed.');
+        loadModuleUsers(selectedCompany.id);
+      } else notify('error', res.message || 'Failed to remove.');
+    } catch { notify('error', 'Network error.'); }
+    setDeleteId(null);
+  };
+
+  const getAssignedUser = (moduleName) => moduleUsers.find(u => u.module_name === moduleName) || null;
+
+  const filteredCompanies = companies.filter(c =>
+    c.company_name?.toLowerCase().includes(search.toLowerCase()) ||
+    c.email?.toLowerCase().includes(search.toLowerCase())
+  );
+
+  return (
+    <SuperAdminLayout title="Module Access" subtitle="Assign per-module users with granular feature permissions" pendingCount={0}>
+
+      {/* Flash message */}
+      {msg && (
+        <div style={{
+          background: msg.type === 'success' ? 'rgba(16,185,129,0.12)' : 'rgba(239,68,68,0.12)',
+          border: `1px solid ${msg.type === 'success' ? 'rgba(16,185,129,0.3)' : 'rgba(239,68,68,0.3)'}`,
+          color: msg.type === 'success' ? '#6ee7b7' : '#fca5a5',
+          padding: '12px 16px', borderRadius: 10, marginBottom: 16, fontSize: 14, fontWeight: 600,
+        }}>
+          {msg.text}
+        </div>
+      )}
+
+      <div style={{ display: 'grid', gridTemplateColumns: '280px 1fr', gap: 20 }}>
+
+        {/* ── Left: Company List ─────────────────────────────────────────────── */}
+        <div className="sa-card" style={{ padding: 0, overflow: 'hidden', height: 'fit-content' }}>
+          <div style={{ padding: '16px 16px 10px', borderBottom: '1px solid var(--sa-border)' }}>
+            <div className="sa-card-title" style={{ marginBottom: 10, fontSize: 14 }}>🏢 Companies</div>
+            <div className="sa-search-wrap">
+              <span className="sa-search-icon">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+                </svg>
+              </span>
+              <input placeholder="Search…" value={search} onChange={e => setSearch(e.target.value)} />
+            </div>
+          </div>
+
+          {loadingCompanies ? (
+            <div className="sa-loading" style={{ padding: 20 }}><span className="sa-spinner" /> Loading…</div>
+          ) : filteredCompanies.length === 0 ? (
+            <div style={{ padding: 20, textAlign: 'center', color: 'var(--sa-muted)', fontSize: 13 }}>No companies found</div>
+          ) : (
+            <div style={{ maxHeight: 520, overflowY: 'auto' }}>
+              {filteredCompanies.map(c => (
+                <div
+                  key={c.id}
+                  onClick={() => selectCompany(c)}
+                  style={{
+                    padding: '12px 16px',
+                    cursor: 'pointer',
+                    borderBottom: '1px solid var(--sa-border)',
+                    background: selectedCompany?.id === c.id ? 'rgba(99,102,241,0.08)' : 'transparent',
+                    borderLeft: selectedCompany?.id === c.id ? '3px solid var(--sa-primary)' : '3px solid transparent',
+                    transition: 'all 0.15s',
+                  }}
+                >
+                  <div style={{ fontWeight: 600, fontSize: 13.5, color: 'var(--sa-text)', marginBottom: 2 }}>{c.company_name}</div>
+                  <div style={{ fontSize: 11.5, color: 'var(--sa-muted)' }}>{c.email}</div>
+                  <span style={{
+                    display: 'inline-block', marginTop: 4, padding: '2px 7px', borderRadius: 20, fontSize: 10, fontWeight: 700,
+                    background: c.status === 'active' ? 'rgba(16,185,129,0.15)' : 'rgba(239,68,68,0.15)',
+                    color: c.status === 'active' ? '#34d399' : '#f87171',
+                  }}>{c.status}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* ── Right: Module Cards ─────────────────────────────────────────────── */}
+        <div>
+          {!selectedCompany ? (
+            <div className="sa-card sa-empty" style={{ minHeight: 300 }}>
+              <div className="sa-empty-icon">🔐</div>
+              <p>Select a company on the left to manage module access</p>
+            </div>
+          ) : (
+            <div className="sa-card">
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
+                <div>
+                  <div className="sa-card-title" style={{ marginBottom: 2 }}>
+                    🔐 {selectedCompany.company_name}
+                  </div>
+                  <div style={{ fontSize: 12, color: 'var(--sa-muted)' }}>
+                    Assign one user per module — each with granular feature permissions
+                  </div>
+                </div>
+                {loadingModules && <span className="sa-spinner" />}
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 16 }}>
+                {MODULE_KEYS.map(mod => (
+                  <ModuleCard
+                    key={mod}
+                    moduleName={mod}
+                    assignedUser={getAssignedUser(mod)}
+                    selected={false}
+                    onSelect={() => {}}
+                    onAssign={mn => setAssignModal(mn)}
+                    onEdit={(u, mn) => setEditModal({ moduleUser: u, moduleName: mn })}
+                    onRemove={id => setDeleteId(id)}
+                  />
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* ── Assign Modal ──────────────────────────────────────────────────────── */}
+      {assignModal && selectedCompany && (
+        <AssignModal
+          company={selectedCompany}
+          moduleName={assignModal}
+          onClose={() => setAssignModal(null)}
+          onSave={() => {
+            notify('success', `User assigned to ${MODULE_DEFS[assignModal].label} successfully!`);
+            loadModuleUsers(selectedCompany.id);
+          }}
+        />
+      )}
+
+      {/* ── Edit Permissions Modal ────────────────────────────────────────────── */}
+      {editModal && (
+        <EditPermsModal
+          moduleUser={editModal.moduleUser}
+          moduleName={editModal.moduleName}
+          onClose={() => setEditModal(null)}
+          onSave={() => {
+            notify('success', 'Permissions updated successfully!');
+            loadModuleUsers(selectedCompany.id);
+          }}
+        />
+      )}
+
+      {/* ── Delete Confirm ────────────────────────────────────────────────────── */}
+      {deleteId && (
+        <div className="sa-modal-overlay" onClick={() => setDeleteId(null)}>
+          <div className="sa-modal" style={{ width: 380 }} onClick={e => e.stopPropagation()}>
+            <div className="sa-modal-header">
+              <h3>⚠️ Remove Module User</h3>
+              <button className="sa-modal-close" onClick={() => setDeleteId(null)}>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+                </svg>
+              </button>
+            </div>
+            <p style={{ color: 'var(--sa-muted)', fontSize: 14, lineHeight: 1.6 }}>
+              Are you sure you want to remove this module user? They will immediately lose access.
+            </p>
+            <div className="sa-modal-actions">
+              <button className="sa-btn sa-btn-ghost" onClick={() => setDeleteId(null)}>Cancel</button>
+              <button className="sa-btn sa-btn-danger" onClick={() => handleRemove(deleteId)}>🗑️ Remove User</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </SuperAdminLayout>
+  );
+};
+
+export default ModuleAssignment;

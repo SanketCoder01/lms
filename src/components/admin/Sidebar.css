@@ -126,6 +126,26 @@
     opacity: 1;
 }
 
+/* Locked nav item styles */
+.nav-item.locked {
+    opacity: 0.5;
+    cursor: not-allowed;
+    background-color: #f8fafc;
+}
+
+.nav-item.locked:hover {
+    background-color: #f8fafc;
+    color: var(--text-muted);
+}
+
+.nav-item.locked .icon {
+    opacity: 0.4;
+}
+
+.nav-item.locked .label {
+    flex: 1;
+}
+
 .sidebar-footer {
     margin-top: auto;
     padding-top: 24px;

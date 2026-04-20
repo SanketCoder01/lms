@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import Sidebar from './Sidebar';
 import { getProjects, unitAPI, ownershipAPI, partyAPI, FILE_BASE_URL } from '../../services/api';
 import './OwnershipMapping.css';
+import usePermissions from '../../hooks/usePermissions';
 
 const OwnershipMapping = () => {
     const [projects, setProjects] = useState([]);
@@ -15,6 +16,7 @@ const OwnershipMapping = () => {
     const [documents, setDocuments] = useState([]); // Documents for current owner
     const [refreshDocs, setRefreshDocs] = useState(0);
     const [isAssignModalOpen, setIsAssignModalOpen] = useState(false);
+    const { can } = usePermissions();
     
     // Search state
     const [globalSearch, setGlobalSearch] = useState('');
@@ -272,39 +274,45 @@ const OwnershipMapping = () => {
                         )}
                     </div>
 
-                    <button onClick={() => {
-                        if (unitOwners.length === 0) {
-                            alert("No ownership history to export for this unit.");
-                            return;
-                        }
-                        const headers = ["Unit Number", "Owner Name", "Share %", "Status", "Start Date", "End Date"];
-                        const currentUnitNum = units.find(u => u.id === parseInt(selectedUnit))?.unit_number || 'N/A';
-                        const rows = unitOwners.map(o => [
-                            currentUnitNum,
-                            o.company_name || `${o.first_name} ${o.last_name}`,
-                            o.share_percentage || 100,
-                            o.ownership_status,
-                            new Date(o.start_date).toLocaleDateString('en-IN', { day: '2-digit', month: '2-digit', year: 'numeric' }),
-                            o.end_date ? new Date(o.end_date).toLocaleDateString('en-IN', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '-'
-                        ]);
-                        let csvContent = "data:text/csv;charset=utf-8," 
-                            + headers.join(",") + "\n"
-                            + rows.map(r => r.map(c => `"${c}"`).join(",")).join("\n");
-                        const encodedUri = encodeURI(csvContent);
-                        const link = document.createElement("a");
-                        link.setAttribute("href", encodedUri);
-                        link.setAttribute("download", `ownership_unit_${currentUnitNum}.csv`);
-                        document.body.appendChild(link);
-                        link.click();
-                        document.body.removeChild(link);
-                    }} className="secondary-btn" style={{ background: '#f8f9fa', color: '#333', border: '1px solid #ddd', padding: '8px 16px', borderRadius: '4px', cursor: 'pointer', display: 'flex', alignItems: 'center' }} disabled={!selectedUnit}>
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ marginRight: '6px' }}>
-                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-                            <polyline points="7 10 12 15 17 10"></polyline>
-                            <line x1="12" y1="15" x2="12" y2="3"></line>
-                        </svg>
-                        Export Unit History CSV
-                    </button>
+                    {can('view') ? (
+                        <button onClick={() => {
+                            if (unitOwners.length === 0) {
+                                alert("No ownership history to export for this unit.");
+                                return;
+                            }
+                            const headers = ["Unit Number", "Owner Name", "Share %", "Status", "Start Date", "End Date"];
+                            const currentUnitNum = units.find(u => u.id === parseInt(selectedUnit))?.unit_number || 'N/A';
+                            const rows = unitOwners.map(o => [
+                                currentUnitNum,
+                                o.company_name || `${o.first_name} ${o.last_name}`,
+                                o.share_percentage || 100,
+                                o.ownership_status,
+                                new Date(o.start_date).toLocaleDateString('en-IN', { day: '2-digit', month: '2-digit', year: 'numeric' }),
+                                o.end_date ? new Date(o.end_date).toLocaleDateString('en-IN', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '-'
+                            ]);
+                            let csvContent = "data:text/csv;charset=utf-8," 
+                                + headers.join(",") + "\n"
+                                + rows.map(r => r.map(c => `"${c}"`).join(",")).join("\n");
+                            const encodedUri = encodeURI(csvContent);
+                            const link = document.createElement("a");
+                            link.setAttribute("href", encodedUri);
+                            link.setAttribute("download", `ownership_unit_${currentUnitNum}.csv`);
+                            document.body.appendChild(link);
+                            link.click();
+                            document.body.removeChild(link);
+                        }} className="secondary-btn" style={{ background: '#f8f9fa', color: '#333', border: '1px solid #ddd', padding: '8px 16px', borderRadius: '4px', cursor: 'pointer', display: 'flex', alignItems: 'center' }} disabled={!selectedUnit}>
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ marginRight: '6px' }}>
+                                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                                <polyline points="7 10 12 15 17 10"></polyline>
+                                <line x1="12" y1="15" x2="12" y2="3"></line>
+                            </svg>
+                            Export Unit History CSV
+                        </button>
+                    ) : (
+                        <button className="secondary-btn" disabled title="No export permission" style={{ background: '#f3f4f6', color: '#9ca3af', border: '1px solid #e5e7eb', padding: '8px 16px', borderRadius: '4px', cursor: 'not-allowed', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                            🔒 Export Unit History CSV
+                        </button>
+                    )}
                 </div>
 
                 <div className="mapping-interface">
@@ -350,7 +358,11 @@ const OwnershipMapping = () => {
                                                 </h4>
                                                 <p>Since: {new Date(owner.start_date).toLocaleDateString('en-IN', { day: '2-digit', month: '2-digit', year: 'numeric' })}</p>
                                             </div>
-                                            <button className="remove-btn" onClick={() => handleRemoveOwner(owner)}>Remove</button>
+                                            {can('delete') ? (
+                                                <button className="remove-btn" onClick={() => handleRemoveOwner(owner)}>Remove</button>
+                                            ) : (
+                                                <button className="remove-btn" disabled title="No delete permission" style={{ opacity: 0.5, cursor: 'not-allowed' }}>🔒 Remove</button>
+                                            )}
                                         </div>
                                     ))
                                 ) : (
@@ -361,13 +373,24 @@ const OwnershipMapping = () => {
                                     </div>
                                 )}
                                 {/* Always show assign button so joint owners can be added */}
-                                <button
-                                    className="assign-btn"
-                                    onClick={() => setIsAssignModalOpen(true)}
-                                    style={{ marginTop: '12px' }}
-                                >
-                                    {activeOwners.length > 0 ? '+ Add Joint Owner' : 'Assign New Owner(s)'}
-                                </button>
+                                {can('edit') ? (
+                                    <button
+                                        className="assign-btn"
+                                        onClick={() => setIsAssignModalOpen(true)}
+                                        style={{ marginTop: '12px' }}
+                                    >
+                                        {activeOwners.length > 0 ? '+ Add Joint Owner' : 'Assign New Owner(s)'}
+                                    </button>
+                                ) : (
+                                    <button
+                                        className="assign-btn"
+                                        disabled
+                                        title="No add ownership permission"
+                                        style={{ marginTop: '12px', background: '#e2e8f0', color: '#94a3b8', cursor: 'not-allowed', border: '1px solid #cbd5e1' }}
+                                    >
+                                        🔒 Assign New Owner(s)
+                                    </button>
+                                )}
 
                                 {activeOwners.length > 0 && (
                                     <>
@@ -406,20 +429,28 @@ const OwnershipMapping = () => {
                                                             </span>
                                                         </div>
 
-                                                        {/* Upload Column - Show upload option always (replace if exists) */}
+                                                        {/* Upload Column */}
                                                         <div style={{ textAlign: 'center' }}>
-                                                            <label className="upload-plus-btn" style={{
-                                                                display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-                                                                width: '28px', height: '28px', background: doc ? '#22c55e' : '#3b82f6', color: 'white',
-                                                                borderRadius: '4px', cursor: 'pointer', transition: 'background 0.2s'
-                                                            }} title={doc ? "Replace Document" : "Upload Document"}>
-                                                                {doc ? (
-                                                                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
-                                                                ) : (
-                                                                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
-                                                                )}
-                                                                <input type="file" hidden accept=".pdf,application/pdf" onChange={(e) => handleFileUpload(e, type.id)} />
-                                                            </label>
+                                                            {can('edit') ? (
+                                                                <label className="upload-plus-btn" style={{
+                                                                    display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                                                                    width: '28px', height: '28px', background: doc ? '#22c55e' : '#3b82f6', color: 'white',
+                                                                    borderRadius: '4px', cursor: 'pointer', transition: 'background 0.2s'
+                                                                }} title={doc ? "Replace Document" : "Upload Document"}>
+                                                                    {doc ? (
+                                                                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
+                                                                    ) : (
+                                                                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                                                                    )}
+                                                                    <input type="file" hidden accept=".pdf,application/pdf" onChange={(e) => handleFileUpload(e, type.id)} />
+                                                                </label>
+                                                            ) : (
+                                                                <button disabled title="No upload document permission" style={{
+                                                                    display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                                                                    width: '28px', height: '28px', background: '#f1f5f9', color: '#94a3b8',
+                                                                    border: '1px solid #cbd5e1', borderRadius: '4px', cursor: 'not-allowed', fontSize: '14px'
+                                                                }}>🔒</button>
+                                                            )}
                                                         </div>
 
                                                         {/* Date Column - Show latest document date */}
@@ -437,12 +468,19 @@ const OwnershipMapping = () => {
                                                         <div style={{ textAlign: 'center' }}>
                                                             {doc ? (
                                                                 <div className="action-icon-wrapper center" style={{ display: 'flex', gap: '8px', justifyContent: 'center' }}>
-                                                                    <button className="action-icon-btn view" onClick={() => viewDocument(doc)} title="View Document" style={{
-                                                                        background: '#f0f9ff', border: '1px solid #bae6fd', borderRadius: '4px',
-                                                                        padding: '4px', cursor: 'pointer', display: 'flex', alignItems: 'center'
-                                                                    }}>
-                                                                        <svg viewBox="0 0 24 24" width="20" height="20" stroke="#0369a1" fill="none" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
-                                                                    </button>
+                                                                    {can('view') ? (
+                                                                        <button className="action-icon-btn view" onClick={() => viewDocument(doc)} title="View Document" style={{
+                                                                            background: '#f0f9ff', border: '1px solid #bae6fd', borderRadius: '4px',
+                                                                            padding: '4px', cursor: 'pointer', display: 'flex', alignItems: 'center'
+                                                                        }}>
+                                                                            <svg viewBox="0 0 24 24" width="20" height="20" stroke="#0369a1" fill="none" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+                                                                        </button>
+                                                                    ) : (
+                                                                        <button disabled title="No view document permission" style={{
+                                                                            background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '4px',
+                                                                            padding: '4px', cursor: 'not-allowed', display: 'flex', alignItems: 'center', opacity: 0.5, fontSize: '14px'
+                                                                        }}>🔒</button>
+                                                                    )}
                                                                 </div>
                                                             ) : (
                                                                 <span style={{ color: '#cbd5e1', display: 'inline-flex', alignItems: 'center' }} title="No document to view">

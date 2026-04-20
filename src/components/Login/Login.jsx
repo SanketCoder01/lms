@@ -30,15 +30,18 @@ const Login = () => {
   });
   const [proofFile, setProofFile] = useState(null);
 
-  // ── Always show login page — clear any stale session on load ──────────────
+  // ── Always show login page — clear any stale session on load ──────────────────────
   useEffect(() => {
     // Clear stored tokens so the login page always shows fresh.
-    // Use sessionStorage for per-tab session isolation.
+    // sessionStorage is per-tab — this only clears THIS tab's session.
     sessionStorage.removeItem('company_token');
     sessionStorage.removeItem('company_user');
     sessionStorage.removeItem('token');
     sessionStorage.removeItem('user');
     sessionStorage.removeItem('company_session_id');
+    sessionStorage.removeItem('permissions');
+    sessionStorage.removeItem('module_name');
+    sessionStorage.removeItem('is_module_user');
   }, []); // eslint-disable-line
 
   // ─── COMPANY USER LOGIN ─────────────────────────────────────────────────────
@@ -78,17 +81,37 @@ const Login = () => {
       sessionStorage.setItem('user', JSON.stringify({
         id: data.user.id,
         email: data.user.email,
-        first_name: data.user.company_name,
+        first_name: data.user.company_name || data.user.email,
         last_name: '',
         role: data.user.role || 'Admin',
         company_name: data.user.company_name,
         phone: data.user.phone,
         address: data.user.address,
         modules_access: data.user.modules_access,
+        type: data.user.type,
+        module_name: data.user.module_name,
       }));
-      sessionStorage.setItem('company_session_id', data.session_id);
+      sessionStorage.setItem('company_session_id', data.session_id || '');
 
-      navigate('/admin/dashboard');
+      // ── Module user: store permissions + redirect to assigned module ──────
+      const isModuleUser = data.user.type === 'module_user';
+      sessionStorage.setItem('is_module_user', isModuleUser ? '1' : '0');
+      sessionStorage.setItem('module_name', data.user.module_name || '');
+      sessionStorage.setItem('permissions', JSON.stringify(data.user.permissions || {}));
+
+      const MODULE_ROUTES = {
+        dashboard: '/admin/dashboard',
+        masters:   '/admin/filter-options',
+        leases:    '/admin/leases',
+        ownership: '/admin/ownership-mapping',
+        projects:  '/admin/projects',
+      };
+
+      if (isModuleUser && data.user.module_name) {
+        navigate(MODULE_ROUTES[data.user.module_name] || '/admin/dashboard');
+      } else {
+        navigate('/admin/dashboard');
+      }
     } catch {
       setError('Network error. Please check your connection and try again.');
     } finally {

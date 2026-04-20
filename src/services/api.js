@@ -167,6 +167,12 @@ export const userAPI = {
   createUser: (data) => API.post("/users", data),
   updateUser: (id, data) => API.put(`/users/${id}`, data),
   deleteUser: (id) => API.delete(`/users/${id}`),
+  
+  // Module Users (Company scoped)
+  getModuleUsers: () => API.get("/users/module-users"),
+  createModuleUser: (data) => API.post("/users/module-users", data),
+  updateModuleUser: (id, data) => API.put(`/users/module-users/${id}`, data),
+  deleteModuleUser: (id) => API.delete(`/users/module-users/${id}`),
 };
 
 // ---------------- MANAGEMENT ----------------

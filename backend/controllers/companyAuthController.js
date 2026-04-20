@@ -17,7 +17,7 @@ const companyLogin = async (req, res) => {
     if (!email || !password)
       return res.status(400).json({ success: false, message: 'Email and password required' });
 
-    // 1. Check if email is in company_users
+    // 1. Check if email is in company_users (full company admin)
     const { data: user, error } = await supabase
       .from('company_users')
       .select('*')
@@ -25,7 +25,57 @@ const companyLogin = async (req, res) => {
       .single();
 
     if (error || !user) {
-      // Also check if pending in registrations
+      // ── 1a. Try module_users (sub-user assigned by super admin) ──────────────
+      const { data: moduleUser, error: muErr } = await supabase
+        .from('module_users')
+        .select('*, company_users!module_users_company_id_fkey(company_name)')
+        .eq('email', email)
+        .single();
+
+      if (!muErr && moduleUser) {
+        // Check status
+        if (moduleUser.status === 'suspended')
+          return res.status(403).json({ success: false, message: 'Your module account has been suspended.', code: 'SUSPENDED' });
+
+        const isValid = await bcrypt.compare(password, moduleUser.password_hash);
+        if (!isValid)
+          return res.status(401).json({ success: false, message: 'Invalid email or password.', code: 'INVALID_CREDENTIALS' });
+
+        const companyName = moduleUser.company_users?.company_name || '';
+
+        const token = jwt.sign(
+          {
+            id: moduleUser.id,
+            email: moduleUser.email,
+            company_id: moduleUser.company_id,
+            company_name: companyName,
+            type: 'module_user',
+            module_name: moduleUser.module_name,
+            permissions: moduleUser.permissions,
+          },
+          COMPANY_JWT_SECRET,
+          { expiresIn: '8h' }
+        );
+
+        return res.json({
+          success: true,
+          token,
+          session_id: null,
+          user: {
+            id: moduleUser.id,
+            email: moduleUser.email,
+            company_id: moduleUser.company_id,
+            company_name: companyName,
+            type: 'module_user',
+            module_name: moduleUser.module_name,
+            permissions: moduleUser.permissions,
+            status: moduleUser.status,
+          },
+          message: 'Login successful',
+        });
+      }
+
+      // ── 1b. Check pending/rejected registrations ──────────────────────────
       const { data: pending } = await supabase
         .from('company_registrations')
         .select('status')

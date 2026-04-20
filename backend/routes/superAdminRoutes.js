@@ -7,6 +7,9 @@ const {
   getSessions, killSession,
   getAnnouncements, createAnnouncement, toggleAnnouncement, deleteAnnouncement,
 } = require('../controllers/superAdminController');
+const {
+  getModuleUsers, createModuleUser, updateModuleUser, deleteModuleUser, getModuleFeatures,
+} = require('../controllers/moduleUserController');
 
 const router = express.Router();
 
@@ -38,5 +41,12 @@ router.get('/announcements',           superAdminAuth, getAnnouncements);
 router.post('/announcements',          superAdminAuth, createAnnouncement);
 router.put('/announcements/:id',       superAdminAuth, toggleAnnouncement);
 router.delete('/announcements/:id',    superAdminAuth, deleteAnnouncement);
+
+// Module User Assignment
+router.get('/module-features',              superAdminAuth, getModuleFeatures);
+router.get('/module-users/:company_id',     superAdminAuth, getModuleUsers);
+router.post('/module-users',               superAdminAuth, createModuleUser);
+router.put('/module-users/:id',            superAdminAuth, updateModuleUser);
+router.delete('/module-users/:id',         superAdminAuth, deleteModuleUser);
 
 module.exports = router;

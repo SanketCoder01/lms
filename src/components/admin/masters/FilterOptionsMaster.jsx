@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import Sidebar from '../Sidebar';
 import { filterAPI, handleApiError } from '../../../services/api';
 import '../Master.css';
+import usePermissions from '../../../hooks/usePermissions';
 
 const FilterOptionsMaster = () => {
     const [options, setOptions] = useState([]);
@@ -11,6 +12,7 @@ const FilterOptionsMaster = () => {
     const [loading, setLoading] = useState(true);
     const [editingId, setEditingId] = useState(null);
     const [editValue, setEditValue] = useState('');
+    const { can } = usePermissions();
 
     const categories = [
         { value: 'project_type', label: 'Project Types', hint: 'Used in Add Project → Project Type dropdown' },
@@ -149,8 +151,13 @@ const FilterOptionsMaster = () => {
                             value={newOption}
                             onChange={(e) => setNewOption(e.target.value)}
                             style={{ maxWidth: '400px', padding: '9px 14px', borderRadius: '6px', border: '1px solid #d1d5db', fontSize: '14px' }}
+                            disabled={!can('edit')}
                         />
-                        <button type="submit" className="primary-btn">+ Add Option</button>
+                        {can('edit') ? (
+                            <button type="submit" className="primary-btn">+ Add Option</button>
+                        ) : (
+                            <button type="button" disabled className="primary-btn" style={{ opacity: 0.5, cursor: 'not-allowed' }}>🔒 Add Option</button>
+                        )}
                     </form>
 
                     {/* Options Table */}
@@ -197,14 +204,22 @@ const FilterOptionsMaster = () => {
                                                 </>
                                             ) : (
                                                 <>
-                                                    <button
-                                                        onClick={() => startEdit(opt)}
-                                                        style={{ background: 'none', border: '1px solid #2E66FF', color: '#2E66FF', borderRadius: '4px', padding: '4px 10px', cursor: 'pointer', fontSize: '12px' }}
-                                                    >Edit</button>
-                                                    <button
-                                                        onClick={() => handleDelete(opt.id)}
-                                                        style={{ background: 'none', border: '1px solid #ff4d4f', color: '#ff4d4f', borderRadius: '4px', padding: '4px 10px', cursor: 'pointer', fontSize: '12px' }}
-                                                    >Delete</button>
+                                                    {can('edit') ? (
+                                                        <button
+                                                            onClick={() => startEdit(opt)}
+                                                            style={{ background: 'none', border: '1px solid #2E66FF', color: '#2E66FF', borderRadius: '4px', padding: '4px 10px', cursor: 'pointer', fontSize: '12px' }}
+                                                        >Edit</button>
+                                                    ) : (
+                                                        <button disabled title="No edit permission" style={{ background: '#f8fafc', border: '1px solid #e2e8f0', color: '#94a3b8', borderRadius: '4px', padding: '4px 10px', cursor: 'not-allowed', fontSize: '12px' }}>🔒 Edit</button>
+                                                    )}
+                                                    {can('delete') ? (
+                                                        <button
+                                                            onClick={() => handleDelete(opt.id)}
+                                                            style={{ background: 'none', border: '1px solid #ff4d4f', color: '#ff4d4f', borderRadius: '4px', padding: '4px 10px', cursor: 'pointer', fontSize: '12px' }}
+                                                        >Delete</button>
+                                                    ) : (
+                                                        <button disabled title="No delete permission" style={{ background: '#f8fafc', border: '1px solid #e2e8f0', color: '#94a3b8', borderRadius: '4px', padding: '4px 10px', cursor: 'not-allowed', fontSize: '12px' }}>🔒 Delete</button>
+                                                    )}
                                                 </>
                                             )}
                                         </div>

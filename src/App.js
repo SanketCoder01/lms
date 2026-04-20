@@ -4,6 +4,7 @@ import Dashboard from "./components/admin/dashboard";
 import Projects from "./components/admin/Projects";
 import ProjectDetails from "./components/admin/ProjectDetails";
 import Settings from "./components/admin/Settings";
+import RoleManagement from "./components/admin/RoleManagement";
 import TenantList from "./components/admin/TenantList"; // Updated import
 import AddTenant from "./components/admin/AddTenant";
 import TenantDetails from "./components/admin/TenantDetails";
@@ -59,6 +60,7 @@ import UserManagement from "./components/super-admin/UserManagement";
 import RegistrationApprovals from "./components/super-admin/RegistrationApprovals";
 import LiveActivity from "./components/super-admin/LiveActivity";
 import Announcements from "./components/super-admin/Announcements";
+import ModuleAssignment from "./components/super-admin/ModuleAssignment";
 
 import GlobalHeartbeat from './components/GlobalHeartbeat';
 import TopBanner from './components/TopBanner';
@@ -116,6 +118,7 @@ function App() {
         <Route path="/super-admin/approvals" element={<RegistrationApprovals />} />
         <Route path="/super-admin/live-activity" element={<LiveActivity />} />
         <Route path="/super-admin/announcements" element={<Announcements />} />
+        <Route path="/super-admin/module-users" element={<ModuleAssignment />} />
 
         {/* Admin Routes (Company Users) - Protected with sessionStorage */}
         <Route path="/admin/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
@@ -137,6 +140,7 @@ function App() {
 
         {/* Other Admin Modules */}
         <Route path="/admin/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
+        <Route path="/admin/role-management" element={<ProtectedRoute><RoleManagement /></ProtectedRoute>} />
         <Route path="/admin/create-user" element={<ProtectedRoute><CreateUser /></ProtectedRoute>} />
 
         {/* Tenant Routes */}

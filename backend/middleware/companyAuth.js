@@ -16,7 +16,11 @@ const jwt = require('jsonwebtoken');
 const COMPANY_JWT_SECRET = process.env.COMPANY_JWT_SECRET || 'COMPANY_USER_JWT_SECRET_2024';
 
 const companyAuth = (req, _res, next) => {
-  req.companyId = null; // Default: no isolation
+  req.companyId    = null;
+  req.companyUser  = null;
+  req.isModuleUser = false;
+  req.moduleName   = null;
+  req.permissions  = {};
 
   try {
     const authHeader = req.headers['authorization'];
@@ -25,15 +29,19 @@ const companyAuth = (req, _res, next) => {
     const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : authHeader;
     if (!token) return next();
 
-    // Verify as company user token (different secret from legacy admin JWT)
     try {
       const decoded = jwt.verify(token, COMPANY_JWT_SECRET);
-      if (decoded && decoded.type === 'company_user' && decoded.company_id) {
-        req.companyId = decoded.company_id;
-        req.companyUser = decoded; // Full payload available to controllers
+      if (decoded && decoded.company_id) {
+        req.companyId   = decoded.company_id;
+        req.companyUser = decoded;
+
+        if (decoded.type === 'module_user') {
+          req.isModuleUser = true;
+          req.moduleName   = decoded.module_name || null;
+          req.permissions  = decoded.permissions || {};
+        }
       }
     } catch {
-      // Not a company user token — could be legacy admin token, that's fine
       req.companyId = null;
     }
   } catch {

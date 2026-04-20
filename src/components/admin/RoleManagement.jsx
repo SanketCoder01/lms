@@ -4,6 +4,15 @@ import "./RoleManagement.css";
 // import api from services
 import { userAPI, roleAPI, handleApiError } from "../../services/api";
 
+// Module definitions for assignment
+const MODULE_DEFS = {
+  dashboard: { label: 'Dashboard', icon: 'Dashboard', color: '#6366f1', features: ['view', 'edit', 'delete'] },
+  projects: { label: 'Projects', icon: 'Projects', color: '#8b5cf6', features: ['view', 'edit', 'delete'] },
+  masters: { label: 'Masters', icon: 'Masters', color: '#f59e0b', features: ['view', 'edit', 'delete'] },
+  ownership: { label: 'Ownership', icon: 'Ownership', color: '#ec4899', features: ['view', 'edit', 'delete'] },
+  leases: { label: 'Leases', icon: 'Leases', color: '#10b981', features: ['view', 'edit', 'delete'] },
+};
+
 const RoleManagement = () => {
   const [users, setUsers] = useState([]);
   const [search, setSearch] = useState("");
@@ -21,7 +30,10 @@ const RoleManagement = () => {
     email: "",
     password: "",
     role_name: "User",
-    status: "active"
+    status: "active",
+    is_module_user: false,
+    module_name: "",
+    module_permissions: { view: true, create: false, edit: false, delete: false }
   });
 
   // UI State
@@ -51,11 +63,12 @@ const RoleManagement = () => {
 
   const fetchUsers = () => {
     setLoading(true);
-    userAPI.getUsers()
-      .then(res => {
-        const data = res.data;
-        const formattedUsers = data.map(user => ({
-          id: user.id,
+    let moduleUsersReq = userAPI.getModuleUsers ? userAPI.getModuleUsers() : Promise.resolve({ data: { moduleUsers: [] } });
+    Promise.all([userAPI.getUsers(), moduleUsersReq])
+      .then(([companyRes, moduleRes]) => {
+        const cUsers = companyRes.data.map(user => ({
+          id: `c_${user.id}`,
+          rawId: user.id,
           name: `${user.first_name} ${user.last_name}`,
           firstName: user.first_name,
           lastName: user.last_name,
@@ -64,10 +77,30 @@ const RoleManagement = () => {
           roleClass: (user.role_name || "User").toLowerCase().replace(/\s+/g, "-"),
           isAll: ["admin", "administrator", "super admin"]
             .includes((user.role_name || "").toLowerCase()),
-          status: (user.status || "active").toLowerCase()
+          status: (user.status || "active").toLowerCase(),
+          is_module_user: false
         }));
 
-        setUsers(formattedUsers);
+        let modData = moduleRes.data.moduleUsers || moduleRes.data || [];
+        if (!Array.isArray(modData)) modData = [];
+
+        const mUsers = modData.map(u => ({
+          id: `m_${u.id}`,
+          rawId: u.id,
+          name: 'Module User',
+          firstName: 'Module',
+          lastName: 'User',
+          email: u.email,
+          role: u.module_name,
+          roleClass: 'module-user',
+          isAll: false,
+          status: (u.status || "active").toLowerCase(),
+          is_module_user: true,
+          module_name: u.module_name,
+          module_permissions: u.permissions || { view: true, edit: false, delete: false }
+        }));
+
+        setUsers([...cUsers, ...mUsers]);
       })
       .catch(err => {
         console.error("Failed to load users", err);
@@ -106,7 +139,10 @@ const RoleManagement = () => {
       email: "",
       password: "",
       role_name: roles.length > 0 ? roles[0].role_name : "Admin",
-      status: "active"
+      status: "active",
+      is_module_user: false,
+      module_name: "",
+      module_permissions: { view: true, edit: false, delete: false }
     });
     setIsEditing(false);
     setCurrentUserId(null);
@@ -125,18 +161,23 @@ const RoleManagement = () => {
       email: user.email,
       password: "", // User can leave blank to keep existing
       role_name: user.role,
-      status: user.status
+      status: user.status,
+      is_module_user: user.is_module_user || false,
+      module_name: user.module_name || "",
+      module_permissions: user.module_permissions || { view: true, edit: false, delete: false }
     });
     setIsEditing(true);
-    setCurrentUserId(user.id);
+    setCurrentUserId(user.rawId || user.id);
     setShowModal(true);
     setActiveActionMenu(null);
   };
 
-  const handleDelete = async (id) => {
+  const handleDelete = async (user) => {
     if (window.confirm("Are you sure you want to delete this user?")) {
       try {
-        await userAPI.deleteUser(id);
+        if (user.is_module_user) await userAPI.deleteModuleUser(user.rawId);
+        else await userAPI.deleteUser(user.rawId);
+
         showToast("User deleted successfully", "success");
         fetchUsers();
       } catch (error) {
@@ -150,26 +191,27 @@ const RoleManagement = () => {
     e.preventDefault();
     setSubmitting(true);
     try {
-      if (isEditing) {
-        // Update User
-        const payload = { ...formData };
-        if (!payload.password) delete payload.password; // Don't send empty password
+      if (formData.is_module_user) {
+        const payload = { ...formData, permissions: formData.module_permissions };
+        if (!payload.password) delete payload.password;
 
-        await userAPI.updateUser(currentUserId, payload);
-        showToast("User updated successfully", "success");
+        if (isEditing) await userAPI.updateModuleUser(currentUserId, payload);
+        else await userAPI.createModuleUser(payload);
       } else {
-        // Create User
-        await userAPI.createUser(formData);
-        showToast("User created successfully", "success");
+        const payload = { ...formData };
+        if (!payload.password) delete payload.password;
+
+        if (isEditing) await userAPI.updateUser(currentUserId, payload);
+        else await userAPI.createUser(payload);
       }
 
+      showToast(isEditing ? "User updated successfully" : "User created successfully", "success");
       setShowModal(false);
       resetForm();
       fetchUsers();
     } catch (error) {
       console.error("Submission Error:", error);
-      const msg = handleApiError(error);
-      showToast(msg, "error");
+      showToast(handleApiError(error), "error");
     } finally {
       setSubmitting(false);
     }
@@ -235,28 +277,84 @@ const RoleManagement = () => {
               </div>
 
               <form onSubmit={handleSubmit} className="modal-form">
-                <div className="form-row">
-                  <div className="form-group">
-                    <label>First Name</label>
-                    <input
-                      type="text"
-                      className="premium-input"
-                      value={formData.first_name}
-                      onChange={e => setFormData({ ...formData, first_name: e.target.value })}
-                      required
-                    />
-                  </div>
-                  <div className="form-group">
-                    <label>Last Name</label>
-                    <input
-                      type="text"
-                      className="premium-input"
-                      value={formData.last_name}
-                      onChange={e => setFormData({ ...formData, last_name: e.target.value })}
-                      required
-                    />
-                  </div>
+                <div className="form-group">
+                  <label>User Type</label>
+                  <select
+                    className="premium-select"
+                    value={formData.is_module_user ? "module" : "company"}
+                    onChange={e => setFormData({ ...formData, is_module_user: e.target.value === "module" })}
+                    disabled={isEditing}
+                    style={{ padding: '10px', borderRadius: '8px', border: '1px solid #d1d5db', width: '100%' }}
+                  >
+                    <option value="company">Full Company User (Admin & Roles)</option>
+                    <option value="module">Specific Module User (Restricted)</option>
+                  </select>
                 </div>
+
+                {!formData.is_module_user && (
+                  <div className="form-row">
+                    <div className="form-group">
+                      <label>First Name</label>
+                      <input
+                        type="text"
+                        className="premium-input"
+                        value={formData.first_name}
+                        onChange={e => setFormData({ ...formData, first_name: e.target.value })}
+                        required={!formData.is_module_user}
+                      />
+                    </div>
+                    <div className="form-group">
+                      <label>Last Name</label>
+                      <input
+                        type="text"
+                        className="premium-input"
+                        value={formData.last_name}
+                        onChange={e => setFormData({ ...formData, last_name: e.target.value })}
+                        required={!formData.is_module_user}
+                      />
+                    </div>
+                  </div>
+                )}
+
+                {formData.is_module_user && (
+                  <>
+                    <div className="form-group">
+                      <label>Assigned Module</label>
+                      <select
+                        className="premium-select"
+                        value={formData.module_name}
+                        onChange={e => setFormData({ ...formData, module_name: e.target.value })}
+                        required={formData.is_module_user}
+                        disabled={isEditing}
+                        style={{ padding: '10px', borderRadius: '8px', border: '1px solid #d1d5db', width: '100%' }}
+                      >
+                        <option value="">Select a module...</option>
+                        {Object.keys(MODULE_DEFS).map(key => (
+                          <option key={key} value={key}>{MODULE_DEFS[key].label}</option>
+                        ))}
+                      </select>
+                    </div>
+
+                    {formData.module_name && (
+                      <div className="form-group" style={{ marginBottom: '16px' }}>
+                        <label>Feature Permissions</label>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginTop: '10px' }}>
+                          {MODULE_DEFS[formData.module_name].features.map(feat => (
+                            <label key={feat} style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13.5px', cursor: 'pointer' }}>
+                              <input
+                                type="checkbox"
+                                checked={!!formData.module_permissions[feat]}
+                                onChange={e => setFormData({ ...formData, module_permissions: { ...formData.module_permissions, [feat]: e.target.checked } })}
+                                style={{ accentColor: 'var(--primary-color)', width: '14px', height: '14px' }}
+                              />
+                              {feat.charAt(0).toUpperCase() + feat.slice(1)} Access
+                            </label>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </>
+                )}
 
                 <div className="form-group">
                   <label>Email Address</label>
@@ -282,33 +380,37 @@ const RoleManagement = () => {
                   />
                 </div>
 
-                <div className="form-group">
-                  <label>Role</label>
-                  <select
-                    className="premium-select"
-                    value={formData.role_name}
-                    onChange={e => setFormData({ ...formData, role_name: e.target.value })}
-                    disabled={roleLoading}
-                  >
-                    {roles.length === 0 && <option value="">Loading roles...</option>}
-                    {roles.map(r => (
-                      <option key={r.id} value={r.role_name}>{r.role_name}</option>
-                    ))}
-                  </select>
-                </div>
+                {!formData.is_module_user && (
+                  <>
+                    <div className="form-group">
+                      <label>Role</label>
+                      <select
+                        className="premium-select"
+                        value={formData.role_name}
+                        onChange={e => setFormData({ ...formData, role_name: e.target.value })}
+                        disabled={roleLoading}
+                      >
+                        {roles.length === 0 && <option value="">Loading roles...</option>}
+                        {roles.map(r => (
+                          <option key={r.id} value={r.role_name}>{r.role_name}</option>
+                        ))}
+                      </select>
+                    </div>
 
-                {isEditing && (
-                  <div className="form-group">
-                    <label>Status</label>
-                    <select
-                      className="premium-select"
-                      value={formData.status}
-                      onChange={e => setFormData({ ...formData, status: e.target.value })}
-                    >
-                      <option value="active">Active</option>
-                      <option value="inactive">Inactive</option>
-                    </select>
-                  </div>
+                    {isEditing && (
+                      <div className="form-group">
+                        <label>Status</label>
+                        <select
+                          className="premium-select"
+                          value={formData.status}
+                          onChange={e => setFormData({ ...formData, status: e.target.value })}
+                        >
+                          <option value="active">Active</option>
+                          <option value="inactive">Inactive</option>
+                        </select>
+                      </div>
+                    )}
+                  </>
                 )}
 
                 <div className="modal-actions">

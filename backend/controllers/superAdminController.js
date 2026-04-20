@@ -535,6 +535,112 @@ const deleteAnnouncement = async (req, res) => {
   }
 };
 
+// --- MODULE USERS - GET BY COMPANY
+const getModuleUsers = async (req, res) => {
+  try {
+    const { companyId } = req.params;
+    const { data, error } = await supabase
+      .from('module_users')
+      .select('*')
+      .eq('company_id', companyId);
+    if (error) throw error;
+    return res.json({ success: true, moduleUsers: data || [] });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+// --- MODULE USERS - CREATE
+const createModuleUser = async (req, res) => {
+  try {
+    const { company_id, module_name, email, password, permissions } = req.body;
+
+    // Validate required fields
+    if (!company_id || !module_name || !email || !password) {
+      return res.status(400).json({ success: false, message: 'Company, module, email, and password are required' });
+    }
+
+    // Check if module already has a user assigned for this company
+    const { data: existing } = await supabase
+      .from('module_users')
+      .select('id')
+      .eq('company_id', company_id)
+      .eq('module_name', module_name)
+      .single();
+
+    if (existing) {
+      return res.status(400).json({ success: false, message: 'A user is already assigned to this module for this company' });
+    }
+
+    // Hash password
+    const bcrypt = require('bcryptjs');
+    const password_hash = await bcrypt.hash(password, 10);
+
+    // Create module user
+    const { data, error } = await supabase
+      .from('module_users')
+      .insert({
+        company_id,
+        module_name,
+        email,
+        password_hash,
+        permissions: permissions || {},
+        status: 'active',
+        created_at: new Date().toISOString()
+      })
+      .select()
+      .single();
+
+    if (error) throw error;
+    return res.json({ success: true, moduleUser: data, message: 'Module user created successfully' });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+// --- MODULE USERS - UPDATE
+const updateModuleUser = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { permissions, password } = req.body;
+
+    const updateData = {
+      permissions: permissions || {},
+      updated_at: new Date().toISOString()
+    };
+
+    // Update password if provided
+    if (password) {
+      const bcrypt = require('bcryptjs');
+      updateData.password_hash = await bcrypt.hash(password, 10);
+    }
+
+    const { data, error } = await supabase
+      .from('module_users')
+      .update(updateData)
+      .eq('id', id)
+      .select()
+      .single();
+
+    if (error) throw error;
+    return res.json({ success: true, moduleUser: data, message: 'Module user updated successfully' });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+// --- MODULE USERS - DELETE
+const deleteModuleUser = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { error } = await supabase.from('module_users').delete().eq('id', id);
+    if (error) throw error;
+    return res.json({ success: true, message: 'Module user deleted successfully' });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
+};
+
 module.exports = {
   login,
   getDashboardStats,
@@ -542,4 +648,5 @@ module.exports = {
   getRegistrations, approveRegistration, rejectRegistration,
   getSessions, killSession,
   getAnnouncements, createAnnouncement, toggleAnnouncement, deleteAnnouncement,
+  getModuleUsers, createModuleUser, updateModuleUser, deleteModuleUser,
 };

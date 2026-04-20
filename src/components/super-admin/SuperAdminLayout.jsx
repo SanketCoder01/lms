@@ -27,6 +27,7 @@ const navItems = [
   { path: '/super-admin/dashboard',     label: 'Dashboard',     icon: '📊' },
   { path: '/super-admin/users',         label: 'Companies',     icon: '🏢' },
   { path: '/super-admin/approvals',     label: 'Approvals',     icon: '✅', badge: true },
+  { path: '/super-admin/module-users',  label: 'Module Access', icon: '🔐' },
   { path: '/super-admin/live-activity', label: 'Live Activity', icon: '👁️', live: true },
   { path: '/super-admin/announcements', label: 'Announcements', icon: '📢' },
 ];

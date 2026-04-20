@@ -5,9 +5,11 @@ import ReportGenerator from './ReportGenerator';
 import './dashboard.css';
 import './leases.css';
 import { leaseAPI, getProjects, getProjectLocations, filterAPI } from "../../services/api";
+import usePermissions from '../../hooks/usePermissions';
 
 const Leases = () => {
     const [searchParams] = useSearchParams();
+    const { can } = usePermissions();
     const [leases, setLeases] = useState([]);
     const [loading, setLoading] = useState(true);
     const [leaseStatuses, setLeaseStatuses] = useState([]); // Initialize as empty array
@@ -228,27 +230,30 @@ const Leases = () => {
                     </div>
                     {/* Export and Create Lease buttons */}
                     <div style={{ display: 'flex', gap: '10px' }}>
-                        <button onClick={handleExportCSV} className="secondary-btn" style={{ background: '#f8f9fa', color: '#333', border: '1px solid #ddd', padding: '8px 16px', borderRadius: '4px', cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ marginRight: '6px' }}>
-                                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-                                <polyline points="7 10 12 15 17 10"></polyline>
-                                <line x1="12" y1="15" x2="12" y2="3"></line>
-                            </svg>
-                            Export CSV
-                        </button>
-                        <button onClick={() => setShowReportModal(true)} className="secondary-btn" style={{ background: '#eff6ff', color: '#2e66ff', border: '1px solid #bfdbfe', padding: '8px 16px', borderRadius: '4px', cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ marginRight: '6px' }}>
-                                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
-                                <polyline points="14 2 14 8 20 8"></polyline>
-                                <line x1="16" y1="13" x2="8" y2="13"></line>
-                                <line x1="16" y1="17" x2="8" y2="17"></line>
-                            </svg>
-                            Generate Report
-                        </button>
-                        <Link to="/admin/add-lease" className="primary-btn" style={{ textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: '8px' }}>
-                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
-                            Create Lease
-                        </Link>
+                        {can('view') ? (
+                            <button onClick={handleExportCSV} className="secondary-btn" style={{ background: '#f8f9fa', color: '#333', border: '1px solid #ddd', padding: '8px 16px', borderRadius: '4px', cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ marginRight: '6px' }}><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+                                Export CSV
+                            </button>
+                        ) : (
+                            <button className="secondary-btn" disabled title="You don't have export permission" style={{ background: '#f3f4f6', color: '#9ca3af', border: '1px solid #e5e7eb', padding: '8px 16px', borderRadius: '4px', cursor: 'not-allowed', display: 'flex', alignItems: 'center', gap: '4px' }}>🔒 Export CSV</button>
+                        )}
+                        {can('view') ? (
+                            <button onClick={() => setShowReportModal(true)} className="secondary-btn" style={{ background: '#eff6ff', color: '#2e66ff', border: '1px solid #bfdbfe', padding: '8px 16px', borderRadius: '4px', cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ marginRight: '6px' }}><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line></svg>
+                                Generate Report
+                            </button>
+                        ) : (
+                            <button className="secondary-btn" disabled title="You don't have report permission" style={{ background: '#f3f4f6', color: '#9ca3af', border: '1px solid #e5e7eb', padding: '8px 16px', borderRadius: '4px', cursor: 'not-allowed', display: 'flex', alignItems: 'center', gap: '4px' }}>🔒 Generate Report</button>
+                        )}
+                        {can('edit') ? (
+                            <Link to="/admin/add-lease" className="primary-btn" style={{ textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: '8px' }}>
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                                Create Lease
+                            </Link>
+                        ) : (
+                            <button className="primary-btn" disabled title="You don't have permission to create leases" style={{ opacity: 0.5, cursor: 'not-allowed', display: 'inline-flex', alignItems: 'center', gap: '6px' }}>🔒 Create Lease</button>
+                        )}
                     </div>
                 </header>
 
@@ -411,15 +416,27 @@ const Leases = () => {
                                         </td>
                                         <td>
                                             <div className="action-icon-wrapper right">
-                                                <Link to={`/admin/view-lease/${lease.id}`} className="action-icon-btn view" title="View Details">
-                                                    <svg viewBox="0 0 24 24" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
-                                                </Link>
-                                                <Link to={`/admin/edit-lease/${lease.id}`} className="action-icon-btn edit" title="Edit">
-                                                    <svg viewBox="0 0 24 24" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
-                                                </Link>
-                                                <button className="action-icon-btn delete" onClick={() => handleDelete(lease.id)} title="Delete">
-                                                    <svg viewBox="0 0 24 24" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
-                                                </button>
+                                                {can('view') ? (
+                                                    <Link to={`/admin/view-lease/${lease.id}`} className="action-icon-btn view" title="View Details">
+                                                        <svg viewBox="0 0 24 24" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+                                                    </Link>
+                                                ) : (
+                                                    <button className="action-icon-btn" disabled title="No view permission" style={{ opacity: 0.4, cursor:'not-allowed', fontSize:'14px' }}>🔒</button>
+                                                )}
+                                                {can('edit') ? (
+                                                    <Link to={`/admin/edit-lease/${lease.id}`} className="action-icon-btn edit" title="Edit">
+                                                        <svg viewBox="0 0 24 24" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
+                                                    </Link>
+                                                ) : (
+                                                    <button className="action-icon-btn" disabled title="No edit permission" style={{ opacity: 0.4, cursor:'not-allowed', fontSize:'14px' }}>🔒</button>
+                                                )}
+                                                {can('delete') ? (
+                                                    <button className="action-icon-btn delete" onClick={() => handleDelete(lease.id)} title="Delete">
+                                                        <svg viewBox="0 0 24 24" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+                                                    </button>
+                                                ) : (
+                                                    <button className="action-icon-btn" disabled title="No delete permission" style={{ opacity: 0.4, cursor:'not-allowed', fontSize:'14px' }}>🔒</button>
+                                                )}
                                             </div>
                                         </td>
                                     </tr>
