@@ -6,6 +6,11 @@ exports.getOwnerDetails = async (req, res) => {
         const { data: owner, error } = await supabase.from('owners').select('*').eq('id', ownerId).single();
         if (error || !owner) return res.status(404).json({ message: "Owner not found" });
 
+        // Multi-tenant: silently hide owners from other companies
+        if (req.companyId && owner.company_id && owner.company_id !== req.companyId) {
+            return res.status(404).json({ message: 'Owner not found' });
+        }
+
         const { data: ownerUnits } = await supabase.from('owner_units').select('unit_id').eq('owner_id', ownerId);
         const unitIds = (ownerUnits || []).map(ou => ou.unit_id);
         
@@ -27,9 +32,12 @@ exports.getOwners = async (req, res) => {
         const { search, location } = req.query;
 
         let query = supabase.from('owners').select(`
-            id, name, email, phone, gst_number, total_owned_area, kyc_status, created_at, address,
+            id, name, email, phone, gst_number, total_owned_area, kyc_status, created_at, address, company_id,
             owner_documents(document_path)
         `).order('created_at', { ascending: false });
+
+        // Multi-tenant: company users only see their own owners
+        if (req.companyId) query = query.eq('company_id', req.companyId);
 
         if (location && location !== 'All') {
             query = query.ilike('address', `%${location}%`);
@@ -105,22 +113,35 @@ exports.createOwner = async (req, res) => {
     try {
         const {
             name, email, phone, alternative_contact, representative_name,
-            representative_phone, representative_email, address, unit_ids
+            representative_phone, representative_email, address, unit_ids: inputUnitIds
         } = req.body;
 
+        let unit_ids = inputUnitIds;
         let totalOwnedArea = 0;
         if (unit_ids && unit_ids.length > 0) {
-            const { data: units } = await supabase.from('units').select('chargeable_area').in('id', unit_ids);
-            if (units) {
-                totalOwnedArea = units.reduce((sum, u) => sum + Number(u.chargeable_area || 0), 0);
+            // Multi-tenant: silently reject units from other companies
+            if (req.companyId) {
+                const { data: unitCheck } = await supabase.from('units')
+                    .select('company_id, id').in('id', unit_ids);
+                unit_ids = (unitCheck || []).filter(u => u.company_id === req.companyId).map(u => u.id);
+            }
+            if (unit_ids && unit_ids.length > 0) {
+                const { data: units } = await supabase.from('units').select('chargeable_area').in('id', unit_ids);
+                if (units) {
+                    totalOwnedArea = units.reduce((sum, u) => sum + Number(u.chargeable_area || 0), 0);
+                }
             }
         }
 
-        const { data: owner, error: oError } = await supabase.from('owners').insert({
+        const insertPayload = {
             name, email, phone, alternative_contact, representative_name,
             representative_phone, representative_email, address, total_owned_area: totalOwnedArea,
             kyc_status: "pending"
-        }).select('id').single();
+        };
+        // Multi-tenant: stamp company_id on new owners
+        if (req.companyId) insertPayload.company_id = req.companyId;
+
+        const { data: owner, error: oError } = await supabase.from('owners').insert(insertPayload).select('id').single();
 
         if (oError) throw oError;
         const ownerId = owner.id;
@@ -142,10 +163,19 @@ exports.updateOwner = async (req, res) => {
     try {
         const ownerId = req.params.id;
         const updates = req.body;
-        
+
+        // Multi-tenant: silently hide owners from other companies
+        if (req.companyId) {
+            const { data: ownerCheck } = await supabase.from('owners')
+                .select('company_id').eq('id', ownerId).single();
+            if (!ownerCheck || ownerCheck.company_id !== req.companyId) {
+                return res.status(404).json({ message: 'Owner not found' });
+            }
+        }
+
         const allowedFields = ['name', 'email', 'phone', 'representative_name', 'representative_phone', 'representative_email', 'address', 'gst_number', 'kyc_status'];
         const updateData = {};
-        
+
         for (const [key, value] of Object.entries(updates)) {
             if (allowedFields.includes(key) && value !== undefined) {
                 updateData[key] = value;
@@ -169,7 +199,16 @@ exports.updateOwner = async (req, res) => {
 exports.deleteOwner = async (req, res) => {
     try {
         const ownerId = req.params.id;
-        
+
+        // Multi-tenant: silently hide owners from other companies
+        if (req.companyId) {
+            const { data: ownerCheck } = await supabase.from('owners')
+                .select('company_id').eq('id', ownerId).single();
+            if (!ownerCheck || ownerCheck.company_id !== req.companyId) {
+                return res.status(404).json({ message: 'Owner not found' });
+            }
+        }
+
         const { data: myUnits } = await supabase.from('owner_units').select('unit_id').eq('owner_id', ownerId);
         if (myUnits && myUnits.length > 0) {
             const unitIds = myUnits.map(u => u.unit_id);

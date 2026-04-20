@@ -46,8 +46,8 @@ const EchoDashboard = () => {
     };
     fetchProjects();
     
-    // Get user info from localStorage
-    const user = JSON.parse(localStorage.getItem('user') || '{}');
+    // Get user info from sessionStorage (per-tab isolation)
+    const user = JSON.parse(sessionStorage.getItem('user') || '{}');
     if (user && (user.first_name || user.last_name || user.name)) {
       const fullName = user.name || `${user.first_name || ''} ${user.last_name || ''}`.trim();
       const nameParts = fullName.split(' ');

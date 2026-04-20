@@ -33,11 +33,12 @@ const Login = () => {
   // ── Always show login page — clear any stale session on load ──────────────
   useEffect(() => {
     // Clear stored tokens so the login page always shows fresh.
-    // Users must actively log in every time they visit the site.
-    localStorage.removeItem('company_token');
-    localStorage.removeItem('company_user');
-    localStorage.removeItem('token');
-    localStorage.removeItem('user');
+    // Use sessionStorage for per-tab session isolation.
+    sessionStorage.removeItem('company_token');
+    sessionStorage.removeItem('company_user');
+    sessionStorage.removeItem('token');
+    sessionStorage.removeItem('user');
+    sessionStorage.removeItem('company_session_id');
   }, []); // eslint-disable-line
 
   // ─── COMPANY USER LOGIN ─────────────────────────────────────────────────────
@@ -67,14 +68,14 @@ const Login = () => {
         return;
       }
 
-      // Store company user session
-      localStorage.setItem('company_token', data.token);
-      localStorage.setItem('token', data.token); // also set as 'token' for API interceptor
-      localStorage.setItem('company_user', JSON.stringify({
+      // Store company user session in sessionStorage (per-tab isolation)
+      sessionStorage.setItem('company_token', data.token);
+      sessionStorage.setItem('token', data.token); // also set as 'token' for API interceptor
+      sessionStorage.setItem('company_user', JSON.stringify({
         ...data.user,
         session_id: data.session_id,
       }));
-      localStorage.setItem('user', JSON.stringify({
+      sessionStorage.setItem('user', JSON.stringify({
         id: data.user.id,
         email: data.user.email,
         first_name: data.user.company_name,
@@ -85,6 +86,7 @@ const Login = () => {
         address: data.user.address,
         modules_access: data.user.modules_access,
       }));
+      sessionStorage.setItem('company_session_id', data.session_id);
 
       navigate('/admin/dashboard');
     } catch {

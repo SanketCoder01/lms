@@ -34,6 +34,7 @@ const navItems = [
 const SuperAdminLayout = ({ children, title, subtitle, pendingCount = 0 }) => {
   const navigate = useNavigate();
   const location = useLocation();
+  const [sidebarOpen, setSidebarOpen] = useState(false);
 
   // Dark / Light mode — persisted in localStorage
   const [isDarkMode, setIsDarkMode] = useState(() => {
@@ -64,8 +65,14 @@ const SuperAdminLayout = ({ children, title, subtitle, pendingCount = 0 }) => {
 
   return (
     <div id="sa-root" className="sa-layout" data-theme={isDarkMode ? 'dark' : 'light'}>
+      {/* Mobile sidebar overlay */}
+      <div 
+        className={`sa-sidebar-overlay ${sidebarOpen ? 'active' : ''}`}
+        onClick={() => setSidebarOpen(false)}
+      />
+      
       {/* ── Sidebar ─────────────────────────────────────────────── */}
-      <aside className="sa-sidebar">
+      <aside className={`sa-sidebar ${sidebarOpen ? 'open' : ''}`}>
         <div className="sa-sidebar-brand">
           <div className="sa-brand-icon">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -85,6 +92,7 @@ const SuperAdminLayout = ({ children, title, subtitle, pendingCount = 0 }) => {
               key={item.path}
               to={item.path}
               className={`sa-nav-item${location.pathname === item.path ? ' active' : ''}`}
+              onClick={() => setSidebarOpen(false)}
             >
               <span>{item.icon}</span>
               <span style={{ flex: 1 }}>{item.label}</span>
@@ -108,6 +116,17 @@ const SuperAdminLayout = ({ children, title, subtitle, pendingCount = 0 }) => {
         </div>
       </aside>
 
+      {/* Mobile menu toggle */}
+      <button 
+        className="sa-mobile-toggle"
+        onClick={() => setSidebarOpen(!sidebarOpen)}
+        style={{ position: 'fixed', top: '12px', left: '16px', zIndex: 1001 }}
+      >
+        <span></span>
+        <span></span>
+        <span></span>
+      </button>
+      
       {/* ── Main content ──────────────────────────────────────────── */}
       <div className="sa-main">
         {/* Topbar — theme toggle lives here */}

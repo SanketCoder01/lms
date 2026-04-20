@@ -4,8 +4,9 @@ import API from '../services/api';
 const GlobalHeartbeat = () => {
   useEffect(() => {
     const handleHeartbeat = async () => {
-      const pData = localStorage.getItem('company_user');
-      const token = localStorage.getItem('company_token') || localStorage.getItem('token');
+      // Use sessionStorage for per-tab session isolation
+      const pData = sessionStorage.getItem('company_user');
+      const token = sessionStorage.getItem('company_token') || sessionStorage.getItem('token');
       
       if (!pData || !token) return;
 
@@ -20,7 +21,7 @@ const GlobalHeartbeat = () => {
 
         if (res && res.code === 'SESSION_KILLED') {
           console.warn("Session was terminated by admin. Logging out.");
-          localStorage.clear();
+          sessionStorage.clear();
           window.location.href = '/login?reason=session_terminated';
         }
       } catch (e) {

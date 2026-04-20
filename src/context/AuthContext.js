@@ -1,8 +1,11 @@
 /**
  * src/context/AuthContext.js
  * --------------------------
- * Global auth state — wraps the app in Supabase session management.
- * Provides: user, session, loading, signOut
+ * Global auth state - manages Supabase session for legacy users ONLY.
+ * Company users use separate JWT auth stored in sessionStorage per tab.
+ * 
+ * IMPORTANT: This context does NOT interfere with company user sessions.
+ * Company users are authenticated via company_token in sessionStorage.
  */
 
 import React, { createContext, useContext, useEffect, useState } from 'react';
@@ -16,54 +19,63 @@ export const AuthProvider = ({ children }) => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Read the initial session
+    // Check if this is a company user session (separate auth system)
+    const companyToken = sessionStorage.getItem('company_token');
+    if (companyToken) {
+      // Company user - don't interfere with Supabase auth
+      // Read user from sessionStorage instead
+      const companyUserStr = sessionStorage.getItem('company_user');
+      if (companyUserStr) {
+        try {
+          const companyUser = JSON.parse(companyUserStr);
+          setUser(companyUser);
+          setSession({ access_token: companyToken }); // Mock session for compatibility
+        } catch (e) {
+          console.error('Error parsing company user:', e);
+        }
+      }
+      setLoading(false);
+      return; // Don't initialize Supabase auth for company users
+    }
+
+    // Legacy Supabase auth for non-company users
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
       setUser(session?.user ?? null);
-      if (session) {
-        // Keep localStorage in sync for axios interceptor
-        localStorage.setItem('token', session.access_token);
-        const u = session.user;
-        localStorage.setItem('user', JSON.stringify({
-          id:         u.id,
-          email:      u.email,
-          first_name: u.user_metadata?.first_name || u.email.split('@')[0],
-          last_name:  u.user_metadata?.last_name || '',
-          role:       u.user_metadata?.role || 'Admin',
-        }));
-      }
       setLoading(false);
     });
 
-    // Listen for auth changes
+    // Listen for auth changes (only for legacy users)
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      // Don't clear company user session!
+      if (sessionStorage.getItem('company_token')) {
+        return;
+      }
+      
       setSession(session);
       setUser(session?.user ?? null);
-
-      if (session) {
-        localStorage.setItem('token', session.access_token);
-        const u = session.user;
-        localStorage.setItem('user', JSON.stringify({
-          id:         u.id,
-          email:      u.email,
-          first_name: u.user_metadata?.first_name || u.email.split('@')[0],
-          last_name:  u.user_metadata?.last_name || '',
-          role:       u.user_metadata?.role || 'Admin',
-        }));
-      } else {
-        // Signed out
-        localStorage.removeItem('token');
-        localStorage.removeItem('user');
-      }
     });
 
     return () => subscription.unsubscribe();
   }, []);
 
   const signOut = async () => {
+    // Check if company user
+    if (sessionStorage.getItem('company_token')) {
+      sessionStorage.removeItem('company_token');
+      sessionStorage.removeItem('company_user');
+      sessionStorage.removeItem('token');
+      sessionStorage.removeItem('user');
+      sessionStorage.removeItem('company_session_id');
+      setUser(null);
+      setSession(null);
+      return;
+    }
+    
+    // Legacy Supabase sign out
     await supabase.auth.signOut();
-    localStorage.removeItem('token');
-    localStorage.removeItem('user');
+    setUser(null);
+    setSession(null);
   };
 
   return (

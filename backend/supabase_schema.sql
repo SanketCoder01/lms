@@ -411,9 +411,14 @@ INSERT INTO roles (role_name) VALUES
 INSERT INTO settings (company_name, currency) VALUES ('Cusec Consulting LLP', 'INR');
 
 -- Ownership Document Types
-INSERT INTO ownership_document_types (name) VALUES
-('Sale Deed'), ('Agreement to Sale'), ('Possession Letter'),
-('NOC'), ('Power of Attorney'), ('Registration Certificate');
+INSERT INTO ownership_document_types (id, name) VALUES
+(1, 'Application For Allotment'),
+(2, 'SBA'),
+(3, 'Purchase Agreement'),
+(4, 'Possession Handover'),
+(5, 'Conveyance Deed'),
+(6, 'Sale Deed')
+ON CONFLICT (id) DO NOTHING;
 
 -- ─── FILTER OPTIONS — ALL APP DROPDOWNS ─────────────────────────────────────
 INSERT INTO filter_options (category, option_value) VALUES

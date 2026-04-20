@@ -5,14 +5,18 @@ exports.getAllOwnerships = async (req, res) => {
     try {
         const { search } = req.query;
         let query = supabase.from('unit_ownerships')
-            .select('*, units(unit_number, projects(project_name)), parties(first_name, last_name, company_name)')
+            .select('*, units(unit_number, company_id, projects(project_name)), parties(first_name, last_name, company_name)')
             .eq('ownership_status', 'Active')
             .order('created_at', { ascending: false });
 
         const { data, error } = await query;
         if (error) throw error;
 
+        // Multi-tenant: filter by company_id through units table
         let filtered = data || [];
+        if (req.companyId) {
+            filtered = filtered.filter(row => row.units?.company_id === req.companyId);
+        }
         if (search) {
             const s = search.toLowerCase();
             filtered = filtered.filter(row =>
@@ -46,6 +50,15 @@ exports.assignOwner = async (req, res) => {
 
     try {
         const assignDate = start_date || new Date().toISOString();
+
+        // Multi-tenant: silently hide units from other companies
+        if (req.companyId) {
+            const { data: unitCheck } = await supabase.from('units')
+                .select('company_id').eq('id', unit_id).single();
+            if (!unitCheck || unitCheck.company_id !== req.companyId) {
+                return res.status(404).json({ message: 'Unit not found' });
+            }
+        }
 
         // Check if any of these parties is already an active owner
         const partyIds = owners.map(o => o.party_id);
@@ -81,6 +94,15 @@ exports.removeOwner = async (req, res) => {
     const { unit_id, party_id, end_date, status } = req.body; // status can be 'Inactive' or 'Sold'
 
     try {
+        // Multi-tenant: silently hide units from other companies
+        if (req.companyId) {
+            const { data: unitCheck } = await supabase.from('units')
+                .select('company_id').eq('id', unit_id).single();
+            if (!unitCheck || unitCheck.company_id !== req.companyId) {
+                return res.status(404).json({ message: 'Unit not found' });
+            }
+        }
+
         const endDate = end_date || new Date().toISOString();
         const { error } = await supabase.from('unit_ownerships')
             .update({ ownership_status: status || 'Inactive', end_date: endDate })
@@ -155,6 +177,15 @@ exports.uploadOwnershipDocument = async (req, res) => {
             return res.status(400).json({ message: 'Unit ID and Party ID are required' });
         }
 
+        // Multi-tenant: silently hide units from other companies
+        if (req.companyId) {
+            const { data: unitCheck } = await supabase.from('units')
+                .select('company_id').eq('id', parseInt(unit_id)).single();
+            if (!unitCheck || unitCheck.company_id !== req.companyId) {
+                return res.status(404).json({ message: 'Unit not found' });
+            }
+        }
+
         if (!req.file || !req.file.buffer) {
             return res.status(400).json({ message: 'No file uploaded. Please select a file.' });
         }
@@ -211,8 +242,7 @@ exports.uploadOwnershipDocument = async (req, res) => {
             const { error: updateError } = await supabase.from('unit_ownership_documents')
                 .update({
                     document_date: document_date || null,
-                    file_path: filePath,
-                    updated_at: new Date().toISOString()
+                    file_path: filePath
                 })
                 .eq('id', existingDoc.id);
             error = updateError;
@@ -245,9 +275,19 @@ exports.uploadOwnershipDocument = async (req, res) => {
 exports.getOwnershipDocuments = async (req, res) => {
     try {
         const { unitId, partyId } = req.params;
+
+        // Multi-tenant: silently hide units from other companies
+        if (req.companyId && unitId) {
+            const { data: unitCheck } = await supabase.from('units')
+                .select('company_id').eq('id', unitId).single();
+            if (!unitCheck || unitCheck.company_id !== req.companyId) {
+                return res.json([]); // Return empty array silently
+            }
+        }
+
         let query = supabase.from('unit_ownership_documents')
-            .select('id, unit_id, party_id, document_type_id, document_date, file_path, created_at, updated_at, ownership_document_types(name)')
-            .order('updated_at', { ascending: false });
+            .select('id, unit_id, party_id, document_type_id, document_date, file_path, created_at, ownership_document_types(name)')
+            .order('created_at', { ascending: false });
 
         if (unitId) query = query.eq('unit_id', unitId);
         if (partyId) query = query.eq('party_id', partyId);
@@ -263,7 +303,6 @@ exports.getOwnershipDocuments = async (req, res) => {
             document_date: d.document_date,
             file_path: d.file_path,
             created_at: d.created_at,
-            updated_at: d.updated_at,
             document_type_name: d.ownership_document_types?.name
         }));
 

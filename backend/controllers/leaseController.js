@@ -577,6 +577,7 @@ const getLeaseById = async (req, res) => {
     try {
         const { data, error } = await supabase.from('leases').select(`
             *,
+            company_id,
             projects(project_name, location),
             units(unit_number, floor_number, chargeable_area, carpet_area, unit_condition),
             tenant:parties!leases_party_tenant_id_fkey(company_name, first_name, last_name, email, phone),
@@ -585,6 +586,11 @@ const getLeaseById = async (req, res) => {
         `).eq('id', req.params.id).single();
 
         if (error || !data) return res.status(404).json({ message: 'Lease not found' });
+
+        // Multi-tenant: silently hide leases from other companies
+        if (req.companyId && data.company_id && data.company_id !== req.companyId) {
+            return res.status(404).json({ message: 'Lease not found' });
+        }
 
         const mapped = {
             ...data,
@@ -626,6 +632,15 @@ const updateLease = async (req, res) => {
             payload = JSON.parse(req.body.leaseData);
         }
         const leaseId = req.params.id;
+
+        // Multi-tenant: silently hide leases from other companies
+        if (req.companyId) {
+            const { data: leaseCheck } = await supabase.from('leases')
+                .select('company_id').eq('id', leaseId).single();
+            if (!leaseCheck || leaseCheck.company_id !== req.companyId) {
+                return res.status(404).json({ message: 'Lease not found' });
+            }
+        }
 
         const allowedFields = [
             'project_id', 'unit_id', 'party_owner_id', 'party_tenant_id', 'sub_tenant_id', 'lease_type', 'rent_model',

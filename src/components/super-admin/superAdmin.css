@@ -632,11 +632,577 @@
 
 /* ── RESPONSIVE ─────────────────────────────────────────────────────────────── */
 @media (max-width: 900px) {
-  .sa-login-card { flex-direction: column; width: 95%; }
-  .sa-login-left { width: 100%; padding: 32px 28px; }
+  .sa-login-card { flex-direction: column; width: 95%; min-height: auto; }
+  .sa-login-left { display: none; }
+  .sa-login-right { padding: 32px 24px; }
+  
   .sa-layout { flex-direction: column; }
-  .sa-sidebar { position: static; width: 100%; flex-direction: row; flex-wrap: wrap; }
+  .sa-sidebar { 
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 280px;
+    height: 100vh;
+    transform: translateX(-100%);
+    transition: transform 0.3s ease;
+    z-index: 1000;
+  }
+  .sa-sidebar.open { transform: translateX(0); }
   .sa-main { margin-left: 0; }
+  .sa-page { padding: 20px 16px; }
+  .sa-topbar { padding: 12px 16px; }
+  .sa-topbar-left h2 { font-size: 16px; }
+  
+  /* Mobile menu toggle */
+  .sa-mobile-toggle {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    padding: 10px;
+    background: var(--sa-surface);
+    border: 1px solid var(--sa-border);
+    border-radius: 8px;
+    cursor: pointer;
+  }
+  .sa-mobile-toggle span {
+    display: block;
+    width: 20px;
+    height: 2px;
+    background: var(--sa-text);
+  }
+  
+  .sa-sidebar-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.5);
+    z-index: 999;
+  }
+  .sa-sidebar-overlay.active { display: block; }
+}
+
+@media (max-width: 768px) {
+  .sa-stats-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+  
+  .sa-table-wrap {
+    margin: 0 -16px;
+    padding: 0 16px;
+  }
+  
+  .sa-form-row {
+    grid-template-columns: 1fr;
+  }
+  
+  .sa-modal {
+    width: 95%;
+    padding: 20px;
+    margin: 16px;
+    max-height: 85vh;
+  }
+  
+  .sa-modal-actions {
+    flex-direction: column;
+  }
+  
+  .sa-modal-actions .sa-btn {
+    width: 100%;
+    justify-content: center;
+  }
+  
+  .sa-admin-chip span:last-child { display: none; }
+}
+
+@media (max-width: 480px) {
+  .sa-stats-grid {
+    grid-template-columns: 1fr;
+  }
+  
+  .sa-stat-card {
+    padding: 16px;
+  }
+  
+  .sa-stat-icon {
+    width: 40px;
+    height: 40px;
+    font-size: 18px;
+  }
+  
+  .sa-stat-value {
+    font-size: 24px;
+  }
+  
+  .sa-topbar-right {
+    gap: 8px;
+  }
+  
+  .sa-btn {
+    padding: 8px 14px;
+    font-size: 12px;
+  }
+  
+  .sa-search-wrap {
+    max-width: 100%;
+  }
+  
+  .sa-module-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Mobile toggle - hidden on desktop */
+.sa-mobile-toggle {
+  display: none;
+}
+
+@media (max-width: 900px) {
+  .sa-mobile-toggle {
+    display: flex;
+  }
+}
+
+/* ===== ENHANCED MOBILE RESPONSIVE STYLES ===== */
+
+/* Extra small devices (phones, 480px and below) */
+@media (max-width: 480px) {
+  /* Login page */
+  .sa-login-root {
+    padding: 12px;
+  }
+
+  .sa-login-card {
+    width: 100% !important;
+    border-radius: 16px !important;
+  }
+
+  .sa-login-right {
+    padding: 24px 16px !important;
+  }
+
+  .sa-login-header h2 {
+    font-size: 18px !important;
+  }
+
+  .sa-login-header p {
+    font-size: 12px !important;
+  }
+
+  .sa-field label {
+    font-size: 11px !important;
+  }
+
+  .sa-input-wrap input {
+    padding: 10px 40px 10px 40px !important;
+    font-size: 13px !important;
+  }
+
+  .sa-login-btn {
+    padding: 12px 20px !important;
+    font-size: 13px !important;
+  }
+
+  /* Dashboard */
+  .sa-page {
+    padding: 12px 8px !important;
+  }
+
+  .sa-topbar {
+    padding: 10px 12px !important;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .sa-topbar-left h2 {
+    font-size: 14px !important;
+  }
+
+  .sa-topbar-left p {
+    font-size: 11px !important;
+  }
+
+  .sa-theme-toggle {
+    padding: 6px 10px !important;
+    font-size: 11px !important;
+  }
+
+  .sa-admin-chip {
+    padding: 4px 8px !important;
+    font-size: 10px !important;
+  }
+
+  /* Stats */
+  .sa-stats-grid {
+    grid-template-columns: 1fr !important;
+    gap: 10px !important;
+  }
+
+  .sa-stat-card {
+    padding: 12px !important;
+  }
+
+  .sa-stat-value {
+    font-size: 20px !important;
+  }
+
+  .sa-stat-label {
+    font-size: 11px !important;
+  }
+
+  /* Tables */
+  .sa-table-wrap {
+    margin: 0 -8px !important;
+    padding: 0 8px !important;
+  }
+
+  .sa-table {
+    font-size: 11px !important;
+  }
+
+  .sa-table th,
+  .sa-table td {
+    padding: 8px 10px !important;
+  }
+
+  /* Forms */
+  .sa-form-grid {
+    grid-template-columns: 1fr !important;
+    gap: 12px !important;
+  }
+
+  .sa-input,
+  .sa-select {
+    padding: 10px 12px !important;
+    font-size: 13px !important;
+  }
+
+  /* Buttons */
+  .sa-btn {
+    padding: 8px 12px !important;
+    font-size: 11px !important;
+    min-height: 40px !important;
+  }
+
+  .sa-btn-lg {
+    padding: 10px 16px !important;
+    font-size: 12px !important;
+  }
+
+  /* Modals */
+  .sa-modal {
+    width: 100% !important;
+    max-width: 100% !important;
+    margin: 0 !important;
+    border-radius: 16px 16px 0 0 !important;
+    max-height: 90vh !important;
+  }
+
+  .sa-modal-header {
+    padding: 12px !important;
+  }
+
+  .sa-modal-body {
+    padding: 12px !important;
+    max-height: calc(90vh - 100px) !important;
+  }
+
+  .sa-modal-actions {
+    padding: 12px !important;
+    flex-direction: column !important;
+    gap: 8px !important;
+  }
+
+  .sa-modal-actions .sa-btn {
+    width: 100% !important;
+  }
+
+  /* Cards */
+  .sa-card {
+    padding: 12px !important;
+    border-radius: 10px !important;
+  }
+
+  /* Search */
+  .sa-search-wrap {
+    width: 100% !important;
+    max-width: 100% !important;
+  }
+
+  .sa-search-input {
+    padding: 8px 12px 8px 36px !important;
+    font-size: 13px !important;
+  }
+
+  /* Module grid */
+  .sa-module-grid {
+    grid-template-columns: 1fr !important;
+    gap: 8px !important;
+  }
+
+  .sa-module-card {
+    padding: 12px !important;
+  }
+
+  /* Nav items in sidebar */
+  .sa-nav-item {
+    padding: 10px 16px !important;
+    font-size: 12px !important;
+  }
+
+  .sa-sidebar-brand {
+    padding: 0 16px 20px !important;
+  }
+
+  .sa-brand-text h3 {
+    font-size: 12px !important;
+  }
+
+  .sa-brand-text p {
+    font-size: 10px !important;
+  }
+}
+
+/* Touch-friendly improvements for all mobile */
+@media (max-width: 900px) {
+  /* Ensure touch targets are at least 44px */
+  .sa-btn,
+  .sa-nav-item,
+  .sa-module-card,
+  button {
+    min-height: 44px;
+    min-width: 44px;
+  }
+
+  /* Prevent horizontal overflow */
+  .sa-page {
+    overflow-x: hidden;
+  }
+
+  /* Better scroll on tables */
+  .sa-table-wrap {
+    -webkit-overflow-scrolling: touch;
+  }
+
+  /* Stack form actions */
+  .sa-form-actions {
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .sa-form-actions .sa-btn {
+    width: 100%;
+  }
+
+  /* Ensure inputs don't cause zoom on iOS */
+  .sa-input,
+  .sa-select,
+  .sa-search-input,
+  input[type="text"],
+  input[type="email"],
+  input[type="password"],
+  select {
+    font-size: 16px !important;
+  }
+}
+
+/* Landscape mobile */
+@media (max-height: 500px) and (orientation: landscape) {
+  .sa-modal {
+    max-height: 95vh !important;
+  }
+
+  .sa-modal-body {
+    max-height: calc(95vh - 80px) !important;
+  }
+
+  .sa-login-card {
+    min-height: auto !important;
+  }
+
+  .sa-login-right {
+    padding: 20px !important;
+  }
+}
+
+/* ===== DASHBOARD RESPONSIVE STYLES ===== */
+
+/* Dashboard two-column grid */
+.sa-dashboard-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+}
+
+/* Pending approval item */
+.sa-pending-item {
+  background: var(--sa-card-inner, rgba(0,0,0,0.02));
+  border: 1px solid var(--sa-border);
+  border-radius: 10px;
+  padding: 12px 14px;
+}
+
+/* Live session item */
+.sa-session-item {
+  background: rgba(16,185,129,0.05);
+  border: 1px solid rgba(16,185,129,0.18);
+  border-radius: 10px;
+  padding: 10px 12px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+/* Session company icon */
+.sa-session-icon {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  background: rgba(99,102,241,0.12);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  flex-shrink: 0;
+}
+
+/* Session info */
+.sa-session-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.sa-session-company {
+  font-weight: 600;
+  font-size: 13px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sa-session-meta {
+  color: var(--sa-muted);
+  font-size: 11px;
+}
+
+/* Kill session button */
+.sa-kill-btn {
+  padding: 4px 8px;
+  border: 1px solid #ef4444;
+  border-radius: 6px;
+  background: transparent;
+  color: #ef4444;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.sa-kill-btn:hover {
+  background: #fef2f2;
+}
+
+/* Pending item buttons */
+.sa-pending-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.sa-approve-btn,
+.sa-reject-btn {
+  flex: 1;
+  padding: 7px 0;
+  border-radius: 7px;
+  border: none;
+  font-weight: 600;
+  font-size: 12.5px;
+  cursor: pointer;
+}
+
+.sa-approve-btn {
+  background: #10b981;
+  color: #fff;
+}
+
+.sa-reject-btn {
+  background: #ef4444;
+  color: #fff;
+}
+
+/* Responsive breakpoints for dashboard */
+@media (max-width: 1024px) {
+  .sa-dashboard-grid {
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+}
+
+@media (max-width: 768px) {
+  .sa-dashboard-grid {
+    gap: 12px;
+  }
+
+  .sa-pending-item,
+  .sa-session-item {
+    padding: 10px 12px;
+  }
+
+  .sa-pending-actions {
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .sa-approve-btn,
+  .sa-reject-btn {
+    padding: 10px 0;
+    font-size: 13px;
+  }
+
+  .sa-session-info {
+    min-width: 0;
+    overflow: hidden;
+  }
+
+  .sa-session-company {
+    font-size: 12px;
+  }
+
+  .sa-session-meta {
+    font-size: 10px;
+  }
+
+  .sa-kill-btn {
+    padding: 6px 10px;
+    font-size: 10px;
+  }
+}
+
+@media (max-width: 480px) {
+  .sa-dashboard-grid {
+    gap: 10px;
+  }
+
+  .sa-pending-item {
+    padding: 10px;
+  }
+
+  .sa-session-item {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .sa-session-icon {
+    width: 28px;
+    height: 28px;
+    font-size: 12px;
+  }
+
+  .sa-kill-btn {
+    width: 100%;
+    padding: 8px 0;
+    margin-top: 4px;
+  }
 }
 
 /* ══════════════════════════════════════════════════════

@@ -1,3 +1,6 @@
+/* Import global responsive styles */
+@import url('./styles/responsive.css');
+
 .App {
   text-align: center;
 }

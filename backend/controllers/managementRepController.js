@@ -16,10 +16,13 @@ exports.exportReports = async (req, res) => {
     const { project_id, owner_id, tenant_id } = req.query;
 
     let query = supabase.from('leases').select(`
-      lease_start, lease_end, status, monthly_rent,
+      lease_start, lease_end, status, monthly_rent, company_id,
       projects(project_name), units(unit_number),
       tenant:parties!leases_party_tenant_id_fkey(company_name, first_name, last_name)
     `).order('created_at', { ascending: false });
+
+    // Multi-tenant: company users only see their own leases
+    if (req.companyId) query = query.eq('company_id', req.companyId);
 
     if (project_id) query = query.eq('project_id', project_id);
     if (owner_id) query = query.eq('party_owner_id', owner_id);
@@ -59,10 +62,13 @@ exports.getRepReports = async (req, res) => {
     const { project_id, owner_id, tenant_id, search, page = 1, limit = 10 } = req.query;
 
     let query = supabase.from('leases').select(`
-      id, lease_type, lease_start, status, created_at,
+      id, lease_type, lease_start, status, created_at, company_id,
       projects(project_name, project_image),
       tenant:parties!leases_party_tenant_id_fkey(company_name, first_name, last_name)
     `).order('created_at', { ascending: false });
+
+    // Multi-tenant: company users only see their own leases
+    if (req.companyId) query = query.eq('company_id', req.companyId);
 
     if (project_id) query = query.eq('project_id', project_id);
     if (owner_id) query = query.eq('party_owner_id', owner_id);
@@ -134,6 +140,37 @@ exports.getRepDashboardStats = async (req, res) => {
     const d60 = new Date(new Date().getTime() + 60 * 86400000).toISOString().split('T')[0];
     const d90 = new Date(new Date().getTime() + 90 * 86400000).toISOString().split('T')[0];
 
+    // Multi-tenant: build queries with company_id filter
+    const projectQ = supabase.from('projects').select('*', { count: 'exact', head: true });
+    const projectPrevQ = supabase.from('projects').select('*', { count: 'exact', head: true }).lt('created_at', prevDateStr);
+    const unitQ = supabase.from('units').select('*', { count: 'exact', head: true });
+    const unitPrevQ = supabase.from('units').select('*', { count: 'exact', head: true }).lt('created_at', prevDateStr);
+    const ownerQ = supabase.from('owners').select('*', { count: 'exact', head: true });
+    const ownerPrevQ = supabase.from('owners').select('*', { count: 'exact', head: true }).lt('created_at', prevDateStr);
+    const tenantQ = supabase.from('tenants').select('*', { count: 'exact', head: true });
+    const tenantPrevQ = supabase.from('tenants').select('*', { count: 'exact', head: true }).lt('created_at', prevDateStr);
+    const leaseQ = supabase.from('leases').select('*', { count: 'exact', head: true });
+    const leasePrevQ = supabase.from('leases').select('*', { count: 'exact', head: true }).lt('created_at', prevDateStr);
+    const activeLeaseQ = supabase.from('leases').select(`
+      id, lease_end, monthly_rent, status, created_at, company_id,
+      units(unit_number),
+      tenant:parties!leases_party_tenant_id_fkey(company_name, first_name, last_name)
+    `).eq('status', 'active');
+
+    if (req.companyId) {
+      projectQ.eq('company_id', req.companyId);
+      projectPrevQ.eq('company_id', req.companyId);
+      unitQ.eq('company_id', req.companyId);
+      unitPrevQ.eq('company_id', req.companyId);
+      ownerQ.eq('company_id', req.companyId);
+      ownerPrevQ.eq('company_id', req.companyId);
+      tenantQ.eq('company_id', req.companyId);
+      tenantPrevQ.eq('company_id', req.companyId);
+      leaseQ.eq('company_id', req.companyId);
+      leasePrevQ.eq('company_id', req.companyId);
+      activeLeaseQ.eq('company_id', req.companyId);
+    }
+
     const [
       { count: projectsCurrent }, { count: projectsPrev },
       { count: unitsCurrent }, { count: unitsPrev },
@@ -142,26 +179,12 @@ exports.getRepDashboardStats = async (req, res) => {
       { count: leasesCurrent }, { count: leasesPrev },
       { data: activeLeasesData },
     ] = await Promise.all([
-      supabase.from('projects').select('*', { count: 'exact', head: true }),
-      supabase.from('projects').select('*', { count: 'exact', head: true }).lt('created_at', prevDateStr),
-      
-      supabase.from('units').select('*', { count: 'exact', head: true }),
-      supabase.from('units').select('*', { count: 'exact', head: true }).lt('created_at', prevDateStr),
-      
-      supabase.from('owners').select('*', { count: 'exact', head: true }),
-      supabase.from('owners').select('*', { count: 'exact', head: true }).lt('created_at', prevDateStr),
-      
-      supabase.from('tenants').select('*', { count: 'exact', head: true }),
-      supabase.from('tenants').select('*', { count: 'exact', head: true }).lt('created_at', prevDateStr),
-      
-      supabase.from('leases').select('*', { count: 'exact', head: true }),
-      supabase.from('leases').select('*', { count: 'exact', head: true }).lt('created_at', prevDateStr),
-      
-      supabase.from('leases').select(`
-        id, lease_end, monthly_rent, status, created_at,
-        units(unit_number),
-        tenant:parties!leases_party_tenant_id_fkey(company_name, first_name, last_name)
-      `).eq('status', 'active')
+      projectQ, projectPrevQ,
+      unitQ, unitPrevQ,
+      ownerQ, ownerPrevQ,
+      tenantQ, tenantPrevQ,
+      leaseQ, leasePrevQ,
+      activeLeaseQ
     ]);
 
     const totalRevenue = activeLeasesData.reduce((sum, l) => sum + (Number(l.monthly_rent) || 0), 0);
@@ -340,16 +363,26 @@ exports.searchData = async (req, res) => {
   try {
     const { project_name, owner_name, tenant_name, unit_number, status } = req.query;
 
+    // Multi-tenant: build queries with company_id filter
+    const projectSearchQ = supabase.from('projects').select('id, project_name, status, company_id')
+       .ilike('project_name', project_name ? `%${project_name}%` : '%')
+       .ilike('status', status ? `%${status}%` : '%');
+    const ownerSearchQ = supabase.from('parties').select('id, first_name, last_name, company_name, company_id').eq('is_owner', true)
+       .or(owner_name ? `first_name.ilike.%${owner_name}%,last_name.ilike.%${owner_name}%,company_name.ilike.%${owner_name}%` : `id.gt.0`);
+    const tenantSearchQ = supabase.from('parties').select('id, first_name, last_name, company_name, company_id').eq('is_tenant', true)
+       .or(tenant_name ? `first_name.ilike.%${tenant_name}%,last_name.ilike.%${tenant_name}%,company_name.ilike.%${tenant_name}%` : `id.gt.0`);
+    const unitSearchQ = supabase.from('units').select('id, unit_number, status, company_id')
+       .ilike('unit_number', unit_number ? `%${unit_number}%` : '%');
+
+    if (req.companyId) {
+      projectSearchQ.eq('company_id', req.companyId);
+      ownerSearchQ.eq('company_id', req.companyId);
+      tenantSearchQ.eq('company_id', req.companyId);
+      unitSearchQ.eq('company_id', req.companyId);
+    }
+
     const [ { data: pRows }, { data: oRows }, { data: tRows }, { data: uRows } ] = await Promise.all([
-        supabase.from('projects').select('id, project_name, status')
-           .ilike('project_name', project_name ? `%${project_name}%` : '%')
-           .ilike('status', status ? `%${status}%` : '%'),
-        supabase.from('parties').select('id, first_name, last_name, company_name').eq('is_owner', true)
-           .or(owner_name ? `first_name.ilike.%${owner_name}%,last_name.ilike.%${owner_name}%,company_name.ilike.%${owner_name}%` : `id.gt.0`),
-        supabase.from('parties').select('id, first_name, last_name, company_name').eq('is_tenant', true)
-           .or(tenant_name ? `first_name.ilike.%${tenant_name}%,last_name.ilike.%${tenant_name}%,company_name.ilike.%${tenant_name}%` : `id.gt.0`),
-        supabase.from('units').select('id, unit_number, status')
-           .ilike('unit_number', unit_number ? `%${unit_number}%` : '%')
+        projectSearchQ, ownerSearchQ, tenantSearchQ, unitSearchQ
     ]);
 
     const results = [];

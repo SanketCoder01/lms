@@ -82,8 +82,7 @@ const CreateUser = () => {
             });
 
             alert("User created successfully");
-            //setSubmitMessage('User created successfully!');
-            navigate("/admin/role-management");
+            navigate("/admin");
 
         } catch (err) {
             console.error(err);
@@ -105,7 +104,7 @@ const CreateUser = () => {
                                 <p>Add a new user to the system and assign their role.</p>
                             </div>
 
-                            <Link to="/admin/role-management" className="close-btn">
+                            <Link to="/admin" className="close-btn">
                                 ✕
                             </Link>
                         </div>
@@ -196,7 +195,7 @@ const CreateUser = () => {
                             </div>
 
                             <div className="form-footer">
-                                <Link to="/admin/role-management" className="cancel-btn">
+                                <Link to="/admin" className="cancel-btn">
                                     Cancel
                                 </Link>
                                 <button type="submit" className="create-btn">

@@ -124,7 +124,7 @@ const SADashboard = () => {
             ))}
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
+          <div className="sa-dashboard-grid">
 
             {/* ── Pending Approvals ──────────────────────── */}
             <div className="sa-card">
@@ -143,11 +143,7 @@ const SADashboard = () => {
               ) : (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                   {pendingRegs.slice(0, 5).map(reg => (
-                    <div key={reg.id} style={{
-                      background: 'var(--sa-card-inner, rgba(0,0,0,0.02))',
-                      border: '1px solid var(--sa-border)',
-                      borderRadius: 10, padding: '12px 14px',
-                    }}>
+                    <div key={reg.id} className="sa-pending-item">
                       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
                         <div>
                           <div style={{ fontWeight: 600, fontSize: 13.5 }}>{reg.company_name}</div>
@@ -161,22 +157,14 @@ const SADashboard = () => {
                         </div>
                         <span className="sa-status pending">Pending</span>
                       </div>
-                      <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
+                      <div className="sa-pending-actions">
                         <button
                           onClick={() => handleApprove(reg.id, reg.company_name)}
-                          style={{
-                            flex: 1, padding: '7px 0', borderRadius: 7, border: 'none',
-                            background: '#10b981', color: '#fff', fontWeight: 600,
-                            fontSize: 12.5, cursor: 'pointer',
-                          }}
+                          className="sa-approve-btn"
                         >✅ Approve</button>
                         <button
                           onClick={() => handleReject(reg.id, reg.company_name)}
-                          style={{
-                            flex: 1, padding: '7px 0', borderRadius: 7, border: 'none',
-                            background: '#ef4444', color: '#fff', fontWeight: 600,
-                            fontSize: 12.5, cursor: 'pointer',
-                          }}
+                          className="sa-reject-btn"
                         >🚫 Reject</button>
                       </div>
                     </div>
@@ -208,22 +196,13 @@ const SADashboard = () => {
               ) : (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                   {sessions.slice(0, 6).map(s => (
-                    <div key={s.id} style={{
-                      background: 'rgba(16,185,129,0.05)',
-                      border: '1px solid rgba(16,185,129,0.18)',
-                      borderRadius: 10, padding: '10px 12px',
-                      display: 'flex', alignItems: 'center', gap: 10,
-                    }}>
-                      <div style={{
-                        width: 32, height: 32, borderRadius: 8,
-                        background: 'rgba(99,102,241,0.12)',
-                        display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14,
-                      }}>🏢</div>
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ fontWeight: 600, fontSize: 13, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    <div key={s.id} className="sa-session-item">
+                      <div className="sa-session-icon">🏢</div>
+                      <div className="sa-session-info">
+                        <div className="sa-session-company">
                           {s.company_name}
                         </div>
-                        <div style={{ color: 'var(--sa-muted)', fontSize: 11 }}>
+                        <div className="sa-session-meta">
                           {s.current_page || '/'} · {s.ip_address}
                         </div>
                       </div>
@@ -231,11 +210,7 @@ const SADashboard = () => {
                       <button
                         onClick={() => handleKillSession(s.id, s.company_name)}
                         title="Terminate session"
-                        style={{
-                          padding: '4px 8px', border: '1px solid #ef4444', borderRadius: 6,
-                          background: 'transparent', color: '#ef4444', fontSize: 11,
-                          cursor: 'pointer', fontWeight: 600, whiteSpace: 'nowrap',
-                        }}
+                        className="sa-kill-btn"
                       >⚡ Kill</button>
                     </div>
                   ))}

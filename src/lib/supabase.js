@@ -18,9 +18,9 @@ const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFz
 export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON, {
   auth: {
     autoRefreshToken: true,
-    persistSession:   true,
+    persistSession:   false, // Don't persist - company users use sessionStorage per tab
     detectSessionInUrl: true,
-    storage: window.localStorage,
+    storage: window.sessionStorage, // Use sessionStorage for per-tab isolation
   },
 });
 

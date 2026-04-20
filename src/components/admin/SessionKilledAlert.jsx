@@ -15,8 +15,8 @@ const SessionKilledAlert = () => {
   const navigate = useNavigate();
 
   useEffect(() => {
-    // Get company user ID from localStorage
-    const companyUser = localStorage.getItem('company_user');
+    // Get company user ID from sessionStorage (per-tab isolation)
+    const companyUser = sessionStorage.getItem('company_user');
     if (!companyUser) return;
 
     let userId;
@@ -44,12 +44,14 @@ const SessionKilledAlert = () => {
             setMessage(payload.new.message || 'Your session has been terminated by an administrator.');
             setShowAlert(true);
             
-            // Clear local storage and redirect to login after 3 seconds
+            // Clear sessionStorage and redirect to login after 3 seconds
             setTimeout(() => {
-              localStorage.removeItem('company_token');
-              localStorage.removeItem('company_user');
-              localStorage.removeItem('company_session_id');
-              localStorage.removeItem('company_modules');
+              sessionStorage.removeItem('company_token');
+              sessionStorage.removeItem('company_user');
+              sessionStorage.removeItem('company_session_id');
+              sessionStorage.removeItem('company_modules');
+              sessionStorage.removeItem('token');
+              sessionStorage.removeItem('user');
               navigate('/login');
             }, 3000);
           }
@@ -78,12 +80,14 @@ const SessionKilledAlert = () => {
             .update({ seen: true })
             .eq('id', data[0].id);
           
-          // Clear local storage and redirect
+          // Clear sessionStorage and redirect
           setTimeout(() => {
-            localStorage.removeItem('company_token');
-            localStorage.removeItem('company_user');
-            localStorage.removeItem('company_session_id');
-            localStorage.removeItem('company_modules');
+            sessionStorage.removeItem('company_token');
+            sessionStorage.removeItem('company_user');
+            sessionStorage.removeItem('company_session_id');
+            sessionStorage.removeItem('company_modules');
+            sessionStorage.removeItem('token');
+            sessionStorage.removeItem('user');
             navigate('/login');
           }, 3000);
         }

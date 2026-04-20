@@ -15,23 +15,33 @@ exports.createTenant = async (req, res) => {
         }
 
         // 1. Insert Tenant
-        const { data: tenant, error: tenantError } = await supabase.from('tenants').insert({
+        const insertPayload = {
             company_name, brand_name, legal_entity_type, registration_no: company_registration_number,
             industry, tax_id, id_type, website, contact_person_name, contact_person_email,
             contact_person_phone, address: street_address, city, state, zip_code, country,
             kyc_status: kyc_status || 'pending', status: status || 'active'
-        }).select('id').single();
+        };
+        // Multi-tenant: stamp company_id on new tenants
+        if (req.companyId) insertPayload.company_id = req.companyId;
+
+        const { data: tenant, error: tenantError } = await supabase.from('tenants').insert(insertPayload).select('id').single();
 
         if (tenantError) throw tenantError;
         const tenantId = tenant.id;
 
         // 2. Assign Units
         const rawUnitIds = unit_ids || units || [];
-        const validUnitIds = (Array.isArray(rawUnitIds) ? rawUnitIds : [])
+        let validUnitIds = (Array.isArray(rawUnitIds) ? rawUnitIds : [])
             .map(id => (typeof id === 'object' ? id.id : id))
             .filter(id => id && !isNaN(id));
 
         if (validUnitIds.length > 0) {
+            // Multi-tenant: silently filter out units from other companies
+            if (req.companyId) {
+                const { data: unitCheck } = await supabase.from('units')
+                    .select('company_id, id').in('id', validUnitIds);
+                validUnitIds = (unitCheck || []).filter(u => u.company_id === req.companyId).map(u => u.id);
+            }
             const tenantUnitsInserts = validUnitIds.map(unitId => ({ tenant_id: tenantId, unit_id: unitId }));
             const { error: tuError } = await supabase.from('tenant_units').insert(tenantUnitsInserts);
             if (tuError) console.error("TU Insert Error:", tuError);
@@ -68,7 +78,11 @@ exports.getAllTenants = async (req, res) => {
         const search = req.query.search ? req.query.search.toLowerCase() : '';
         const projectId = req.query.projectId;
 
-        let { data: tenants, error } = await supabase.from('tenants').select('*').order('created_at', { ascending: false });
+        let query = supabase.from('tenants').select('*').order('created_at', { ascending: false });
+        // Multi-tenant: company users only see their own tenants
+        if (req.companyId) query = query.eq('company_id', req.companyId);
+
+        let { data: tenants, error } = await query;
         if (error) throw error;
 
         // Fetch Tenant Units
@@ -131,6 +145,11 @@ exports.getTenantById = async (req, res) => {
         const { data: tenant, error } = await supabase.from('tenants').select('*').eq('id', tenantId).single();
         if (error || !tenant) return res.status(404).json({ message: 'Tenant not found' });
 
+        // Multi-tenant: silently hide tenants from other companies
+        if (req.companyId && tenant.company_id && tenant.company_id !== req.companyId) {
+            return res.status(404).json({ message: 'Tenant not found' });
+        }
+
         const { data: tenantUnits } = await supabase.from('tenant_units').select('unit_id').eq('tenant_id', tenantId);
         const unitIds = (tenantUnits || []).map(tu => tu.unit_id);
 
@@ -178,6 +197,15 @@ exports.updateTenant = async (req, res) => {
             contact_person_phone, street_address, city, state, zip_code, country,
             kyc_status, status
         } = req.body;
+
+        // Multi-tenant: silently hide tenants from other companies
+        if (req.companyId) {
+            const { data: tenantCheck } = await supabase.from('tenants')
+                .select('company_id').eq('id', tenantId).single();
+            if (!tenantCheck || tenantCheck.company_id !== req.companyId) {
+                return res.status(404).json({ message: 'Tenant not found' });
+            }
+        }
 
         const updateData = {};
         if (company_name !== undefined) updateData.company_name = company_name;

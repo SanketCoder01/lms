@@ -1,38 +1,18 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import SuperAdminLayout, { SA_API, saFetch } from './SuperAdminLayout';
 
-const MODULES = [
-  { key: 'dashboard',     label: 'Dashboard',      emoji: '📊' },
-  { key: 'projects',      label: 'Projects',       emoji: '🏗️' },
-  { key: 'units',         label: 'Units',           emoji: '🏠' },
-  { key: 'leases',        label: 'Leases',          emoji: '📋' },
-  { key: 'parties',       label: 'Parties',         emoji: '👥' },
-  { key: 'ownership',     label: 'Ownership Mapping', emoji: '🔗' },
-  { key: 'filters',       label: 'Filter Options',  emoji: '🏷️' },
-  { key: 'reports',       label: 'Reports',         emoji: '📈' },
-  { key: 'notifications', label: 'Notifications',   emoji: '🔔' },
-  { key: 'settings',      label: 'Settings',        emoji: '⚙️' },
-];
-
-const DEFAULT_MODULES = { 
-  dashboard: true, projects: true, units: true, leases: true, parties: true, 
-  ownership: true, filters: true, reports: true, notifications: true, settings: false 
-};
-
 const UserManagement = () => {
   const [users, setUsers]         = useState([]);
   const [loading, setLoading]     = useState(true);
   const [search, setSearch]       = useState('');
   const [showCreate, setShowCreate] = useState(false);
   const [editUser, setEditUser]   = useState(null);
-  const [moduleUser, setModuleUser] = useState(null);
   const [deleteId, setDeleteId]   = useState(null);
   const [saving, setSaving]       = useState(false);
   const [error, setError]         = useState('');
   const [success, setSuccess]     = useState('');
 
-  const [form, setForm] = useState({ company_name: '', email: '', phone: '', address: '', role: 'user', password: '' });
-  const [moduleForm, setModuleForm] = useState({ ...DEFAULT_MODULES });
+  const [form, setForm] = useState({ company_name: '', email: '', phone: '', address: '', password: '' });
 
   const loadUsers = useCallback(async () => {
     const res = await saFetch(`${SA_API}/api/super-admin/users`);
@@ -56,11 +36,10 @@ const UserManagement = () => {
     });
     setSaving(false);
     if (res.success) { 
-      msg('success', 'Company user created! Please configure module access.'); 
+      msg('success', 'Company user created successfully!'); 
       setShowCreate(false); 
-      setForm({ company_name: '', email: '', phone: '', address: '', role: 'user', password: '' }); 
+      setForm({ company_name: '', email: '', phone: '', address: '', password: '' }); 
       loadUsers(); 
-      openModules(res.user);
     }
     else msg('error', res.message);
   };
@@ -90,24 +69,9 @@ const UserManagement = () => {
     else msg('error', res.message);
   };
 
-  const handleSaveModules = async () => {
-    setSaving(true);
-    const res = await saFetch(`${SA_API}/api/super-admin/users/${moduleUser.id}/modules`, {
-      method: 'PUT', body: JSON.stringify({ modules_access: moduleForm }),
-    });
-    setSaving(false);
-    if (res.success) { msg('success', 'Module access updated!'); setModuleUser(null); loadUsers(); }
-    else msg('error', res.message);
-  };
-
   const openEdit = (u) => {
     setEditUser(u);
-    setForm({ company_name: u.company_name, email: u.email, phone: u.phone || '', address: u.address || '', role: u.role, password: '' });
-  };
-
-  const openModules = (u) => {
-    setModuleUser(u);
-    setModuleForm({ ...DEFAULT_MODULES, ...(u.modules_access || {}) });
+    setForm({ company_name: u.company_name, email: u.email, phone: u.phone || '', address: u.address || '', password: '' });
   };
 
   const filtered = users.filter(u =>
@@ -129,7 +93,7 @@ const UserManagement = () => {
               <span className="sa-search-icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg></span>
               <input placeholder="Search company or email…" value={search} onChange={e => setSearch(e.target.value)} />
             </div>
-            <button className="sa-btn sa-btn-primary" onClick={() => { setShowCreate(true); setForm({ company_name:'', email:'', phone:'', address:'', role:'user', password:'' }); }}>
+            <button className="sa-btn sa-btn-primary" onClick={() => { setShowCreate(true); setForm({ company_name:'', email:'', phone:'', address:'', password:'' }); }}>
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
               New Company
             </button>
@@ -146,7 +110,7 @@ const UserManagement = () => {
             <table className="sa-table">
               <thead>
                 <tr>
-                  <th>Company</th><th>Email</th><th>Phone</th><th>Role</th>
+                  <th>Company</th><th>Email</th><th>Phone</th>
                   <th>Status</th><th>Last Login</th><th>Actions</th>
                 </tr>
               </thead>
@@ -156,7 +120,6 @@ const UserManagement = () => {
                     <td><div style={{ fontWeight:600 }}>{u.company_name}</div></td>
                     <td style={{ color:'var(--sa-muted)' }}>{u.email}</td>
                     <td style={{ color:'var(--sa-muted)' }}>{u.phone || '—'}</td>
-                    <td><span style={{ textTransform:'capitalize', fontWeight:600 }}>{u.role}</span></td>
                     <td><span className={`sa-status ${u.status}`}>{u.status}</span></td>
                     <td style={{ color:'var(--sa-muted)', fontSize:12 }}>
                       {u.last_login ? new Date(u.last_login).toLocaleString() : 'Never'}
@@ -164,7 +127,6 @@ const UserManagement = () => {
                     <td>
                       <div style={{ display:'flex', gap:6, flexWrap:'wrap' }}>
                         <button className="sa-btn sa-btn-ghost sa-btn-sm" onClick={() => openEdit(u)}>Edit</button>
-                        <button className="sa-btn sa-btn-ghost sa-btn-sm" onClick={() => openModules(u)}>Modules</button>
                         <button
                           className={`sa-btn sa-btn-sm ${u.status === 'active' ? 'sa-btn-warning' : 'sa-btn-success'}`}
                           onClick={() => handleToggleStatus(u)}
@@ -193,18 +155,9 @@ const UserManagement = () => {
               </button>
             </div>
             <div className="sa-form">
-              <div className="sa-form-row">
-                <div className="sa-form-group">
-                  <label>Company Name *</label>
-                  <input placeholder="e.g. Acme Corp" value={form.company_name} onChange={e => setForm({...form, company_name: e.target.value})} />
-                </div>
-                <div className="sa-form-group">
-                  <label>Role</label>
-                  <select value={form.role} onChange={e => setForm({...form, role: e.target.value})}>
-                    <option value="user">User</option>
-                    <option value="admin">Admin</option>
-                  </select>
-                </div>
+              <div className="sa-form-group">
+                <label>Company Name *</label>
+                <input placeholder="e.g. Acme Corp" value={form.company_name} onChange={e => setForm({...form, company_name: e.target.value})} />
               </div>
               <div className="sa-form-group">
                 <label>Email Address *</label>
@@ -229,43 +182,6 @@ const UserManagement = () => {
               <button className="sa-btn sa-btn-ghost" onClick={() => { setShowCreate(false); setEditUser(null); }}>Cancel</button>
               <button className="sa-btn sa-btn-primary" disabled={saving} onClick={editUser ? handleUpdate : handleCreate}>
                 {saving ? <><span className="sa-spinner" />Saving…</> : (showCreate ? '✅ Create Company' : '💾 Save Changes')}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Module Access Modal */}
-      {moduleUser && (
-        <div className="sa-modal-overlay" onClick={() => setModuleUser(null)}>
-          <div className="sa-modal" onClick={e => e.stopPropagation()}>
-            <div className="sa-modal-header">
-              <h3>🔐 Module Access — {moduleUser.company_name}</h3>
-              <button className="sa-modal-close" onClick={() => setModuleUser(null)}>
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-              </button>
-            </div>
-            <p style={{ color:'var(--sa-muted)', fontSize:13, marginBottom:20 }}>
-              Toggle which modules are visible to this company when they log in.
-            </p>
-            <div className="sa-module-grid">
-              {MODULES.map(m => (
-                <div key={m.key} className={`sa-module-card${moduleForm[m.key] ? ' enabled' : ''}`}>
-                  <div className="sa-module-info">
-                    <span className="sa-module-emoji">{m.emoji}</span>
-                    <span className="sa-module-name">{m.label}</span>
-                  </div>
-                  <label className="sa-toggle">
-                    <input type="checkbox" checked={!!moduleForm[m.key]} onChange={() => setModuleForm(f => ({ ...f, [m.key]: !f[m.key] }))} />
-                    <span className="sa-toggle-slider" />
-                  </label>
-                </div>
-              ))}
-            </div>
-            <div className="sa-modal-actions">
-              <button className="sa-btn sa-btn-ghost" onClick={() => setModuleUser(null)}>Cancel</button>
-              <button className="sa-btn sa-btn-primary" disabled={saving} onClick={handleSaveModules}>
-                {saving ? <><span className="sa-spinner" />Saving…</> : '💾 Save Module Access'}
               </button>
             </div>
           </div>

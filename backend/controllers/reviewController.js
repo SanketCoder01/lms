@@ -3,19 +3,28 @@ const supabase = require("../config/db");
 // Get Review Stats (Counts for tabs)
 exports.getReviewStats = async (req, res) => {
     try {
+        // Multi-tenant: build queries with company_id filter
+        const projectQ = supabase.from('projects').select('*', { count: 'exact', head: true }).eq('status', 'pending');
+        const unitQ = supabase.from('units').select('*', { count: 'exact', head: true }).eq('status', 'under_maintenance');
+        const ownerQ = supabase.from('parties').select('*', { count: 'exact', head: true }).eq('is_owner', true).eq('status', 'inactive');
+        const tenantQ = supabase.from('parties').select('*', { count: 'exact', head: true }).eq('is_tenant', true).eq('status', 'inactive');
+        const leaseQ = supabase.from('leases').select('*', { count: 'exact', head: true }).eq('status', 'draft');
+
+        if (req.companyId) {
+            projectQ.eq('company_id', req.companyId);
+            unitQ.eq('company_id', req.companyId);
+            ownerQ.eq('company_id', req.companyId);
+            tenantQ.eq('company_id', req.companyId);
+            leaseQ.eq('company_id', req.companyId);
+        }
+
         const [
             { count: projectsCount },
             { count: unitsCount },
             { count: ownersCount },
             { count: tenantsCount },
             { count: leasesCount }
-        ] = await Promise.all([
-            supabase.from('projects').select('*', { count: 'exact', head: true }).eq('status', 'pending'),
-            supabase.from('units').select('*', { count: 'exact', head: true }).eq('status', 'under_maintenance'),
-            supabase.from('parties').select('*', { count: 'exact', head: true }).eq('is_owner', true).eq('status', 'inactive'),
-            supabase.from('parties').select('*', { count: 'exact', head: true }).eq('is_tenant', true).eq('status', 'inactive'),
-            supabase.from('leases').select('*', { count: 'exact', head: true }).eq('status', 'draft')
-        ]);
+        ] = await Promise.all([projectQ, unitQ, ownerQ, tenantQ, leaseQ]);
 
         res.json({
             projects: projectsCount || 0,
@@ -37,10 +46,15 @@ exports.getPendingItems = async (req, res) => {
 
         switch (type) {
             case 'lease':
-                const { data, error } = await supabase.from('leases').select(`
-                    id, monthly_rent, lease_start, lease_end, created_at,
+                let query = supabase.from('leases').select(`
+                    id, monthly_rent, lease_start, lease_end, created_at, company_id,
                     tenant:parties!leases_party_tenant_id_fkey(company_name, first_name, last_name)
                 `).eq('status', 'draft').order('created_at', { ascending: false });
+
+                // Multi-tenant: company users only see their own leases
+                if (req.companyId) query = query.eq('company_id', req.companyId);
+
+                const { data, error } = await query;
 
                 if (error) throw error;
 

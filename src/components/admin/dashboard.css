@@ -32,6 +32,24 @@ body {
     font-weight: 400;
 }
 
+/* ========= ADMIN DASHBOARD LAYOUT ========= */
+
+.admin-dashboard-layout {
+    display: flex;
+    min-height: 100vh;
+    background: #f8fafc;
+}
+
+.admin-main-content {
+    flex: 1;
+    margin-left: var(--sidebar-width);
+    padding: 24px;
+    padding-top: 24px;
+    overflow-y: auto;
+    min-width: 0;
+    box-sizing: border-box;
+}
+
 /* ========= LAYOUT ========= */
 
 .dashboard-container {
@@ -43,6 +61,7 @@ body {
     flex: 1;
     margin-left: var(--sidebar-width);
     padding: 28px 38px 40px;
+    padding-top: 72px; /* Account for TopBanner (44px) + some spacing */
     box-sizing: border-box;
     width: calc(100% - var(--sidebar-width));
 }
@@ -810,4 +829,82 @@ table .action-btn.delete:hover,
         width: 100% !important;
     }
     .page-header .header-text h1 { font-size: 1.15rem !important; }
+}
+
+/* ========= ADMIN DASHBOARD RESPONSIVE ========= */
+
+@media (max-width: 1024px) {
+    .admin-dashboard-layout {
+        flex-direction: column;
+    }
+
+    .admin-main-content {
+        margin-left: 0;
+        width: 100%;
+        padding: 16px;
+        padding-top: 80px; /* Space for mobile toggle */
+    }
+}
+
+@media (max-width: 768px) {
+    .admin-main-content {
+        padding: 12px;
+        padding-top: 72px;
+    }
+
+    /* Ensure tables scroll horizontally */
+    .admin-main-content .echo-dashboard-wrapper {
+        overflow-x: hidden;
+    }
+
+    .admin-main-content table {
+        min-width: 600px;
+    }
+}
+
+@media (max-width: 480px) {
+    .admin-main-content {
+        padding: 8px;
+        padding-top: 64px;
+    }
+
+    .admin-main-content .echo-content {
+        padding: 12px 8px;
+    }
+
+    .admin-main-content .echo-navbar {
+        padding: 8px 12px;
+    }
+
+    .admin-main-content .echo-navbar-left {
+        gap: 8px;
+    }
+
+    .admin-main-content .echo-logo {
+        font-size: 14px;
+    }
+
+    .admin-main-content .echo-project-select {
+        min-width: 120px;
+        font-size: 12px;
+        padding: 4px 24px 4px 8px;
+    }
+
+    .admin-main-content .echo-header {
+        flex-direction: column;
+        gap: 12px;
+        align-items: stretch;
+    }
+
+    .admin-main-content .echo-actions {
+        flex-wrap: wrap;
+        gap: 8px;
+    }
+
+    .admin-main-content .echo-btn-secondary,
+    .admin-main-content .echo-btn-primary {
+        flex: 1;
+        justify-content: center;
+        min-width: 100px;
+    }
 }

@@ -1,8 +1,17 @@
+/* CSS Variables */
+:root {
+    --text-primary: #111827;
+    --text-secondary: #6B7280;
+    --border-color: #E5E7EB;
+    --primary-blue: #2E66FF;
+    --bg-light: #F5F7FB;
+}
+
 .master-tabs {
     display: flex;
     gap: 16px;
     margin-bottom: 24px;
-    border-bottom: 1px solid #e5e7eb;
+    border-bottom: 1px solid var(--border-color);
 }
 
 .tab-btn {

@@ -10,9 +10,12 @@ const getActivityLogs = async (req, res) => {
     const { module, location, search, startDate, endDate } = req.query;
 
     let query = supabase.from('activity_logs').select(`
-        id, action, module, details, created_at, ip_address, user_id,
+        id, action, module, details, created_at, ip_address, user_id, company_id,
         users!left(first_name, last_name, profile_image, location, roles(role_name))
     `, { count: 'exact' });
+
+    // Multi-tenant: company users only see their own logs
+    if (req.companyId) query = query.eq('company_id', req.companyId);
 
     if (module && module !== 'All Modules') query = query.eq('module', module);
     if (startDate) query = query.gte('created_at', startDate);
@@ -79,9 +82,14 @@ const exportActivityLogs = async (req, res) => {
     const { module, location, search, startDate, endDate } = req.query;
 
     let query = supabase.from('activity_logs').select(`
-        id, action, module, details, created_at,
-        users!left(first_name, last_name, location, roles(role_name))
-    `).order('created_at', { ascending: false });
+        id, action, module, details, created_at, ip_address, user_id, company_id,
+        users!left(first_name, last_name, profile_image, location, roles(role_name))
+    `);
+
+    // Multi-tenant: company users only see their own logs
+    if (req.companyId) query = query.eq('company_id', req.companyId);
+
+    query = query.order('created_at', { ascending: false });
 
     if (module && module !== 'All Modules') query = query.eq('module', module);
     if (startDate) query = query.gte('created_at', startDate);

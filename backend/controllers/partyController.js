@@ -25,6 +25,10 @@ exports.getPartyById = async (req, res) => {
             if (error.code === 'PGRST116') return res.status(404).json({ message: 'Party not found' });
             throw error;
         }
+        // Multi-tenant: silently hide parties from other companies
+        if (req.companyId && data.company_id && data.company_id !== req.companyId) {
+            return res.status(404).json({ message: 'Party not found' });
+        }
         res.json(data);
     } catch (err) {
         console.error("getPartyById Error:", err);
@@ -73,6 +77,15 @@ exports.updateParty = async (req, res) => {
     } = req.body;
 
     try {
+        // Multi-tenant: silently hide parties from other companies
+        if (req.companyId) {
+            const { data: partyCheck } = await supabase.from('parties')
+                .select('company_id').eq('id', req.params.id).single();
+            if (!partyCheck || partyCheck.company_id !== req.companyId) {
+                return res.status(404).json({ message: 'Party not found' });
+            }
+        }
+
         const { error } = await supabase.from('parties').update({
             type, party_type, company_name, brand_name, brand_category, legal_entity_type, title, first_name, last_name,
             email, phone, alt_phone, identification_type, identification_number,
@@ -92,6 +105,15 @@ exports.updateParty = async (req, res) => {
 // Delete a party
 exports.deleteParty = async (req, res) => {
     try {
+        // Multi-tenant: silently hide parties from other companies
+        if (req.companyId) {
+            const { data: partyCheck } = await supabase.from('parties')
+                .select('company_id').eq('id', req.params.id).single();
+            if (!partyCheck || partyCheck.company_id !== req.companyId) {
+                return res.status(404).json({ message: 'Party not found' });
+            }
+        }
+
         const { error } = await supabase.from('parties').delete().eq('id', req.params.id);
         
         if (error) return res.status(500).json(handleDbError(error));

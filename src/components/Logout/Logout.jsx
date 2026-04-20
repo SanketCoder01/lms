@@ -12,8 +12,12 @@ const Logout = () => {
 
     const handleLogout = async () => {
         await supabase.auth.signOut();
-        localStorage.removeItem('token');
-        localStorage.removeItem('user');
+        // Use sessionStorage for per-tab session isolation
+        sessionStorage.removeItem('token');
+        sessionStorage.removeItem('user');
+        sessionStorage.removeItem('company_token');
+        sessionStorage.removeItem('company_user');
+        sessionStorage.removeItem('company_session_id');
         navigate('/login');
     };
 

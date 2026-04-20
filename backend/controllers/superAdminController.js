@@ -140,14 +140,100 @@ const updateUser = async (req, res) => {
   }
 };
 
-// ─── COMPANY USERS — DELETE ──────────────────────────────────────────────────
+// ─── COMPANY USERS — DELETE ──────────────────────────────────────────────────// --- COMPANY USERS - DELETE (with all related data)
 const deleteUser = async (req, res) => {
   try {
     const { id } = req.params;
+
+    // Get company_user details before deletion
+    const { data: companyUser } = await supabase
+      .from('company_users')
+      .select('id, email')
+      .eq('id', id)
+      .single();
+
+    if (!companyUser) {
+      return res.status(404).json({ success: false, message: 'Company not found' });
+    }
+
+    // Delete all related data for this company
+    // Order matters due to foreign key constraints
+
+    // 1. Kill all active sessions for this company user
+    await supabase.from('user_sessions').delete().eq('company_user_id', id);
+
+    // 2. Delete unit ownership documents for this company's units
+    const { data: companyUnits } = await supabase.from('units').select('id').eq('company_id', id);
+    if (companyUnits && companyUnits.length > 0) {
+      const unitIds = companyUnits.map(u => u.id);
+      // Delete documents linked to these units
+      await supabase.from('unit_ownership_documents').delete().in('unit_id', unitIds);
+      // Delete unit ownerships
+      await supabase.from('unit_ownerships').delete().in('unit_id', unitIds);
+      // Delete unit images
+      await supabase.from('unit_images').delete().in('unit_id', unitIds);
+    }
+
+    // 3. Delete lease escalations for this company's leases
+    const { data: companyLeases } = await supabase.from('leases').select('id').eq('company_id', id);
+    if (companyLeases && companyLeases.length > 0) {
+      const leaseIds = companyLeases.map(l => l.id);
+      await supabase.from('lease_escalations').delete().in('lease_id', leaseIds);
+    }
+
+    // 4. Delete leases for this company
+    await supabase.from('leases').delete().eq('company_id', id);
+
+    // 5. Delete units for this company
+    await supabase.from('units').delete().eq('company_id', id);
+
+    // 6. Delete project blocks and floors for this company's projects
+    const { data: companyProjects } = await supabase.from('projects').select('id').eq('company_id', id);
+    if (companyProjects && companyProjects.length > 0) {
+      const projectIds = companyProjects.map(p => p.id);
+      await supabase.from('project_floors').delete().in('project_id', projectIds);
+      await supabase.from('project_blocks').delete().in('project_id', projectIds);
+    }
+
+    // 7. Delete projects for this company
+    await supabase.from('projects').delete().eq('company_id', id);
+
+    // 8. Delete parties for this company
+    await supabase.from('parties').delete().eq('company_id', id);
+
+    // 9. Delete filter options for this company
+    await supabase.from('filter_options').delete().eq('company_id', id);
+
+    // 10. Delete activity logs for this company
+    await supabase.from('activity_logs').delete().eq('company_id', id);
+
+    // 11. Delete notifications for this company
+    await supabase.from('notifications').delete().eq('company_id', id);
+
+    // 12. Delete owners for this company
+    const { data: companyOwners } = await supabase.from('owners').select('id').eq('company_id', id);
+    if (companyOwners && companyOwners.length > 0) {
+      const ownerIds = companyOwners.map(o => o.id);
+      await supabase.from('owner_documents').delete().in('owner_id', ownerIds);
+      await supabase.from('owner_units').delete().in('owner_id', ownerIds);
+    }
+    await supabase.from('owners').delete().eq('company_id', id);
+
+    // 13. Delete tenants for this company
+    const { data: companyTenants } = await supabase.from('tenants').select('id').eq('company_id', id);
+    if (companyTenants && companyTenants.length > 0) {
+      const tenantIds = companyTenants.map(t => t.id);
+      await supabase.from('tenant_units').delete().in('tenant_id', tenantIds);
+    }
+    await supabase.from('tenants').delete().eq('company_id', id);
+
+    // 14. Finally, delete the company user record
     const { error } = await supabase.from('company_users').delete().eq('id', id);
     if (error) throw error;
-    return res.json({ success: true, message: 'User deleted successfully' });
+
+    return res.json({ success: true, message: 'Company and all related data deleted successfully' });
   } catch (err) {
+    console.error('Delete company error:', err);
     return res.status(500).json({ success: false, message: err.message });
   }
 };
@@ -312,49 +398,73 @@ const getSessions = async (req, res) => {
 const killSession = async (req, res) => {
   try {
     const { id } = req.params;
-    
+    console.log('[killSession] Attempting to kill session:', id);
+
     // Get session info before killing
     const { data: session, error: fetchError } = await supabase
       .from('user_sessions')
       .select('id, company_user_id, email, company_name')
       .eq('id', id)
       .single();
-    
-    if (fetchError || !session) {
+
+    if (fetchError) {
+      console.error('[killSession] Fetch error:', fetchError);
       return res.status(404).json({ success: false, message: 'Session not found' });
     }
-    
-    // Mark session as killed (not just inactive)
-    const { error } = await supabase
+
+    if (!session) {
+      return res.status(404).json({ success: false, message: 'Session not found' });
+    }
+
+    // Try to update with killed_at and killed_by columns
+    // If those columns don't exist, just set is_active to false
+    const { error: updateError } = await supabase
       .from('user_sessions')
-      .update({ 
-        is_active: false, 
+      .update({
+        is_active: false,
         killed_at: new Date().toISOString(),
         killed_by: 'admin'
       })
       .eq('id', id);
-    
-    if (error) throw error;
-    
-    // Insert notification for the affected user
-    await supabase
-      .from('session_kill_notifications')
-      .insert({
-        company_user_id: session.company_user_id,
-        session_id: id,
-        message: 'Your session has been terminated by an administrator.',
-        created_at: new Date().toISOString()
-      })
-      .then(() => console.log('Session kill notification inserted for user:', session.company_user_id))
-      .catch(err => console.error('Failed to insert kill notification:', err));
-    
-    return res.json({ 
-      success: true, 
+
+    if (updateError) {
+      console.error('[killSession] Update with killed_at failed, trying basic update:', updateError);
+      // Fallback: just set is_active to false
+      const { error: fallbackError } = await supabase
+        .from('user_sessions')
+        .update({ is_active: false })
+        .eq('id', id);
+
+      if (fallbackError) {
+        console.error('[killSession] Fallback update also failed:', fallbackError);
+        throw fallbackError;
+      }
+    }
+
+    // Try to insert notification (non-critical, don't fail if this errors)
+    try {
+      await supabase
+        .from('session_kill_notifications')
+        .insert({
+          company_user_id: session.company_user_id,
+          session_id: parseInt(id),
+          message: 'Your session has been terminated by an administrator.',
+          created_at: new Date().toISOString()
+        });
+      console.log('[killSession] Notification inserted for user:', session.company_user_id);
+    } catch (notifErr) {
+      console.warn('[killSession] Could not insert notification (non-critical):', notifErr.message);
+    }
+
+    console.log('[killSession] Session terminated successfully:', id);
+    return res.json({
+      success: true,
       message: 'Session terminated',
       session: { id, email: session.email, company_name: session.company_name }
     });
   } catch (err) {
-    return res.status(500).json({ success: false, message: err.message });
+    console.error('[killSession] Unexpected error:', err);
+    return res.status(500).json({ success: false, message: err.message || 'Internal server error' });
   }
 };
 

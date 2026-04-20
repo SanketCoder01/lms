@@ -20,8 +20,9 @@ const API = axios.create({
 });
 
 // ---------------- TOKEN INTERCEPTOR ----------------
+// Use sessionStorage for per-tab session isolation
 API.interceptors.request.use((config) => {
-  const token = localStorage.getItem("token");
+  const token = sessionStorage.getItem("token") || sessionStorage.getItem("company_token");
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
   }

@@ -1,3 +1,12 @@
+/* CSS Variables */
+:root {
+    --text-primary: #111827;
+    --text-secondary: #6B7280;
+    --border-color: #E5E7EB;
+    --primary-blue: #2E66FF;
+    --bg-light: #F5F7FB;
+}
+
 .dashboard-container {
     display: flex;
     min-height: 100vh;

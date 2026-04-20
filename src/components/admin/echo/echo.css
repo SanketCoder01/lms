@@ -674,13 +674,130 @@
   .echo-kpi-grid {
     grid-template-columns: 1fr;
   }
-  
+
   .echo-header {
     flex-direction: column;
     gap: 16px;
   }
-  
+
   .echo-navbar-center {
     display: none;
+  }
+
+  .echo-navbar {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .echo-navbar-left {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .echo-project-selector {
+    max-width: 150px;
+  }
+
+  .echo-project-select {
+    min-width: 100px;
+    max-width: 150px;
+  }
+
+  .echo-content {
+    padding: 12px 8px;
+  }
+
+  .echo-card {
+    padding: 12px;
+    border-radius: 8px;
+  }
+
+  .echo-title {
+    font-size: 16px;
+  }
+
+  .echo-leasing-stats {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+
+  .echo-leasing-stat-value {
+    font-size: 20px;
+  }
+
+  .echo-section-title {
+    margin-top: 20px;
+    margin-bottom: 12px;
+  }
+
+  .echo-section-heading {
+    font-size: 12px;
+  }
+
+  /* Tables scroll horizontally on mobile */
+  .echo-zoning-table {
+    display: block;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    white-space: nowrap;
+  }
+
+  /* Rent composition mobile */
+  .echo-rent-content {
+    gap: 16px;
+  }
+
+  .echo-rent-legend {
+    gap: 12px;
+  }
+
+  .echo-rent-label,
+  .echo-rent-amount {
+    font-size: 12px;
+  }
+}
+
+/* Extra small devices */
+@media (max-width: 400px) {
+  .echo-navbar {
+    padding: 8px 10px;
+  }
+
+  .echo-logo {
+    font-size: 14px;
+  }
+
+  .echo-project-select {
+    min-width: 80px;
+    font-size: 11px;
+  }
+
+  .echo-avatar {
+    width: 28px;
+    height: 28px;
+    font-size: 10px;
+  }
+
+  .echo-kpi-card {
+    padding: 12px;
+  }
+
+  .echo-kpi-value {
+    font-size: 22px;
+  }
+
+  .echo-kpi-label {
+    font-size: 9px;
+  }
+
+  .echo-btn-secondary,
+  .echo-btn-primary {
+    padding: 6px 10px;
+    font-size: 12px;
+  }
+
+  .echo-btn-icon {
+    width: 14px;
+    height: 14px;
   }
 }

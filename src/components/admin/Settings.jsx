@@ -27,8 +27,9 @@ const Settings = () => {
     useEffect(() => {
         try {
             // Check if this is a company user (new auth flow)
-            const companyUserRaw = localStorage.getItem('company_user');
-            const regularUserRaw = localStorage.getItem('user');
+            // Use sessionStorage for per-tab session isolation
+            const companyUserRaw = sessionStorage.getItem('company_user');
+            const regularUserRaw = sessionStorage.getItem('user');
 
             let parsed = null;
             if (companyUserRaw) {

@@ -116,6 +116,11 @@ const getUnitById = async (req, res) => {
     if (error) throw error;
     if (!data) return res.status(404).json({ message: 'Unit not found' });
 
+    // Multi-tenant: silently hide units from other companies
+    if (req.companyId && data.company_id && data.company_id !== req.companyId) {
+      return res.status(404).json({ message: 'Unit not found' });
+    }
+
     res.json({
       ...data,
       project_name: data.projects?.project_name,
@@ -220,6 +225,16 @@ const createUnit = async (req, res) => {
 const updateUnit = async (req, res) => {
   try {
     const { id } = req.params;
+
+    // Multi-tenant: silently hide units from other companies
+    if (req.companyId) {
+      const { data: unitCheck } = await supabase.from('units')
+        .select('company_id').eq('id', id).single();
+      if (!unitCheck || unitCheck.company_id !== req.companyId) {
+        return res.status(404).json({ message: 'Unit not found' });
+      }
+    }
+
     const {
       unit_number, floor_number, block_tower, chargeable_area, carpet_area,
       unit_condition, plc, unit_category, unit_zoning_type, projected_rent, status
@@ -285,6 +300,15 @@ const updateUnit = async (req, res) => {
 const deleteUnit = async (req, res) => {
   try {
     const { id } = req.params;
+
+    // Multi-tenant: silently hide units from other companies
+    if (req.companyId) {
+      const { data: unitCheck } = await supabase.from('units')
+        .select('company_id').eq('id', id).single();
+      if (!unitCheck || unitCheck.company_id !== req.companyId) {
+        return res.status(404).json({ message: 'Unit not found' });
+      }
+    }
 
     const { data: unit } = await supabase.from('units').select('project_id').eq('id', id).single();
 

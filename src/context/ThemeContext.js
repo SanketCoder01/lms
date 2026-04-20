@@ -31,8 +31,8 @@ export const ThemeProvider = ({ children }) => {
   useEffect(() => {
     const loadTheme = async () => {
       try {
-        // Try to get company user ID from localStorage
-        const companyUserStr = localStorage.getItem('company_user');
+        // Try to get company user ID from sessionStorage (per-tab isolation)
+        const companyUserStr = sessionStorage.getItem('company_user');
         if (companyUserStr) {
           const companyUser = JSON.parse(companyUserStr);
           if (companyUser?.id) {
@@ -63,7 +63,7 @@ export const ThemeProvider = ({ children }) => {
 
     try {
       // Try to save to Supabase
-      const companyUserStr = localStorage.getItem('company_user');
+      const companyUserStr = sessionStorage.getItem('company_user');
       if (companyUserStr) {
         const companyUser = JSON.parse(companyUserStr);
         if (companyUser?.id) {

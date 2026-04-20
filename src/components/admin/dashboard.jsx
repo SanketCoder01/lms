@@ -2,11 +2,12 @@ import React from 'react';
 import Sidebar from './Sidebar';
 import EchoDashboard from './echo/EchoDashboard';
 import './echo/echo.css';
+import './dashboard.css';
 
 const Dashboard = () => (
-  <div style={{ display: 'flex', minHeight: '100vh', background: '#f8fafc' }}>
+  <div className="admin-dashboard-layout">
     <Sidebar />
-    <main style={{ flex: 1, marginLeft: '250px', padding: '24px', overflowY: 'auto', minWidth: 0 }}>
+    <main className="admin-main-content">
       <EchoDashboard />
     </main>
   </div>

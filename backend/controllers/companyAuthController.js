@@ -102,13 +102,12 @@ const companyLogin = async (req, res) => {
 // ─── COMPANY REGISTRATION (self-register) ────────────────────────────────────
 const companyRegister = async (req, res) => {
   try {
-    const { company_name, email, phone, address, role, password, confirm_password } = req.body;
+    const { company_name, email, phone, address, role, password } = req.body;
 
     if (!company_name || !email || !password)
       return res.status(400).json({ success: false, message: 'Company name, email and password are required' });
 
-    if (password !== confirm_password)
-      return res.status(400).json({ success: false, message: 'Passwords do not match' });
+    // Password match validation is done on frontend - no need to check here
 
     // Check if already registered or already a user
     const { data: existingReg } = await supabase.from('company_registrations').select('id, status').eq('email', email).single();

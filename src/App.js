@@ -4,7 +4,6 @@ import Dashboard from "./components/admin/dashboard";
 import Projects from "./components/admin/Projects";
 import ProjectDetails from "./components/admin/ProjectDetails";
 import Settings from "./components/admin/Settings";
-import RoleManagement from "./components/admin/RoleManagement";
 import TenantList from "./components/admin/TenantList"; // Updated import
 import AddTenant from "./components/admin/AddTenant";
 import TenantDetails from "./components/admin/TenantDetails";
@@ -63,6 +62,8 @@ import Announcements from "./components/super-admin/Announcements";
 
 import GlobalHeartbeat from './components/GlobalHeartbeat';
 import TopBanner from './components/TopBanner';
+import ProtectedRoute from './components/ProtectedRoute';
+import SessionKilledAlert from './components/admin/SessionKilledAlert';
 import './App.css';
 
 // Force Rebuild
@@ -96,6 +97,7 @@ function App() {
     <BrowserRouter>
       <GlobalHeartbeat />
       <TopBanner />
+      <SessionKilledAlert />
       <Routes>
         <Route path="/test-kyc-modal" element={<TestKycModal />} />
         {/* Default route redirects to Login or Dashboard */}
@@ -115,122 +117,121 @@ function App() {
         <Route path="/super-admin/live-activity" element={<LiveActivity />} />
         <Route path="/super-admin/announcements" element={<Announcements />} />
 
-        {/* Admin Routes (Company Users) */}
-        <Route path="/admin/dashboard" element={<Dashboard />} />
-        <Route path="/admin/projects" element={<Projects />} />
-        <Route path="/admin/projects/:id" element={<ProjectDetails />} />
-        <Route path="/admin/add-project" element={<AddProject />} />
-        <Route path="/admin/edit-project/:id" element={<EditProject />} />
+        {/* Admin Routes (Company Users) - Protected with sessionStorage */}
+        <Route path="/admin/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
+        <Route path="/admin/projects" element={<ProtectedRoute><Projects /></ProtectedRoute>} />
+        <Route path="/admin/projects/:id" element={<ProtectedRoute><ProjectDetails /></ProtectedRoute>} />
+        <Route path="/admin/add-project" element={<ProtectedRoute><AddProject /></ProtectedRoute>} />
+        <Route path="/admin/edit-project/:id" element={<ProtectedRoute><EditProject /></ProtectedRoute>} />
 
         {/* Unit Management */}
-        <Route path="/admin/units" element={<Units />} />
-        <Route path="/admin/add-unit" element={<AddUnit />} />
-        <Route path="/admin/edit-unit/:id" element={<EditUnit />} />
-        <Route path="/admin/view-unit/:id" element={<UnitDetails />} />
-        <Route path="/admin/unit-structure" element={<UnitStructure />} />
-        <Route path="/admin/leases" element={<Leases />} />
-        <Route path="/admin/add-lease" element={<AddLease />} />
-        <Route path="/admin/edit-lease/:id" element={<EditLease />} />
-        <Route path="/admin/view-lease/:id" element={<LeaseDetails />} />
+        <Route path="/admin/units" element={<ProtectedRoute><Units /></ProtectedRoute>} />
+        <Route path="/admin/add-unit" element={<ProtectedRoute><AddUnit /></ProtectedRoute>} />
+        <Route path="/admin/edit-unit/:id" element={<ProtectedRoute><EditUnit /></ProtectedRoute>} />
+        <Route path="/admin/view-unit/:id" element={<ProtectedRoute><UnitDetails /></ProtectedRoute>} />
+        <Route path="/admin/unit-structure" element={<ProtectedRoute><UnitStructure /></ProtectedRoute>} />
+        <Route path="/admin/leases" element={<ProtectedRoute><Leases /></ProtectedRoute>} />
+        <Route path="/admin/add-lease" element={<ProtectedRoute><AddLease /></ProtectedRoute>} />
+        <Route path="/admin/edit-lease/:id" element={<ProtectedRoute><EditLease /></ProtectedRoute>} />
+        <Route path="/admin/view-lease/:id" element={<ProtectedRoute><LeaseDetails /></ProtectedRoute>} />
 
         {/* Other Admin Modules */}
-        <Route path="/admin/settings" element={<Settings />} />
-        <Route path="/admin/role-management" element={<RoleManagement />} />
-        <Route path="/admin/create-user" element={<CreateUser />} />
+        <Route path="/admin/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
+        <Route path="/admin/create-user" element={<ProtectedRoute><CreateUser /></ProtectedRoute>} />
 
         {/* Tenant Routes */}
-        <Route path="/admin/tenants" element={<TenantList />} />
+        <Route path="/admin/tenants" element={<ProtectedRoute><TenantList /></ProtectedRoute>} />
         <Route path="/admin/tenant" element={<Navigate to="/admin/tenants" replace />} />
-        <Route path="/admin/tenant/add" element={<AddTenant />} />
-        <Route path="/admin/add-tenant" element={<AddTenant />} />
-        <Route path="/admin/tenant/edit/:id" element={<EditTenant />} />
-        <Route path="/admin/tenant/:id" element={<TenantDetails />} />
+        <Route path="/admin/tenant/add" element={<ProtectedRoute><AddTenant /></ProtectedRoute>} />
+        <Route path="/admin/add-tenant" element={<ProtectedRoute><AddTenant /></ProtectedRoute>} />
+        <Route path="/admin/tenant/edit/:id" element={<ProtectedRoute><EditTenant /></ProtectedRoute>} />
+        <Route path="/admin/tenant/:id" element={<ProtectedRoute><TenantDetails /></ProtectedRoute>} />
 
         {/* Master Route - Deprecated
         <Route path="/admin/master" element={<Master />} /> 
         */}
 
         {/* Party Master Routes (Replaces Owner/Tenant) */}
-        <Route path="/admin/parties" element={<PartyMaster />} />
-        <Route path="/admin/parties/add" element={<AddParty />} />
-        <Route path="/admin/parties/view/:id" element={<ViewParty />} />
-        <Route path="/admin/parties/edit/:id" element={<EditParty />} />
+        <Route path="/admin/parties" element={<ProtectedRoute><PartyMaster /></ProtectedRoute>} />
+        <Route path="/admin/parties/add" element={<ProtectedRoute><AddParty /></ProtectedRoute>} />
+        <Route path="/admin/parties/view/:id" element={<ProtectedRoute><ViewParty /></ProtectedRoute>} />
+        <Route path="/admin/parties/edit/:id" element={<ProtectedRoute><EditParty /></ProtectedRoute>} />
         
-        <Route path="/admin/filter-options" element={<FilterOptionsMaster />} />
+        <Route path="/admin/filter-options" element={<ProtectedRoute><FilterOptionsMaster /></ProtectedRoute>} />
 
-        <Route path="/admin/ownership-mapping" element={<OwnershipMapping />} />
+        <Route path="/admin/ownership-mapping" element={<ProtectedRoute><OwnershipMapping /></ProtectedRoute>} />
 
         {/* Legacy Owner Routes (Can be deprecated later) */}
-        <Route path="/admin/owner" element={<OwnerList />} />
-        <Route path="/admin/owners" element={<OwnerList />} />
-        <Route path="/admin/owner/add" element={<AddOwner />} />
-        <Route path="/admin/owners/add" element={<AddOwner />} />
-        <Route path="/admin/owner/edit/:id" element={<EditOwner />} />
-        <Route path="/admin/owner/:id" element={<OwnerDetails />} />
+        <Route path="/admin/owner" element={<ProtectedRoute><OwnerList /></ProtectedRoute>} />
+        <Route path="/admin/owners" element={<ProtectedRoute><OwnerList /></ProtectedRoute>} />
+        <Route path="/admin/owner/add" element={<ProtectedRoute><AddOwner /></ProtectedRoute>} />
+        <Route path="/admin/owners/add" element={<ProtectedRoute><AddOwner /></ProtectedRoute>} />
+        <Route path="/admin/owner/edit/:id" element={<ProtectedRoute><EditOwner /></ProtectedRoute>} />
+        <Route path="/admin/owner/:id" element={<ProtectedRoute><OwnerDetails /></ProtectedRoute>} />
 
-        <Route path="/admin/notifications" element={<AdminNotifications />} /> {/* New Route */}
-        <Route path="/admin/activity-logs" element={<ActivityLogs />} />
+        <Route path="/admin/notifications" element={<ProtectedRoute><AdminNotifications /></ProtectedRoute>} />
+        <Route path="/admin/activity-logs" element={<ProtectedRoute><ActivityLogs /></ProtectedRoute>} />
 
 
         {/* Management Rep Routes */}
-        <Route path="/doc-repo" element={<DocRepo />} />
+        <Route path="/doc-repo" element={<ProtectedRoute><DocRepo /></ProtectedRoute>} />
 
         {/* Lease Management Suite */}
-        <Route path="/lease/dashboard" element={<LeaseDashboard />} />
-        <Route path="/lease-manager/dashboard" element={<LeaseDashboard />} />
+        <Route path="/lease/dashboard" element={<ProtectedRoute><LeaseDashboard /></ProtectedRoute>} />
+        <Route path="/lease-manager/dashboard" element={<ProtectedRoute><LeaseDashboard /></ProtectedRoute>} />
 
         {/* Tracking */}
-        <Route path="/lease/tracking" element={<LeaseTracker />} />
-        <Route path="/lease/tracking/:id" element={<LeaseTrackingDetails />} />
+        <Route path="/lease/tracking" element={<ProtectedRoute><LeaseTracker /></ProtectedRoute>} />
+        <Route path="/lease/tracking/:id" element={<ProtectedRoute><LeaseTrackingDetails /></ProtectedRoute>} />
 
         {/* Reports */}
-        <Route path="/lease/reports" element={<LeaseReports />} />
-        <Route path="/lease/reports/:reportType" element={<LeaseReportDetails />} />
-        <Route path="/lease/notifications" element={<LeaseNotifications />} />
+        <Route path="/lease/reports" element={<ProtectedRoute><LeaseReports /></ProtectedRoute>} />
+        <Route path="/lease/reports/:reportType" element={<ProtectedRoute><LeaseReportDetails /></ProtectedRoute>} />
+        <Route path="/lease/notifications" element={<ProtectedRoute><LeaseNotifications /></ProtectedRoute>} />
 
         {/* Reminders */}
-        <Route path="/lease/reminders" element={<LeaseReminders />} />
+        <Route path="/lease/reminders" element={<ProtectedRoute><LeaseReminders /></ProtectedRoute>} />
 
         {/* Reviews/Approvals */}
-        <Route path="/lease/reviews" element={<LeaseList />} />
-        <Route path="/lease/review/:id" element={<LeaseDetailsManager />} />
+        <Route path="/lease/reviews" element={<ProtectedRoute><LeaseList /></ProtectedRoute>} />
+        <Route path="/lease/review/:id" element={<ProtectedRoute><LeaseDetailsManager /></ProtectedRoute>} />
 
         {/* Legacy/Other Routes */}
-        <Route path="/lease/validation" element={<LeaseValidation />} />
-        <Route path="/lease/lifecycle" element={<LeaseLifecycle />} />
-        <Route path="/management/dashboard" element={<RepDashboard />} />
-        <Route path="/management/reports" element={<Reports />} />
-        <Route path="/management/search" element={<SearchFilters />} />
-        <Route path="/management/notifications" element={<Notifications />} />
-        <Route path="/management/review-center" element={<ReviewCenter />} />
-        <Route path="/management/lease-tracker" element={<LeaseTracker />} />
-        <Route path="/management/settings" element={<RepSettings />} />
+        <Route path="/lease/validation" element={<ProtectedRoute><LeaseValidation /></ProtectedRoute>} />
+        <Route path="/lease/lifecycle" element={<ProtectedRoute><LeaseLifecycle /></ProtectedRoute>} />
+        <Route path="/management/dashboard" element={<ProtectedRoute><RepDashboard /></ProtectedRoute>} />
+        <Route path="/management/reports" element={<ProtectedRoute><Reports /></ProtectedRoute>} />
+        <Route path="/management/search" element={<ProtectedRoute><SearchFilters /></ProtectedRoute>} />
+        <Route path="/management/notifications" element={<ProtectedRoute><Notifications /></ProtectedRoute>} />
+        <Route path="/management/review-center" element={<ProtectedRoute><ReviewCenter /></ProtectedRoute>} />
+        <Route path="/management/lease-tracker" element={<ProtectedRoute><LeaseTracker /></ProtectedRoute>} />
+        <Route path="/management/settings" element={<ProtectedRoute><RepSettings /></ProtectedRoute>} />
 
         {/* Data Entry Routes */}
-        <Route path="/data-entry/dashboard" element={<DataEntryDashboard />} />
-        <Route path="/data-entry/add-data" element={<DataEntrySelection />} />
-        <Route path="/data-entry/pending-projects" element={<PendingProjects />} />
-        <Route path="/data-entry/pending-approvals" element={<PendingApprovals />} />
-        <Route path="/data-entry/past-entries" element={<PastEntries />} />
+        <Route path="/data-entry/dashboard" element={<ProtectedRoute><DataEntryDashboard /></ProtectedRoute>} />
+        <Route path="/data-entry/add-data" element={<ProtectedRoute><DataEntrySelection /></ProtectedRoute>} />
+        <Route path="/data-entry/pending-projects" element={<ProtectedRoute><PendingProjects /></ProtectedRoute>} />
+        <Route path="/data-entry/pending-approvals" element={<ProtectedRoute><PendingApprovals /></ProtectedRoute>} />
+        <Route path="/data-entry/past-entries" element={<ProtectedRoute><PastEntries /></ProtectedRoute>} />
 
         {/* Specific Data Entry Forms */}
-        <Route path="/data-entry/add-project-data" element={<ProjectDataEntry />} />
-        <Route path="/data-entry/project/:id" element={<ProjectDataEntry />} />
-        <Route path="/data-entry/add-unit-data" element={<UnitDataEntry />} />
-        <Route path="/data-entry/add-master-data" element={<MasterDataEntry />} />
-        <Route path="/data-entry/add-master-data/add" element={<AddMasterDataEntry />} />
-        <Route path="/data-entry/add-ownership-data" element={<OwnershipDataEntry />} />
+        <Route path="/data-entry/add-project-data" element={<ProtectedRoute><ProjectDataEntry /></ProtectedRoute>} />
+        <Route path="/data-entry/project/:id" element={<ProtectedRoute><ProjectDataEntry /></ProtectedRoute>} />
+        <Route path="/data-entry/add-unit-data" element={<ProtectedRoute><UnitDataEntry /></ProtectedRoute>} />
+        <Route path="/data-entry/add-master-data" element={<ProtectedRoute><MasterDataEntry /></ProtectedRoute>} />
+        <Route path="/data-entry/add-master-data/add" element={<ProtectedRoute><AddMasterDataEntry /></ProtectedRoute>} />
+        <Route path="/data-entry/add-ownership-data" element={<ProtectedRoute><OwnershipDataEntry /></ProtectedRoute>} />
 
         {/* Detail View */}
-        <Route path="/data-entry/submission/:id" element={<SubmissionDetails />} />
-        <Route path="/data-entry/add-tenant-data" element={<TenantDataEntry />} />
-        <Route path="/data-entry/add-lease-data" element={<LeaseDataEntry />} />
-        <Route path="/data-entry/bulk-upload" element={<DocumentUploadCenter />} />
-        <Route path="/data-entry/submission-tracking" element={<SubmissionTracking />} />
-        <Route path="/data-entry/notifications" element={<NotificationCenter />} />
-        <Route path="/data-entry/approval-request/:id" element={<ApprovalRequestDetail />} />
-        <Route path="/data-entry/approved-today" element={<ApprovedSubmissions />} />
-        <Route path="/data-entry/rejected-submissions" element={<RejectedSubmissions />} />
+        <Route path="/data-entry/submission/:id" element={<ProtectedRoute><SubmissionDetails /></ProtectedRoute>} />
+        <Route path="/data-entry/add-tenant-data" element={<ProtectedRoute><TenantDataEntry /></ProtectedRoute>} />
+        <Route path="/data-entry/add-lease-data" element={<ProtectedRoute><LeaseDataEntry /></ProtectedRoute>} />
+        <Route path="/data-entry/bulk-upload" element={<ProtectedRoute><DocumentUploadCenter /></ProtectedRoute>} />
+        <Route path="/data-entry/submission-tracking" element={<ProtectedRoute><SubmissionTracking /></ProtectedRoute>} />
+        <Route path="/data-entry/notifications" element={<ProtectedRoute><NotificationCenter /></ProtectedRoute>} />
+        <Route path="/data-entry/approval-request/:id" element={<ProtectedRoute><ApprovalRequestDetail /></ProtectedRoute>} />
+        <Route path="/data-entry/approved-today" element={<ProtectedRoute><ApprovedSubmissions /></ProtectedRoute>} />
+        <Route path="/data-entry/rejected-submissions" element={<ProtectedRoute><RejectedSubmissions /></ProtectedRoute>} />
 
       </Routes >
     </BrowserRouter >

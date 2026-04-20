@@ -13,7 +13,8 @@ function RepSidebar() {
   };
 
   const handleNavClick = (route) => {
-    const user = JSON.parse(localStorage.getItem('user') || '{}');
+    // Use sessionStorage for per-tab session isolation
+    const user = JSON.parse(sessionStorage.getItem('user') || '{}');
     if (route === '/management/dashboard' && user.role === 'lease_manager') {
       navigate('/lease/dashboard');
     } else {

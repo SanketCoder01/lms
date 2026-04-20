@@ -144,6 +144,11 @@ const getProjectById = async (req, res) => {
     const { data: project, error } = await supabase.from('projects').select('*').eq('id', id).single();
     if (error || !project) return res.status(404).json({ message: "Project not found" });
 
+    // Multi-tenant: silently hide projects from other companies
+    if (req.companyId && project.company_id && project.company_id !== req.companyId) {
+      return res.status(404).json({ message: 'Project not found' });
+    }
+
     // 2. Fetch Units for stats
     const { data: units } = await supabase.from('units').select('id, status, chargeable_area').eq('project_id', id);
     const unitIds = (units || []).map(u => u.id);
@@ -209,6 +214,17 @@ const getProjectById = async (req, res) => {
 /* ================= UPDATE PROJECT ================= */
 const updateProject = async (req, res) => {
   try {
+    const { id } = req.params;
+
+    // Multi-tenant: silently hide projects from other companies
+    if (req.companyId) {
+      const { data: projectCheck } = await supabase.from('projects')
+        .select('company_id').eq('id', id).single();
+      if (!projectCheck || projectCheck.company_id !== req.companyId) {
+        return res.status(404).json({ message: 'Project not found' });
+      }
+    }
+
     const {
       project_name, location, address, project_type, calculation_type,
       total_floors, total_project_area, description, status
@@ -246,7 +262,7 @@ const updateProject = async (req, res) => {
     };
     if (imageUrl) updateData.project_image = imageUrl;
 
-    const { error } = await supabase.from('projects').update(updateData).eq('id', req.params.id);
+    const { error } = await supabase.from('projects').update(updateData).eq('id', id);
     if (error) return res.status(500).json(handleDbError(error));
 
     res.json({ success: true, message: "Project updated successfully" });
@@ -259,7 +275,18 @@ const updateProject = async (req, res) => {
 /* ================= DELETE PROJECT ================= */
 const deleteProject = async (req, res) => {
   try {
-    const { error } = await supabase.from('projects').delete().eq('id', req.params.id);
+    const { id } = req.params;
+
+    // Multi-tenant: silently hide projects from other companies
+    if (req.companyId) {
+      const { data: projectCheck } = await supabase.from('projects')
+        .select('company_id').eq('id', id).single();
+      if (!projectCheck || projectCheck.company_id !== req.companyId) {
+        return res.status(404).json({ message: 'Project not found' });
+      }
+    }
+
+    const { error } = await supabase.from('projects').delete().eq('id', id);
     if (error) {
       if (error.code === '23503') {
         return res.status(400).json({ error: "Cannot delete project. It has associated units or leases. Please delete them first." });

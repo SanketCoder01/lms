@@ -3,12 +3,23 @@ const supabase = require("../config/db");
 /* ================= DASHBOARD STATS ================= */
 exports.getDashboardStats = async (req, res) => {
     try {
+        // Multi-tenant: filter by company_id
+        const projectQ = supabase.from('projects').select('*', { count: 'exact', head: true });
+        const unitQ = supabase.from('units').select('*', { count: 'exact', head: true });
+        const ownerQ = supabase.from('owners').select('*', { count: 'exact', head: true });
+        const tenantQ = supabase.from('tenants').select('*', { count: 'exact', head: true });
+        const leaseQ = supabase.from('leases').select('*', { count: 'exact', head: true });
+
+        if (req.companyId) {
+            projectQ.eq('company_id', req.companyId);
+            unitQ.eq('company_id', req.companyId);
+            ownerQ.eq('company_id', req.companyId);
+            tenantQ.eq('company_id', req.companyId);
+            leaseQ.eq('company_id', req.companyId);
+        }
+
         const [projects, units, owners, tenants, leases] = await Promise.all([
-            supabase.from('projects').select('*', { count: 'exact', head: true }),
-            supabase.from('units').select('*', { count: 'exact', head: true }),
-            supabase.from('owners').select('*', { count: 'exact', head: true }),
-            supabase.from('tenants').select('*', { count: 'exact', head: true }),
-            supabase.from('leases').select('*', { count: 'exact', head: true })
+            projectQ, unitQ, ownerQ, tenantQ, leaseQ
         ]);
 
         res.json({
@@ -31,10 +42,13 @@ exports.getReports = async (req, res) => {
         const { project_id, owner_id, tenant_id, search } = req.query;
 
         let query = supabase.from('leases').select(`
-            id, lease_start, lease_type, status,
+            id, lease_start, lease_type, status, company_id,
             projects(project_name),
             tenant:parties!leases_party_tenant_id_fkey(company_name, first_name, last_name)
         `).order('created_at', { ascending: false });
+
+        // Multi-tenant: company users only see their own leases
+        if (req.companyId) query = query.eq('company_id', req.companyId);
 
         if (project_id) query = query.eq('project_id', project_id);
         if (owner_id) query = query.eq('party_owner_id', owner_id);
@@ -73,7 +87,11 @@ exports.getDocuments = async (req, res) => {
     try {
         // Fallback for documents since schema might be owner_documents, tenant_documents etc. 
         // Assuming there is a generic documents table if this legacy API exists
-        const { data: docs, error } = await supabase.from('documents').select('*').order('created_at', { ascending: false });
+        let query = supabase.from('documents').select('*').order('created_at', { ascending: false });
+        // Multi-tenant: company users only see their own documents
+        if (req.companyId) query = query.eq('company_id', req.companyId);
+        
+        const { data: docs, error } = await query;
         
         let formatted = [];
         if (!error && docs) {
@@ -95,7 +113,11 @@ exports.getDocuments = async (req, res) => {
 /* ================= NOTIFICATIONS ================= */
 exports.getNotifications = async (req, res) => {
     try {
-        const { data, error } = await supabase.from('notifications').select('*').order('created_at', { ascending: false });
+        let query = supabase.from('notifications').select('*').order('created_at', { ascending: false });
+        // Multi-tenant: company users only see their own notifications
+        if (req.companyId) query = query.eq('company_id', req.companyId);
+        
+        const { data, error } = await query;
         if(error) throw error;
         res.json(data || []);
     } catch (err) {
