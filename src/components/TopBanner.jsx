@@ -106,6 +106,13 @@ const TopBanner = () => {
           padding-top: 44px !important;
         }
         
+        /* Adjust sidebar to start below banner */
+        .sidebar {
+          top: 44px !important;
+          height: calc(100vh - 44px) !important;
+          padding-top: 20px !important;
+        }
+        
         /* Mobile responsive styles */
         @media (max-width: 768px) {
           .top-banner {
@@ -129,6 +136,10 @@ const TopBanner = () => {
           }
           body {
             padding-top: 36px !important;
+          }
+          .sidebar {
+            top: 36px !important;
+            height: calc(100vh - 36px) !important;
           }
         }
         

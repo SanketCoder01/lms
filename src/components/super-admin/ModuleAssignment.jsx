@@ -572,9 +572,9 @@ const ProjectAssignModal = ({ company, onClose, onSave, notify }) => {
 };
 
 // --- Module Card ---
-const ModuleCard = ({ moduleName, assignedUser, selected, onSelect, onAssign, onEdit, onRemove, onManageProjects }) => {
+const ModuleCard = ({ moduleName, assignedUsers = [], selected, onSelect, onAssign, onEdit, onRemove, onManageProjects }) => {
   const def = MODULE_DEFS[moduleName];
-  const isAssigned = !!assignedUser;
+  const hasUsers = assignedUsers.length > 0;
   const isProjectModule = def.isProjectModule;
 
   return (
@@ -618,10 +618,10 @@ const ModuleCard = ({ moduleName, assignedUser, selected, onSelect, onAssign, on
             borderRadius: 20,
             fontSize: 11,
             fontWeight: 700,
-            background: isAssigned ? 'rgba(16,185,129,0.15)' : 'rgba(156,163,175,0.15)',
-            color: isAssigned ? '#34d399' : 'var(--sa-muted)',
+            background: hasUsers ? 'rgba(16,185,129,0.15)' : 'rgba(156,163,175,0.15)',
+            color: hasUsers ? '#34d399' : 'var(--sa-muted)',
           }}>
-            {isAssigned ? 'Assigned' : 'Empty'}
+            {hasUsers ? `${assignedUsers.length} User${assignedUsers.length > 1 ? 's' : ''}` : 'Empty'}
           </span>
         )}
       </div>
@@ -630,24 +630,49 @@ const ModuleCard = ({ moduleName, assignedUser, selected, onSelect, onAssign, on
         <div style={{ fontSize: 12, color: 'var(--sa-muted)', marginBottom: 10 }}>
           Assign users to specific projects with granular permissions
         </div>
-      ) : isAssigned ? (
-        <div style={{ fontSize: 12, color: 'var(--sa-muted)', marginBottom: 10 }}>
-          {assignedUser.email}
+      ) : hasUsers ? (
+        <div style={{ marginBottom: 10 }}>
+          {assignedUsers.map((user, idx) => (
+            <div key={user.id} style={{ 
+              display: 'flex', 
+              alignItems: 'center', 
+              justifyContent: 'space-between',
+              padding: '6px 8px', 
+              marginBottom: idx < assignedUsers.length - 1 ? '4px' : 0,
+              background: 'rgba(255,255,255,0.03)', 
+              borderRadius: 6,
+              fontSize: 12,
+            }}>
+              <div>
+                <span style={{ color: 'var(--sa-text)', fontWeight: 500 }}>{user.email}</span>
+                <div style={{ display: 'flex', gap: 4, marginTop: 2 }}>
+                  {Object.entries(user.permissions || {}).filter(([,v]) => v).slice(0, 4).map(([k]) => (
+                    <span key={k} style={{ fontSize: 9, padding: '1px 4px', borderRadius: 3, background: `rgba(${hexToRgb(def.color)}, 0.12)`, color: def.color, fontWeight: 600 }}>
+                      {k.replace(/_/g,' ').slice(0, 8)}
+                    </span>
+                  ))}
+                </div>
+              </div>
+              <div style={{ display: 'flex', gap: 4 }}>
+                <button 
+                  className="sa-btn sa-btn-ghost sa-btn-sm" 
+                  style={{ padding: '4px 8px', fontSize: 11 }}
+                  onClick={e => { e.stopPropagation(); onEdit(user, moduleName); }}
+                >Edit</button>
+                <button 
+                  className="sa-btn sa-btn-danger sa-btn-sm" 
+                  style={{ padding: '4px 8px', fontSize: 11 }}
+                  onClick={e => { e.stopPropagation(); onRemove(user.id); }}
+                >✕</button>
+              </div>
+            </div>
+          ))}
         </div>
       ) : (
         <div style={{ fontSize: 12, color: 'var(--sa-muted)', marginBottom: 10 }}>No user assigned</div>
       )}
 
-      {/* Permissions summary */}
-      {!isProjectModule && isAssigned && (
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginBottom: 10 }}>
-          {Object.entries(assignedUser.permissions).filter(([,v]) => v).map(([k]) => (
-            <span key={k} style={{ fontSize: 10, padding: '2px 6px', borderRadius: 4, background: `rgba(${hexToRgb(def.color)}, 0.12)`, color: def.color, fontWeight: 600 }}>
-              {k.replace(/_/g,' ')}
-            </span>
-          ))}
-        </div>
-      )}
+      {/* Permissions summary - removed, now shown per user above */}
 
       <div style={{ display: 'flex', gap: 6 }}>
         {isProjectModule ? (
@@ -657,11 +682,6 @@ const ModuleCard = ({ moduleName, assignedUser, selected, onSelect, onAssign, on
           >
             Manage Project Users
           </button>
-        ) : isAssigned ? (
-          <>
-            <button className="sa-btn sa-btn-ghost sa-btn-sm" onClick={e => { e.stopPropagation(); onEdit(assignedUser, moduleName); }}>Edit</button>
-            <button className="sa-btn sa-btn-danger sa-btn-sm" onClick={e => { e.stopPropagation(); onRemove(assignedUser.id); }}>Remove</button>
-          </>
         ) : (
           <button
             className="sa-btn sa-btn-primary sa-btn-sm"
@@ -742,7 +762,7 @@ const ModuleAssignment = () => {
     setDeleteId(null);
   };
 
-  const getAssignedUser = (moduleName) => moduleUsers.find(u => u.module_name === moduleName) || null;
+  const getAssignedUsers = (moduleName) => moduleUsers.filter(u => u.module_name === moduleName);
 
   const filteredCompanies = companies.filter(c =>
     c.company_name?.toLowerCase().includes(search.toLowerCase()) ||
@@ -838,7 +858,7 @@ const ModuleAssignment = () => {
                   <ModuleCard
                     key={mod}
                     moduleName={mod}
-                    assignedUser={getAssignedUser(mod)}
+                    assignedUsers={getAssignedUsers(mod)}
                     selected={false}
                     onSelect={() => {}}
                     onAssign={mn => setAssignModal(mn)}
