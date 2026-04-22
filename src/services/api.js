@@ -47,14 +47,14 @@ API.interceptors.response.use(
  */
 export const handleApiError = (error) => {
   const data = error.response?.data;
-  
+
   if (data) {
     // Priority 1: Our standardized { success: false, message: "..." }
     if (data.message && typeof data.message === 'string') return data.message;
-    
+
     // Priority 2: Generic { error: "..." } string
     if (data.error && typeof data.error === 'string') return data.error;
-    
+
     // Priority 3: Supabase/PostgreSQL style { error: { message: "..." } }
     if (data.error?.message && typeof data.error.message === 'string') return data.error.message;
 
@@ -167,12 +167,20 @@ export const userAPI = {
   createUser: (data) => API.post("/users", data),
   updateUser: (id, data) => API.put(`/users/${id}`, data),
   deleteUser: (id) => API.delete(`/users/${id}`),
-  
-  // Module Users (Company scoped)
+  getProjects: () => API.get("/projects"),
+
+  // Module Users (Company scope)
   getModuleUsers: () => API.get("/users/module-users"),
   createModuleUser: (data) => API.post("/users/module-users", data),
   updateModuleUser: (id, data) => API.put(`/users/module-users/${id}`, data),
-  deleteModuleUser: (id) => API.delete(`/users/module-users/${id}`),
+  deleteModuleUser: (id, moduleName) => API.delete(`/users/module-users/${id}`, { data: { module_name: moduleName } }),
+
+  // Project Users (Project-specific access)
+  getProjectUsers: (projectId) => API.get(`/project-users/project/${projectId}`),
+  getAllProjectUsers: () => API.get('/project-users/all'),
+  createProjectUser: (data) => API.post("/project-users", data),
+  updateProjectUser: (id, data) => API.put(`/project-users/${id}`, data),
+  deleteProjectUser: (id) => API.delete(`/project-users/${id}`),
 };
 
 // ---------------- MANAGEMENT ----------------

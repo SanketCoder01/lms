@@ -76,6 +76,11 @@ const getProjects = async (req, res) => {
     // Multi-tenant: company users only see their own data
     if (req.companyId) query = query.eq('company_id', req.companyId);
 
+    // Project-specific users only see their assigned project
+    if (req.isProjectUser && req.projectId) {
+      query = query.eq('id', req.projectId);
+    }
+
     if (location && location !== 'All') query = query.eq('location', location);
     if (type && type !== 'All') query = query.eq('project_type', type);
     if (status && status !== 'All') query = query.eq('status', status);
@@ -216,6 +221,17 @@ const updateProject = async (req, res) => {
   try {
     const { id } = req.params;
 
+    // Project-specific users can only update their assigned project
+    if (req.isProjectUser) {
+      if (String(req.projectId) !== String(id)) {
+        return res.status(403).json({ message: 'You do not have access to this project' });
+      }
+      // Check edit permission
+      if (!req.permissions?.edit) {
+        return res.status(403).json({ message: 'You do not have permission to edit this project' });
+      }
+    }
+
     // Multi-tenant: silently hide projects from other companies
     if (req.companyId) {
       const { data: projectCheck } = await supabase.from('projects')
@@ -276,6 +292,17 @@ const updateProject = async (req, res) => {
 const deleteProject = async (req, res) => {
   try {
     const { id } = req.params;
+
+    // Project-specific users can only delete their assigned project
+    if (req.isProjectUser) {
+      if (String(req.projectId) !== String(id)) {
+        return res.status(403).json({ message: 'You do not have access to this project' });
+      }
+      // Check delete permission
+      if (!req.permissions?.delete) {
+        return res.status(403).json({ message: 'You do not have permission to delete this project' });
+      }
+    }
 
     // Multi-tenant: silently hide projects from other companies
     if (req.companyId) {

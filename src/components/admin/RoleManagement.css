@@ -176,6 +176,16 @@
     color: #4b5563;
 }
 
+.role-badge.project-user {
+    background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%);
+    color: white;
+}
+
+.role-badge.module-user {
+    background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+    color: white;
+}
+
 /* STATUS */
 .status-column .status {
     padding: 4px 8px;
@@ -312,9 +322,14 @@
     background: white;
     padding: 0;
     border-radius: 12px;
-    width: 450px;
-    max-width: 90%;
+    width: 520px;
+    max-width: 95vw;
+    max-height: 90vh;
+    overflow-y: auto;
+    overflow-x: hidden;
     box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+    display: flex;
+    flex-direction: column;
 }
 
 .modal-header {
@@ -323,6 +338,12 @@
     display: flex;
     justify-content: space-between;
     align-items: center;
+    position: sticky;
+    top: 0;
+    background: white;
+    z-index: 10;
+    border-radius: 12px 12px 0 0;
+    flex-shrink: 0;
 }
 
 .modal-header h3 {
@@ -339,10 +360,21 @@
     color: #94a3b8;
     cursor: pointer;
     line-height: 1;
+    padding: 4px 8px;
+    border-radius: 6px;
+    transition: all 0.15s;
+    flex-shrink: 0;
+}
+
+.close-btn:hover {
+    background: #f1f5f9;
+    color: #1a202c;
 }
 
 .modal-form {
     padding: 24px;
+    flex: 1;
+    overflow-y: auto;
 }
 
 .form-row {
@@ -547,24 +579,28 @@
         grid-template-columns: 1fr;
     }
 
+    .modal-overlay {
+        align-items: flex-end;
+        padding: 0;
+    }
+
     .premium-modal {
         width: 100%;
-        height: 100%;
-        max-height: 100vh;
-        border-radius: 0;
+        max-width: 100%;
+        max-height: 95vh;
+        border-radius: 16px 16px 0 0;
         display: flex;
         flex-direction: column;
     }
 
-    .modal-content {
-        height: 100%;
-        display: flex;
-        flex-direction: column;
+    .modal-header {
+        border-radius: 16px 16px 0 0;
     }
 
     .modal-form {
         flex: 1;
         overflow-y: auto;
+        -webkit-overflow-scrolling: touch;
     }
 
     .form-row {

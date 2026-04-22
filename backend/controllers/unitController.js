@@ -28,6 +28,11 @@ const getUnits = async (req, res) => {
     // Multi-tenant: company users only see their own units
     if (req.companyId) query = query.eq('company_id', req.companyId);
 
+    // Project-specific users only see units from their assigned project
+    if (req.isProjectUser && req.projectId) {
+      query = query.eq('project_id', req.projectId);
+    }
+
     if (projectId && projectId !== 'All') {
       query = query.eq('project_id', parseInt(projectId));
     }
@@ -148,6 +153,17 @@ const createUnit = async (req, res) => {
       return res.status(400).json({ message: 'project_id and unit_number are required' });
     }
 
+    // Project-specific users can only add units to their assigned project
+    if (req.isProjectUser) {
+      if (String(req.projectId) !== String(project_id)) {
+        return res.status(403).json({ message: 'You do not have access to this project' });
+      }
+      // Check edit permission (adding units requires edit permission)
+      if (!req.permissions?.edit) {
+        return res.status(403).json({ message: 'You do not have permission to add units' });
+      }
+    }
+
     const insertPayload = {
       project_id:    parseInt(project_id),
       unit_number,
@@ -226,6 +242,19 @@ const updateUnit = async (req, res) => {
   try {
     const { id } = req.params;
 
+    // Project-specific users can only update units in their assigned project
+    if (req.isProjectUser) {
+      const { data: unitCheck } = await supabase.from('units')
+        .select('project_id').eq('id', id).single();
+      if (!unitCheck || String(unitCheck.project_id) !== String(req.projectId)) {
+        return res.status(403).json({ message: 'You do not have access to this unit' });
+      }
+      // Check edit permission
+      if (!req.permissions?.edit) {
+        return res.status(403).json({ message: 'You do not have permission to edit units' });
+      }
+    }
+
     // Multi-tenant: silently hide units from other companies
     if (req.companyId) {
       const { data: unitCheck } = await supabase.from('units')
@@ -300,6 +329,19 @@ const updateUnit = async (req, res) => {
 const deleteUnit = async (req, res) => {
   try {
     const { id } = req.params;
+
+    // Project-specific users can only delete units in their assigned project
+    if (req.isProjectUser) {
+      const { data: unitCheck } = await supabase.from('units')
+        .select('project_id').eq('id', id).single();
+      if (!unitCheck || String(unitCheck.project_id) !== String(req.projectId)) {
+        return res.status(403).json({ message: 'You do not have access to this unit' });
+      }
+      // Check delete permission
+      if (!req.permissions?.delete) {
+        return res.status(403).json({ message: 'You do not have permission to delete units' });
+      }
+    }
 
     // Multi-tenant: silently hide units from other companies
     if (req.companyId) {

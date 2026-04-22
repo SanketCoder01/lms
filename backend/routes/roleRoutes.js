@@ -3,9 +3,48 @@ const router = express.Router();
 const supabase = require("../config/db");
 
 /* ===============================
-   GET ALL USERS WITH ROLE + MODULES
+   GET ALL ROLES
 ================================ */
 router.get("/", async (req, res) => {
+    try {
+        // Fetch all available roles
+        const { data: roles, error } = await supabase
+            .from('roles')
+            .select('id, name, role_name')
+            .order('name', { ascending: true });
+
+        if (error) {
+            // If roles table doesn't exist, return default roles
+            console.log('Roles table error, returning defaults:', error.message);
+            return res.json({ 
+                success: true, 
+                data: [
+                    { id: 1, name: 'Admin', role_name: 'Admin' },
+                    { id: 2, name: 'User', role_name: 'User' },
+                    { id: 3, name: 'Manager', role_name: 'Manager' },
+                    { id: 4, name: 'Super Admin', role_name: 'Super Admin' }
+                ] 
+            });
+        }
+
+        // Format response
+        const formattedRoles = (roles || []).map(r => ({
+            id: r.id,
+            name: r.name || r.role_name,
+            role_name: r.role_name || r.name
+        }));
+
+        res.json({ success: true, data: formattedRoles });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ success: false, message: "Server error", error: err.message });
+    }
+});
+
+/* ===============================
+   GET ALL USERS WITH ROLE + MODULES
+================================ */
+router.get("/users", async (req, res) => {
     try {
         // Fetch users with their roles
         const { data: users, error } = await supabase
@@ -17,7 +56,8 @@ router.get("/", async (req, res) => {
                 email,
                 status,
                 role_id,
-                roles:id (
+                roles:roles_id (
+                    id,
                     name
                 )
             `);

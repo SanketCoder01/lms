@@ -7,7 +7,7 @@ import { userAPI, roleAPI, handleApiError } from "../../services/api";
 // Module definitions for assignment
 const MODULE_DEFS = {
   dashboard: { label: 'Dashboard', icon: 'Dashboard', color: '#6366f1', features: ['view', 'edit', 'delete'] },
-  projects: { label: 'Projects', icon: 'Projects', color: '#8b5cf6', features: ['view', 'edit', 'delete'] },
+  projects: { label: 'Projects', icon: 'Projects', color: '#8b5cf6', features: ['view', 'edit', 'delete'], isProjectModule: true },
   masters: { label: 'Masters', icon: 'Masters', color: '#f59e0b', features: ['view', 'edit', 'delete'] },
   ownership: { label: 'Ownership', icon: 'Ownership', color: '#ec4899', features: ['view', 'edit', 'delete'] },
   leases: { label: 'Leases', icon: 'Leases', color: '#10b981', features: ['view', 'edit', 'delete'] },
@@ -32,9 +32,18 @@ const RoleManagement = () => {
     role_name: "User",
     status: "active",
     is_module_user: false,
+    is_project_user: false,
     module_name: "",
-    module_permissions: { view: true, create: false, edit: false, delete: false }
+    project_id: "",
+    module_permissions: { view: true, create: false, edit: false, delete: false },
+    // For multiple modules support
+    selected_modules: [], // Array of { name, permissions }
+    user_raw_ids: [] // For editing - array of rawIds
   });
+
+  // Projects state for project user assignment
+  const [projects, setProjects] = useState([]);
+  const [loadingProjects, setLoadingProjects] = useState(false);
 
   // UI State
   const [roles, setRoles] = useState([]);
@@ -43,6 +52,17 @@ const RoleManagement = () => {
   const [toast, setToast] = useState({ show: false, message: "", type: "success" }); // type: success | error
   const [activeActionMenu, setActiveActionMenu] = useState(null); // ID of user whose menu is open
   const actionMenuRef = useRef(null);
+
+  const fetchProjects = () => {
+    setLoadingProjects(true);
+    userAPI.getProjects()
+      .then(res => {
+        const data = res.data.data || res.data || [];
+        if (Array.isArray(data)) setProjects(data);
+      })
+      .catch(err => console.error("Failed to load projects", err))
+      .finally(() => setLoadingProjects(false));
+  };
 
   const fetchRoles = () => {
     setRoleLoading(true);
@@ -64,8 +84,10 @@ const RoleManagement = () => {
   const fetchUsers = () => {
     setLoading(true);
     let moduleUsersReq = userAPI.getModuleUsers ? userAPI.getModuleUsers() : Promise.resolve({ data: { moduleUsers: [] } });
-    Promise.all([userAPI.getUsers(), moduleUsersReq])
-      .then(([companyRes, moduleRes]) => {
+    let projectUsersReq = userAPI.getAllProjectUsers ? userAPI.getAllProjectUsers() : Promise.resolve({ data: { projectUsers: [] } });
+
+    Promise.all([userAPI.getUsers(), moduleUsersReq, projectUsersReq])
+      .then(([companyRes, moduleRes, projectRes]) => {
         const cUsers = companyRes.data.map(user => ({
           id: `c_${user.id}`,
           rawId: user.id,
@@ -78,29 +100,79 @@ const RoleManagement = () => {
           isAll: ["admin", "administrator", "super admin"]
             .includes((user.role_name || "").toLowerCase()),
           status: (user.status || "active").toLowerCase(),
-          is_module_user: false
+          is_module_user: false,
+          is_project_user: false
         }));
 
         let modData = moduleRes.data.moduleUsers || moduleRes.data || [];
         if (!Array.isArray(modData)) modData = [];
 
-        const mUsers = modData.map(u => ({
-          id: `m_${u.id}`,
+        // Group module users by email to show multiple modules per user
+        const moduleUsersByEmail = {};
+        modData.forEach(u => {
+          const email = u.email;
+          if (!moduleUsersByEmail[email]) {
+            moduleUsersByEmail[email] = {
+              id: `m_${u.id}`,
+              rawIds: [u.id],
+              name: `${u.module_name?.charAt(0).toUpperCase() + u.module_name?.slice(1) || 'Module'} User`,
+              firstName: u.first_name || '',
+              lastName: u.last_name || '',
+              email: email,
+              role: '',
+              roleClass: 'module-user',
+              isAll: false,
+              status: (u.status || "active").toLowerCase(),
+              is_module_user: true,
+              is_project_user: false,
+              modules: [{ name: u.module_name, permissions: u.permissions || { view: true, edit: false, delete: false } }],
+              module_permissions: u.permissions || { view: true, edit: false, delete: false }
+            };
+          } else {
+            // Add module to existing user
+            moduleUsersByEmail[email].rawIds.push(u.id);
+            moduleUsersByEmail[email].modules.push({
+              name: u.module_name,
+              permissions: u.permissions || { view: true, edit: false, delete: false }
+            });
+          }
+        });
+
+        // Convert to array and format role display
+        const mUsers = Object.values(moduleUsersByEmail).map(u => {
+          const displayName = `${u.modules[0]?.name?.charAt(0).toUpperCase() + u.modules[0]?.name?.slice(1) || 'Module'} User`;
+          return {
+            ...u,
+            id: `m_${u.rawIds[0]}`,
+            name: displayName,
+            role: u.modules.map(m => m.name.charAt(0).toUpperCase() + m.name.slice(1)).join(', ') + ' Module(s)',
+            module_name: u.modules[0]?.name || '',
+            rawId: u.rawIds[0] // Keep first rawId for backward compatibility
+          };
+        });
+
+        let projData = projectRes.data.projectUsers || projectRes.data || [];
+        if (!Array.isArray(projData)) projData = [];
+
+        const pUsers = projData.map(u => ({
+          id: `p_${u.id}`,
           rawId: u.id,
-          name: 'Module User',
-          firstName: 'Module',
-          lastName: 'User',
+          name: u.project_name ? `${u.project_name} User` : 'Project User',
+          firstName: '',
+          lastName: '',
           email: u.email,
-          role: u.module_name,
-          roleClass: 'module-user',
+          role: u.project_name ? `${u.project_name}` : 'Project',
+          roleClass: 'project-user',
           isAll: false,
           status: (u.status || "active").toLowerCase(),
-          is_module_user: true,
-          module_name: u.module_name,
+          is_module_user: false,
+          is_project_user: true,
+          project_id: u.project_id,
+          project_name: u.project_name,
           module_permissions: u.permissions || { view: true, edit: false, delete: false }
         }));
 
-        setUsers([...cUsers, ...mUsers]);
+        setUsers([...cUsers, ...mUsers, ...pUsers]);
       })
       .catch(err => {
         console.error("Failed to load users", err);
@@ -115,6 +187,7 @@ const RoleManagement = () => {
   useEffect(() => {
     fetchUsers();
     fetchRoles();
+    fetchProjects();
 
     // Click outside to close action menu
     const handleClickOutside = (event) => {
@@ -141,8 +214,12 @@ const RoleManagement = () => {
       role_name: roles.length > 0 ? roles[0].role_name : "Admin",
       status: "active",
       is_module_user: false,
+      is_project_user: false,
       module_name: "",
-      module_permissions: { view: true, edit: false, delete: false }
+      project_id: "",
+      module_permissions: { view: true, edit: false, delete: false },
+      selected_modules: [],
+      user_raw_ids: []
     });
     setIsEditing(false);
     setCurrentUserId(null);
@@ -155,16 +232,36 @@ const RoleManagement = () => {
   };
 
   const handleOpenEdit = (user) => {
+    // Properly build selected_modules for module users
+    let selectedModules = [];
+    if (user.is_module_user) {
+      if (user.modules && user.modules.length > 0) {
+        selectedModules = user.modules.map(m => ({
+          name: m.name,
+          permissions: m.permissions || { view: true, edit: false, delete: false }
+        }));
+      } else if (user.module_name) {
+        selectedModules = [{
+          name: user.module_name,
+          permissions: user.module_permissions || { view: true, edit: false, delete: false }
+        }];
+      }
+    }
+
     setFormData({
-      first_name: user.firstName,
-      last_name: user.lastName,
+      first_name: user.firstName || '',
+      last_name: user.lastName || '',
       email: user.email,
-      password: "", // User can leave blank to keep existing
-      role_name: user.role,
-      status: user.status,
+      password: '', // Leave blank to keep existing password
+      role_name: user.is_module_user || user.is_project_user ? 'User' : (user.role || 'User'),
+      status: user.status || 'active',
       is_module_user: user.is_module_user || false,
-      module_name: user.module_name || "",
-      module_permissions: user.module_permissions || { view: true, edit: false, delete: false }
+      is_project_user: user.is_project_user || false,
+      module_name: user.module_name || '',
+      project_id: user.project_id || '',
+      module_permissions: user.module_permissions || user.permissions || { view: true, edit: false, delete: false },
+      selected_modules: selectedModules,
+      user_raw_ids: user.rawIds || [user.rawId]
     });
     setIsEditing(true);
     setCurrentUserId(user.rawId || user.id);
@@ -175,15 +272,30 @@ const RoleManagement = () => {
   const handleDelete = async (user) => {
     if (window.confirm("Are you sure you want to delete this user?")) {
       try {
-        if (user.is_module_user) await userAPI.deleteModuleUser(user.rawId);
-        else await userAPI.deleteUser(user.rawId);
+        if (user.is_module_user) {
+          // Delete all module assignments for this email
+          if (user.rawIds && user.rawIds.length > 0) {
+            // Pass module names so merged rows only lose that specific module
+            const modNames = user.module_names || [];
+            for (let i = 0; i < user.rawIds.length; i++) {
+              await userAPI.deleteModuleUser(user.rawIds[i], modNames[i]);
+            }
+          } else {
+            await userAPI.deleteModuleUser(user.rawId, user.module_name);
+          }
+        } else if (user.is_project_user) {
+          await userAPI.deleteProjectUser(user.rawId);
+        } else {
+          await userAPI.deleteUser(user.rawId);
+        }
 
         showToast("User deleted successfully", "success");
+        // Always re-fetch from DB to ensure list is in sync
+        setActiveActionMenu(null);
         fetchUsers();
       } catch (error) {
         showToast("Failed to delete user: " + handleApiError(error), "error");
       }
-      setActiveActionMenu(null);
     }
   };
 
@@ -191,12 +303,130 @@ const RoleManagement = () => {
     e.preventDefault();
     setSubmitting(true);
     try {
-      if (formData.is_module_user) {
-        const payload = { ...formData, permissions: formData.module_permissions };
+      if (formData.is_project_user) {
+        // Project-specific user
+        const company_id = sessionStorage.getItem('company_id');
+        const payload = {
+          company_id: company_id,
+          project_id: formData.project_id,
+          email: formData.email,
+          password: formData.password,
+          permissions: formData.module_permissions,
+          first_name: formData.first_name,
+          last_name: formData.last_name
+        };
+        if (!payload.password && !isEditing) {
+          showToast("Password is required for new project users", "error");
+          setSubmitting(false);
+          return;
+        }
         if (!payload.password) delete payload.password;
+        if (!payload.company_id) {
+          showToast("Company ID not found. Please re-login.", "error");
+          setSubmitting(false);
+          return;
+        }
 
-        if (isEditing) await userAPI.updateModuleUser(currentUserId, payload);
-        else await userAPI.createModuleUser(payload);
+        if (isEditing) await userAPI.updateProjectUser(currentUserId, payload);
+        else await userAPI.createProjectUser(payload);
+      } else if (formData.is_module_user) {
+        const company_id = sessionStorage.getItem('company_id');
+
+        if (!company_id) {
+          showToast("Company ID not found. Please re-login.", "error");
+          setSubmitting(false);
+          return;
+        }
+
+        if (formData.selected_modules.length === 0) {
+          showToast("Please select at least one module", "error");
+          setSubmitting(false);
+          return;
+        }
+
+        if (isEditing) {
+          // Smart edit strategy:
+          // - For modules that still exist → updateModuleUser (preserves password hash)
+          // - For newly added modules → createModuleUser (requires password)
+          // - For removed modules → deleteModuleUser
+
+          const newModules = formData.selected_modules;
+
+          // Get the original module assignments from DB to build rawId→moduleName map
+          const company_id_for_fetch = sessionStorage.getItem('company_id');
+          let existingMap = {}; // module_name -> rawId
+          try {
+            const existingRes = await userAPI.getModuleUsers();
+            const existingData = existingRes.data.moduleUsers || existingRes.data || [];
+            existingData.forEach(mu => {
+              if (mu.email === formData.email) {
+                existingMap[mu.module_name] = mu.id;
+              }
+            });
+          } catch (err) {
+            console.warn('Could not fetch existing module users for smart edit:', err);
+          }
+
+          // Which module names are in the new selection
+          const newModuleNames = new Set(newModules.map(m => m.name));
+
+          // Delete removed modules — pass modName so merged rows only lose that module
+          for (const [modName, rawId] of Object.entries(existingMap)) {
+            if (!newModuleNames.has(modName)) {
+              await userAPI.deleteModuleUser(rawId, modName);
+            }
+          }
+
+          // Update or create
+          for (const mod of newModules) {
+            const existingRawId = existingMap[mod.name];
+            if (existingRawId) {
+              // Module existed — update permissions, status, name, and optionally password
+              const updatePayload = {
+                permissions: mod.permissions,
+                status: formData.status || 'active',
+              };
+              if (formData.password) updatePayload.password = formData.password;
+              await userAPI.updateModuleUser(existingRawId, updatePayload);
+            } else {
+              // New module — must create (requires password)
+              if (!formData.password) {
+                showToast(`Password is required when adding new module: ${mod.name}`, 'error');
+                setSubmitting(false);
+                return;
+              }
+              const createPayload = {
+                company_id: company_id_for_fetch,
+                module_name: mod.name,
+                email: formData.email,
+                password: formData.password,
+                permissions: mod.permissions,
+                status: formData.status || 'active',
+              };
+              await userAPI.createModuleUser(createPayload);
+            }
+          }
+
+        } else {
+          // For creating: create module entry for each selected module
+          if (!formData.password) {
+            showToast("Password is required for new module users", "error");
+            setSubmitting(false);
+            return;
+          }
+
+          for (const mod of formData.selected_modules) {
+            const payload = {
+              company_id,
+              module_name: mod.name,
+              email: formData.email,
+              password: formData.password,
+              permissions: mod.permissions,
+              status: 'active',
+            };
+            await userAPI.createModuleUser(payload);
+          }
+        }
       } else {
         const payload = { ...formData };
         if (!payload.password) delete payload.password;
@@ -269,11 +499,11 @@ const RoleManagement = () => {
 
         {/* MODAL */}
         {showModal && (
-          <div className="modal-overlay">
-            <div className="modal-content premium-modal">
-              <div className="modal-header">
+          <div className="modal-overlay" onClick={() => setShowModal(false)}>
+            <div className="modal-content premium-modal" onClick={e => e.stopPropagation()}>
+              <div className="modal-header" style={{ position: 'sticky', top: 0, background: 'white', zIndex: 10, borderRadius: '12px 12px 0 0' }}>
                 <h3>{isEditing ? "Edit User" : "Create New User"}</h3>
-                <button className="close-btn" onClick={() => setShowModal(false)}>×</button>
+                <button className="close-btn" onClick={() => setShowModal(false)} aria-label="Close">×</button>
               </div>
 
               <form onSubmit={handleSubmit} className="modal-form">
@@ -281,17 +511,27 @@ const RoleManagement = () => {
                   <label>User Type</label>
                   <select
                     className="premium-select"
-                    value={formData.is_module_user ? "module" : "company"}
-                    onChange={e => setFormData({ ...formData, is_module_user: e.target.value === "module" })}
+                    value={formData.is_project_user ? "project" : (formData.is_module_user ? "module" : "company")}
+                    onChange={e => {
+                      const val = e.target.value;
+                      setFormData({
+                        ...formData,
+                        is_module_user: val === "module",
+                        is_project_user: val === "project",
+                        module_name: val === "project" ? "projects" : formData.module_name,
+                        project_id: val === "project" ? formData.project_id : ""
+                      });
+                    }}
                     disabled={isEditing}
                     style={{ padding: '10px', borderRadius: '8px', border: '1px solid #d1d5db', width: '100%' }}
                   >
                     <option value="company">Full Company User (Admin & Roles)</option>
                     <option value="module">Specific Module User (Restricted)</option>
+                    <option value="project">Project-Specific User (Single Project Access)</option>
                   </select>
                 </div>
 
-                {!formData.is_module_user && (
+                {!formData.is_module_user && !formData.is_project_user && (
                   <div className="form-row">
                     <div className="form-group">
                       <label>First Name</label>
@@ -300,7 +540,7 @@ const RoleManagement = () => {
                         className="premium-input"
                         value={formData.first_name}
                         onChange={e => setFormData({ ...formData, first_name: e.target.value })}
-                        required={!formData.is_module_user}
+                        required={!formData.is_module_user && !formData.is_project_user}
                       />
                     </div>
                     <div className="form-group">
@@ -310,36 +550,163 @@ const RoleManagement = () => {
                         className="premium-input"
                         value={formData.last_name}
                         onChange={e => setFormData({ ...formData, last_name: e.target.value })}
-                        required={!formData.is_module_user}
+                        required={!formData.is_module_user && !formData.is_project_user}
                       />
                     </div>
                   </div>
                 )}
 
-                {formData.is_module_user && (
+                {formData.is_module_user && !formData.is_project_user && (
                   <>
+                    {/* Show name fields for module users too */}
+                    <div className="form-row">
+                      <div className="form-group">
+                        <label>First Name</label>
+                        <input
+                          type="text"
+                          className="premium-input"
+                          value={formData.first_name}
+                          onChange={e => setFormData({ ...formData, first_name: e.target.value })}
+                        />
+                      </div>
+                      <div className="form-group">
+                        <label>Last Name</label>
+                        <input
+                          type="text"
+                          className="premium-input"
+                          value={formData.last_name}
+                          onChange={e => setFormData({ ...formData, last_name: e.target.value })}
+                        />
+                      </div>
+                    </div>
+
                     <div className="form-group">
-                      <label>Assigned Module</label>
+                      <label>Assigned Modules (select multiple)</label>
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px', marginTop: '10px' }}>
+                        {Object.keys(MODULE_DEFS).filter(k => !MODULE_DEFS[k].isProjectModule).map(key => {
+                          const isSelected = formData.selected_modules.some(m => m.name === key);
+                          return (
+                            <label
+                              key={key}
+                              style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '6px',
+                                padding: '8px 12px',
+                                border: `2px solid ${isSelected ? MODULE_DEFS[key].color : '#e2e8f0'}`,
+                                borderRadius: '8px',
+                                cursor: 'pointer',
+                                backgroundColor: isSelected ? `${MODULE_DEFS[key].color}15` : 'white',
+                                fontWeight: isSelected ? '600' : '400'
+                              }}
+                            >
+                              <input
+                                type="checkbox"
+                                checked={isSelected}
+                                onChange={e => {
+                                  if (e.target.checked) {
+                                    setFormData({
+                                      ...formData,
+                                      selected_modules: [...formData.selected_modules, { name: key, permissions: { view: true, edit: false, delete: false } }]
+                                    });
+                                  } else {
+                                    setFormData({
+                                      ...formData,
+                                      selected_modules: formData.selected_modules.filter(m => m.name !== key)
+                                    });
+                                  }
+                                }}
+                                style={{ accentColor: MODULE_DEFS[key].color, width: '16px', height: '16px' }}
+                              />
+                              {MODULE_DEFS[key].label}
+                            </label>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    {/* Show permissions for each selected module */}
+                    {formData.selected_modules.length > 0 && (
+                      <div className="form-group" style={{ marginBottom: '16px' }}>
+                        <label>Module Permissions</label>
+                        {formData.selected_modules.map((mod, idx) => (
+                          <div key={mod.name} style={{ marginTop: '12px', padding: '12px', border: '1px solid #e2e8f0', borderRadius: '8px', backgroundColor: '#f8fafc' }}>
+                            <div style={{ fontWeight: '600', marginBottom: '8px', color: MODULE_DEFS[mod.name]?.color || '#333' }}>
+                              {MODULE_DEFS[mod.name]?.label || mod.name}
+                            </div>
+                            <div style={{ display: 'flex', gap: '16px', flexWrap: 'wrap' }}>
+                              {['view', 'edit', 'delete'].map(feat => (
+                                <label key={feat} style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', cursor: 'pointer' }}>
+                                  <input
+                                    type="checkbox"
+                                    checked={!!mod.permissions[feat]}
+                                    onChange={e => {
+                                      const updatedModules = [...formData.selected_modules];
+                                      updatedModules[idx] = {
+                                        ...mod,
+                                        permissions: { ...mod.permissions, [feat]: e.target.checked }
+                                      };
+                                      setFormData({ ...formData, selected_modules: updatedModules });
+                                    }}
+                                    style={{ accentColor: 'var(--primary-color)', width: '14px', height: '14px' }}
+                                  />
+                                  {feat.charAt(0).toUpperCase() + feat.slice(1)}
+                                </label>
+                              ))}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </>
+                )}
+
+                {formData.is_project_user && (
+                  <>
+                    {/* Show name fields for project users too */}
+                    <div className="form-row">
+                      <div className="form-group">
+                        <label>First Name</label>
+                        <input
+                          type="text"
+                          className="premium-input"
+                          value={formData.first_name}
+                          onChange={e => setFormData({ ...formData, first_name: e.target.value })}
+                        />
+                      </div>
+                      <div className="form-group">
+                        <label>Last Name</label>
+                        <input
+                          type="text"
+                          className="premium-input"
+                          value={formData.last_name}
+                          onChange={e => setFormData({ ...formData, last_name: e.target.value })}
+                        />
+                      </div>
+                    </div>
+
+                    <div className="form-group">
+                      <label>Assigned Project</label>
                       <select
                         className="premium-select"
-                        value={formData.module_name}
-                        onChange={e => setFormData({ ...formData, module_name: e.target.value })}
-                        required={formData.is_module_user}
-                        disabled={isEditing}
+                        value={formData.project_id}
+                        onChange={e => setFormData({ ...formData, project_id: e.target.value })}
+                        required={formData.is_project_user}
+                        disabled={loadingProjects}
                         style={{ padding: '10px', borderRadius: '8px', border: '1px solid #d1d5db', width: '100%' }}
                       >
-                        <option value="">Select a module...</option>
-                        {Object.keys(MODULE_DEFS).map(key => (
-                          <option key={key} value={key}>{MODULE_DEFS[key].label}</option>
+                        <option value="">{loadingProjects ? 'Loading projects...' : 'Select a project...'}</option>
+                        {projects.map(p => (
+                          <option key={p.id} value={p.id}>{p.project_name} {p.location ? `(${p.location})` : ''}</option>
                         ))}
                       </select>
                     </div>
 
-                    {formData.module_name && (
+                    {formData.project_id && (
                       <div className="form-group" style={{ marginBottom: '16px' }}>
-                        <label>Feature Permissions</label>
+                        <label>Project Permissions</label>
                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginTop: '10px' }}>
-                          {MODULE_DEFS[formData.module_name].features.map(feat => (
+                          {['view', 'edit', 'delete'].map(feat => (
                             <label key={feat} style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13.5px', cursor: 'pointer' }}>
                               <input
                                 type="checkbox"
@@ -380,7 +747,7 @@ const RoleManagement = () => {
                   />
                 </div>
 
-                {!formData.is_module_user && (
+                {!formData.is_module_user && !formData.is_project_user && (
                   <>
                     <div className="form-group">
                       <label>Role</label>
@@ -411,6 +778,22 @@ const RoleManagement = () => {
                       </div>
                     )}
                   </>
+                )}
+
+                {/* Status for module/project users in edit mode */}
+                {isEditing && (formData.is_module_user || formData.is_project_user) && (
+                  <div className="form-group">
+                    <label>Account Status</label>
+                    <select
+                      className="premium-select"
+                      value={formData.status}
+                      onChange={e => setFormData({ ...formData, status: e.target.value })}
+                    >
+                      <option value="active">Active</option>
+                      <option value="inactive">Inactive</option>
+                      <option value="suspended">Suspended</option>
+                    </select>
+                  </div>
                 )}
 
                 <div className="modal-actions">
@@ -515,9 +898,9 @@ const RoleManagement = () => {
               <div className="actions-column">
                 <button className="action-btn" onClick={(e) => toggleActionMenu(user.id, e)}>⋮</button>
                 {activeActionMenu === user.id && (
-                  <div className="action-menu" ref={actionMenuRef}>
-                    <button onClick={() => handleOpenEdit(user)}>Edit</button>
-                    <button className="delete" onClick={() => handleDelete(user.id)}>Delete</button>
+                  <div className="action-menu" ref={actionMenuRef} style={{ bottom: user.id === filteredUsers[filteredUsers.length - 1]?.id ? '100%' : 'auto', top: user.id === filteredUsers[filteredUsers.length - 1]?.id ? 'auto' : '100%' }}>
+                    <button onClick={() => handleOpenEdit(user)}>✏️ Edit</button>
+                    <button className="delete" onClick={() => handleDelete(user)}>🗑️ Delete</button>
                   </div>
                 )}
               </div>

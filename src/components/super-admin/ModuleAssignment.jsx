@@ -5,7 +5,7 @@ import SuperAdminLayout, { SA_API, saFetch } from './SuperAdminLayout';
 const MODULE_DEFS = {
   dashboard: {
     label: 'Dashboard',
-    icon: '📊',
+    icon: 'Dashboard',
     color: '#6366f1',
     features: {
       view:   'View Access',
@@ -15,7 +15,7 @@ const MODULE_DEFS = {
   },
   masters: {
     label: 'Masters',
-    icon: '🗂️',
+    icon: 'Masters',
     color: '#f59e0b',
     features: {
       view:   'View Access',
@@ -25,7 +25,7 @@ const MODULE_DEFS = {
   },
   leases: {
     label: 'Leases',
-    icon: '📋',
+    icon: 'Leases',
     color: '#10b981',
     features: {
       view:   'View Access',
@@ -35,7 +35,7 @@ const MODULE_DEFS = {
   },
   ownership: {
     label: 'Ownership',
-    icon: '🏠',
+    icon: 'Ownership',
     color: '#ec4899',
     features: {
       view:   'View Access',
@@ -45,13 +45,14 @@ const MODULE_DEFS = {
   },
   projects: {
     label: 'Projects',
-    icon: '🏗️',
+    icon: 'Projects',
     color: '#8b5cf6',
     features: {
       view:   'View Access',
-      edit:   'Create/Edit',
+      edit:   'Create/Edit (Add Units)',
       delete: 'Delete/Remove',
     },
+    isProjectModule: true, // Special flag for project-specific assignment
   },
 };
 
@@ -256,10 +257,325 @@ const EditPermsModal = ({ moduleUser, moduleName, onClose, onSave }) => {
   );
 };
 
-// ─── Module Card ──────────────────────────────────────────────────────────────
-const ModuleCard = ({ moduleName, assignedUser, selected, onSelect, onAssign, onEdit, onRemove }) => {
+// --- Project Assign Modal (for project-specific users) ---
+const ProjectAssignModal = ({ company, onClose, onSave, notify }) => {
+  const [projects, setProjects] = useState([]);
+  const [selectedProject, setSelectedProject] = useState(null);
+  const [projectUsers, setProjectUsers] = useState([]);
+  const [loadingProjects, setLoadingProjects] = useState(true);
+  const [showUserForm, setShowUserForm] = useState(false);
+  const [editingUser, setEditingUser] = useState(null);
+  
+  const [formData, setFormData] = useState({
+    email: '',
+    password: '',
+    permissions: { view: true, edit: false, delete: false }
+  });
+  const [saving, setSaving] = useState(false);
+  const [err, setErr] = useState('');
+
+  // Load projects for this company
+  useEffect(() => {
+    const loadProjects = async () => {
+      setLoadingProjects(true);
+      try {
+        const res = await saFetch(`${SA_API}/api/super-admin/company-projects/${company.id}`);
+        if (res.success) setProjects(res.projects || []);
+      } catch (e) { console.error(e); }
+      setLoadingProjects(false);
+    };
+    loadProjects();
+  }, [company.id]);
+
+  // Load project users when project selected
+  const loadProjectUsers = async (projectId) => {
+    try {
+      const res = await saFetch(`${SA_API}/api/project-users/project/${projectId}`);
+      if (res.success) setProjectUsers(res.projectUsers || []);
+    } catch (e) { console.error(e); }
+  };
+
+  const handleSelectProject = (project) => {
+    setSelectedProject(project);
+    setProjectUsers([]);
+    setShowUserForm(false);
+    setEditingUser(null);
+    loadProjectUsers(project.id);
+  };
+
+  const togglePerm = (key) => {
+    setFormData(prev => ({
+      ...prev,
+      permissions: { ...prev.permissions, [key]: !prev.permissions[key] }
+    }));
+  };
+
+  const handleSaveUser = async () => {
+    if (!formData.email || (!formData.password && !editingUser)) {
+      setErr('Email and password are required.');
+      return;
+    }
+    setSaving(true);
+    setErr('');
+    try {
+      if (editingUser) {
+        // Update existing
+        const body = { permissions: formData.permissions };
+        if (formData.password) body.password = formData.password;
+        const res = await saFetch(`${SA_API}/api/project-users/${editingUser.id}`, {
+          method: 'PUT',
+          body: JSON.stringify(body),
+        });
+        if (res.success) {
+          notify('success', 'User permissions updated!');
+          loadProjectUsers(selectedProject.id);
+          setShowUserForm(false);
+          setEditingUser(null);
+        } else setErr(res.message || 'Failed to update.');
+      } else {
+        // Create new
+        const res = await saFetch(`${SA_API}/api/project-users`, {
+          method: 'POST',
+          body: JSON.stringify({
+            company_id: company.id,
+            project_id: selectedProject.id,
+            email: formData.email,
+            password: formData.password,
+            permissions: formData.permissions,
+          }),
+        });
+        if (res.success) {
+          notify('success', 'User assigned to project!');
+          loadProjectUsers(selectedProject.id);
+          setShowUserForm(false);
+        } else setErr(res.message || 'Failed to assign.');
+      }
+    } catch (e) { setErr(e.message || 'Network error.'); }
+    setSaving(false);
+  };
+
+  const handleDeleteUser = async (userId) => {
+    if (!window.confirm('Remove this user from the project?')) return;
+    try {
+      const res = await saFetch(`${SA_API}/api/project-users/${userId}`, { method: 'DELETE' });
+      if (res.success) {
+        notify('success', 'User removed from project.');
+        loadProjectUsers(selectedProject.id);
+      }
+    } catch (e) { notify('error', 'Failed to remove.'); }
+  };
+
+  const openEditUser = (user) => {
+    setEditingUser(user);
+    setFormData({
+      email: user.email,
+      password: '',
+      permissions: user.permissions || { view: true, edit: false, delete: false }
+    });
+    setShowUserForm(true);
+  };
+
+  const openAddUser = () => {
+    setEditingUser(null);
+    setFormData({
+      email: '',
+      password: '',
+      permissions: { view: true, edit: false, delete: false }
+    });
+    setShowUserForm(true);
+  };
+
+  return (
+    <div className="sa-modal-overlay" onClick={onClose}>
+      <div className="sa-modal" style={{ width: 800, maxHeight: '90vh', overflowY: 'auto' }} onClick={e => e.stopPropagation()}>
+        <div className="sa-modal-header">
+          <h3>Projects - Assign Users to Specific Projects</h3>
+          <button className="sa-modal-close" onClick={onClose}>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+            </svg>
+          </button>
+        </div>
+
+        <div style={{ padding: '0 4px' }}>
+          <p style={{ color: 'var(--sa-muted)', fontSize: 13, marginBottom: 16 }}>
+            Company: <strong style={{ color: 'var(--sa-text)' }}>{company.company_name}</strong>
+          </p>
+
+          {err && (
+            <div style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.3)', color: '#fca5a5', padding: '10px 14px', borderRadius: 8, fontSize: 13, marginBottom: 14 }}>
+              {err}
+            </div>
+          )}
+
+          <div style={{ display: 'grid', gridTemplateColumns: '280px 1fr', gap: 16 }}>
+            {/* Project List */}
+            <div>
+              <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--sa-text)', marginBottom: 10 }}>
+                Select Project
+              </div>
+              {loadingProjects ? (
+                <div className="sa-loading" style={{ padding: 20 }}><span className="sa-spinner" /> Loading...</div>
+              ) : projects.length === 0 ? (
+                <div style={{ padding: 20, textAlign: 'center', color: 'var(--sa-muted)', fontSize: 13, border: '1px dashed var(--sa-border)', borderRadius: 8 }}>
+                  No projects found for this company
+                </div>
+              ) : (
+                <div style={{ maxHeight: 350, overflowY: 'auto', border: '1px solid var(--sa-border)', borderRadius: 8 }}>
+                  {projects.map(p => (
+                    <div
+                      key={p.id}
+                      onClick={() => handleSelectProject(p)}
+                      style={{
+                        padding: '12px 14px',
+                        cursor: 'pointer',
+                        borderBottom: '1px solid var(--sa-border)',
+                        background: selectedProject?.id === p.id ? 'rgba(99,102,241,0.08)' : 'transparent',
+                        borderLeft: selectedProject?.id === p.id ? '3px solid var(--sa-primary)' : '3px solid transparent',
+                      }}
+                    >
+                      <div style={{ fontWeight: 600, fontSize: 13, color: 'var(--sa-text)' }}>{p.project_name}</div>
+                      <div style={{ fontSize: 11, color: 'var(--sa-muted)' }}>{p.location || 'No location'}</div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Users for selected project */}
+            <div>
+              {!selectedProject ? (
+                <div style={{ padding: 40, textAlign: 'center', color: 'var(--sa-muted)', fontSize: 13, border: '1px dashed var(--sa-border)', borderRadius: 8 }}>
+                  Select a project to manage user access
+                </div>
+              ) : (
+                <>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                    <div>
+                      <div style={{ fontWeight: 700, fontSize: 14, color: 'var(--sa-text)' }}>{selectedProject.project_name}</div>
+                      <div style={{ fontSize: 11, color: 'var(--sa-muted)' }}>Assign users with specific permissions</div>
+                    </div>
+                    <button className="sa-btn sa-btn-primary sa-btn-sm" onClick={openAddUser}>
+                      + Assign User
+                    </button>
+                  </div>
+
+                  {/* User form */}
+                  {showUserForm && (
+                    <div style={{ background: 'var(--sa-card)', border: '1px solid var(--sa-border)', borderRadius: 8, padding: 14, marginBottom: 12 }}>
+                      <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 10 }}>
+                        {editingUser ? `Edit: ${editingUser.email}` : 'New Project User'}
+                      </div>
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 12 }}>
+                        <div>
+                          <label style={{ fontSize: 11, color: 'var(--sa-muted)', display: 'block', marginBottom: 4 }}>Email *</label>
+                          <input
+                            type="email"
+                            value={formData.email}
+                            onChange={e => setFormData({ ...formData, email: e.target.value })}
+                            disabled={!!editingUser}
+                            placeholder="user@email.com"
+                            style={{ width: '100%', padding: '8px 10px', borderRadius: 6, border: '1px solid var(--sa-border)', fontSize: 13 }}
+                          />
+                        </div>
+                        <div>
+                          <label style={{ fontSize: 11, color: 'var(--sa-muted)', display: 'block', marginBottom: 4 }}>
+                            Password {editingUser ? '(leave blank to keep)' : '*'}
+                          </label>
+                          <input
+                            type="password"
+                            value={formData.password}
+                            onChange={e => setFormData({ ...formData, password: e.target.value })}
+                            placeholder="Enter password"
+                            style={{ width: '100%', padding: '8px 10px', borderRadius: 6, border: '1px solid var(--sa-border)', fontSize: 13 }}
+                          />
+                        </div>
+                      </div>
+                      <div style={{ marginBottom: 12 }}>
+                        <div style={{ fontSize: 11, color: 'var(--sa-muted)', marginBottom: 6 }}>Permissions</div>
+                        <div style={{ display: 'flex', gap: 8 }}>
+                          {['view', 'edit', 'delete'].map(key => (
+                            <label key={key} style={{ display: 'flex', alignItems: 'center', gap: 4, cursor: 'pointer', padding: '4px 8px', borderRadius: 6, border: '1px solid var(--sa-border)', background: formData.permissions[key] ? 'rgba(99,102,241,0.08)' : 'transparent' }}>
+                              <input type="checkbox" checked={formData.permissions[key]} onChange={() => togglePerm(key)} style={{ accentColor: 'var(--sa-primary)' }} />
+                              <span style={{ fontSize: 12, textTransform: 'capitalize' }}>{key}</span>
+                            </label>
+                          ))}
+                        </div>
+                      </div>
+                      <div style={{ display: 'flex', gap: 8 }}>
+                        <button className="sa-btn sa-btn-ghost sa-btn-sm" onClick={() => { setShowUserForm(false); setEditingUser(null); }}>Cancel</button>
+                        <button className="sa-btn sa-btn-primary sa-btn-sm" disabled={saving} onClick={handleSaveUser}>
+                          {saving ? 'Saving...' : editingUser ? 'Update' : 'Assign'}
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* User list */}
+                  {projectUsers.length === 0 ? (
+                    <div style={{ padding: 20, textAlign: 'center', color: 'var(--sa-muted)', fontSize: 13, border: '1px dashed var(--sa-border)', borderRadius: 8 }}>
+                      No users assigned to this project yet
+                    </div>
+                  ) : (
+                    <div style={{ border: '1px solid var(--sa-border)', borderRadius: 8, overflow: 'hidden' }}>
+                      <table style={{ width: '100%', fontSize: 12 }}>
+                        <thead>
+                          <tr style={{ background: 'var(--sa-bg)' }}>
+                            <th style={{ padding: '8px 12px', textAlign: 'left', fontWeight: 600 }}>Email</th>
+                            <th style={{ padding: '8px 8px', textAlign: 'center', fontWeight: 600 }}>View</th>
+                            <th style={{ padding: '8px 8px', textAlign: 'center', fontWeight: 600 }}>Edit</th>
+                            <th style={{ padding: '8px 8px', textAlign: 'center', fontWeight: 600 }}>Delete</th>
+                            <th style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 600 }}>Actions</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {projectUsers.map(u => (
+                            <tr key={u.id} style={{ borderTop: '1px solid var(--sa-border)' }}>
+                              <td style={{ padding: '10px 12px' }}>{u.email}</td>
+                              <td style={{ padding: '10px 8px', textAlign: 'center' }}>
+                                <span style={{ padding: '2px 6px', borderRadius: 4, fontSize: 10, fontWeight: 600, background: u.permissions?.view ? 'rgba(16,185,129,0.15)' : 'rgba(156,163,175,0.15)', color: u.permissions?.view ? '#34d399' : 'var(--sa-muted)' }}>
+                                  {u.permissions?.view ? 'Yes' : 'No'}
+                                </span>
+                              </td>
+                              <td style={{ padding: '10px 8px', textAlign: 'center' }}>
+                                <span style={{ padding: '2px 6px', borderRadius: 4, fontSize: 10, fontWeight: 600, background: u.permissions?.edit ? 'rgba(16,185,129,0.15)' : 'rgba(156,163,175,0.15)', color: u.permissions?.edit ? '#34d399' : 'var(--sa-muted)' }}>
+                                  {u.permissions?.edit ? 'Yes' : 'No'}
+                                </span>
+                              </td>
+                              <td style={{ padding: '10px 8px', textAlign: 'center' }}>
+                                <span style={{ padding: '2px 6px', borderRadius: 4, fontSize: 10, fontWeight: 600, background: u.permissions?.delete ? 'rgba(16,185,129,0.15)' : 'rgba(156,163,175,0.15)', color: u.permissions?.delete ? '#34d399' : 'var(--sa-muted)' }}>
+                                  {u.permissions?.delete ? 'Yes' : 'No'}
+                                </span>
+                              </td>
+                              <td style={{ padding: '10px 12px', textAlign: 'right' }}>
+                                <button className="sa-btn sa-btn-ghost sa-btn-sm" onClick={() => openEditUser(u)} style={{ padding: '4px 8px', fontSize: 11 }}>Edit</button>
+                                <button className="sa-btn sa-btn-danger sa-btn-sm" onClick={() => handleDeleteUser(u.id)} style={{ padding: '4px 8px', fontSize: 11, marginLeft: 4 }}>Remove</button>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+
+        <div className="sa-modal-actions" style={{ marginTop: 20 }}>
+          <button className="sa-btn sa-btn-ghost" onClick={onClose}>Close</button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// --- Module Card ---
+const ModuleCard = ({ moduleName, assignedUser, selected, onSelect, onAssign, onEdit, onRemove, onManageProjects }) => {
   const def = MODULE_DEFS[moduleName];
   const isAssigned = !!assignedUser;
+  const isProjectModule = def.isProjectModule;
 
   return (
     <div
@@ -278,31 +594,52 @@ const ModuleCard = ({ moduleName, assignedUser, selected, onSelect, onAssign, on
         <span style={{ fontSize: 22 }}>{def.icon}</span>
         <div>
           <div style={{ fontWeight: 700, fontSize: 14, color: 'var(--sa-text)' }}>{def.label}</div>
-          <div style={{ fontSize: 11, color: 'var(--sa-muted)' }}>{Object.keys(def.features).length} features</div>
+          <div style={{ fontSize: 11, color: 'var(--sa-muted)' }}>
+            {isProjectModule ? 'Project-specific access' : `${Object.keys(def.features).length} features`}
+          </div>
         </div>
-        <span style={{
-          marginLeft: 'auto',
-          padding: '3px 8px',
-          borderRadius: 20,
-          fontSize: 11,
-          fontWeight: 700,
-          background: isAssigned ? 'rgba(16,185,129,0.15)' : 'rgba(156,163,175,0.15)',
-          color: isAssigned ? '#34d399' : 'var(--sa-muted)',
-        }}>
-          {isAssigned ? '✅ Assigned' : '⬜ Empty'}
-        </span>
+        {isProjectModule && (
+          <span style={{
+            marginLeft: 'auto',
+            padding: '3px 8px',
+            borderRadius: 20,
+            fontSize: 11,
+            fontWeight: 700,
+            background: 'rgba(139, 92, 246, 0.15)',
+            color: '#8b5cf6',
+          }}>
+            Special
+          </span>
+        )}
+        {!isProjectModule && (
+          <span style={{
+            marginLeft: 'auto',
+            padding: '3px 8px',
+            borderRadius: 20,
+            fontSize: 11,
+            fontWeight: 700,
+            background: isAssigned ? 'rgba(16,185,129,0.15)' : 'rgba(156,163,175,0.15)',
+            color: isAssigned ? '#34d399' : 'var(--sa-muted)',
+          }}>
+            {isAssigned ? 'Assigned' : 'Empty'}
+          </span>
+        )}
       </div>
 
-      {isAssigned ? (
+      {isProjectModule ? (
         <div style={{ fontSize: 12, color: 'var(--sa-muted)', marginBottom: 10 }}>
-          👤 {assignedUser.email}
+          Assign users to specific projects with granular permissions
+        </div>
+      ) : isAssigned ? (
+        <div style={{ fontSize: 12, color: 'var(--sa-muted)', marginBottom: 10 }}>
+          {assignedUser.email}
         </div>
       ) : (
         <div style={{ fontSize: 12, color: 'var(--sa-muted)', marginBottom: 10 }}>No user assigned</div>
       )}
 
       {/* Permissions summary */}
-      {isAssigned && (
+      {!isProjectModule && isAssigned && (
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginBottom: 10 }}>
           {Object.entries(assignedUser.permissions).filter(([,v]) => v).map(([k]) => (
             <span key={k} style={{ fontSize: 10, padding: '2px 6px', borderRadius: 4, background: `rgba(${hexToRgb(def.color)}, 0.12)`, color: def.color, fontWeight: 600 }}>
@@ -313,10 +650,17 @@ const ModuleCard = ({ moduleName, assignedUser, selected, onSelect, onAssign, on
       )}
 
       <div style={{ display: 'flex', gap: 6 }}>
-        {isAssigned ? (
+        {isProjectModule ? (
+          <button
+            className="sa-btn sa-btn-primary sa-btn-sm"
+            onClick={e => { e.stopPropagation(); onManageProjects(); }}
+          >
+            Manage Project Users
+          </button>
+        ) : isAssigned ? (
           <>
-            <button className="sa-btn sa-btn-ghost sa-btn-sm" onClick={e => { e.stopPropagation(); onEdit(assignedUser, moduleName); }}>✏️ Edit</button>
-            <button className="sa-btn sa-btn-danger sa-btn-sm" onClick={e => { e.stopPropagation(); onRemove(assignedUser.id); }}>🗑️ Remove</button>
+            <button className="sa-btn sa-btn-ghost sa-btn-sm" onClick={e => { e.stopPropagation(); onEdit(assignedUser, moduleName); }}>Edit</button>
+            <button className="sa-btn sa-btn-danger sa-btn-sm" onClick={e => { e.stopPropagation(); onRemove(assignedUser.id); }}>Remove</button>
           </>
         ) : (
           <button
@@ -349,6 +693,7 @@ const ModuleAssignment = () => {
   const [assignModal, setAssignModal]     = useState(null); // moduleName
   const [editModal, setEditModal]         = useState(null); // {moduleUser, moduleName}
   const [deleteId, setDeleteId]           = useState(null);
+  const [projectModal, setProjectModal]   = useState(false); // for project-specific users
   const [search, setSearch]               = useState('');
   const [msg, setMsg]                     = useState(null);
 
@@ -389,8 +734,9 @@ const ModuleAssignment = () => {
     try {
       const res = await saFetch(`${SA_API}/api/super-admin/module-users/${id}`, { method: 'DELETE' });
       if (res.success) {
+        // Immediately remove from local state for instant UI update
+        setModuleUsers(prev => prev.filter(u => u.id !== id));
         notify('success', 'Module user removed.');
-        loadModuleUsers(selectedCompany.id);
       } else notify('error', res.message || 'Failed to remove.');
     } catch { notify('error', 'Network error.'); }
     setDeleteId(null);
@@ -498,6 +844,7 @@ const ModuleAssignment = () => {
                     onAssign={mn => setAssignModal(mn)}
                     onEdit={(u, mn) => setEditModal({ moduleUser: u, moduleName: mn })}
                     onRemove={id => setDeleteId(id)}
+                    onManageProjects={() => setProjectModal(true)}
                   />
                 ))}
               </div>
@@ -529,6 +876,16 @@ const ModuleAssignment = () => {
             notify('success', 'Permissions updated successfully!');
             loadModuleUsers(selectedCompany.id);
           }}
+        />
+      )}
+
+      {/* ── Project User Assignment Modal ─────────────────────────────────────── */}
+      {projectModal && selectedCompany && (
+        <ProjectAssignModal
+          company={selectedCompany}
+          onClose={() => setProjectModal(false)}
+          onSave={() => {}}
+          notify={notify}
         />
       )}
 

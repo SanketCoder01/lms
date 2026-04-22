@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { getProjectById, unitAPI, FILE_BASE_URL } from '../../services/api';
+import usePermissions from '../../hooks/usePermissions';
 import './ProjectDetails.css';
 
 const ProjectDetails = () => {
@@ -12,6 +13,7 @@ const ProjectDetails = () => {
     const [owners, setOwners] = useState([]);
     const [loading, setLoading] = useState(true);
     const [imageError, setImageError] = useState(false);
+    const { can, isProjectUser, hasProjectAccess } = usePermissions();
 
     /* ================= FETCH DATA ================= */
     useEffect(() => {
@@ -257,9 +259,21 @@ const ProjectDetails = () => {
                     </div>
                 </div>
                 <div className="header-actions">
-                    <Link to={`/admin/edit-project/${project.id}`} className="secondary-btn">Edit Project</Link>
-                    <Link to={`/admin/add-unit?projectId=${project.id}`} className="primary-btn">+ Add Unit</Link>
-                    <Link to={`/admin/unit-structure?projectId=${project.id}`} className="primary-btn" style={{ backgroundColor: '#10b981' }}>+ Add Unit Structure</Link>
+                    {can('edit') && (!isProjectUser || hasProjectAccess(project.id)) ? (
+                      <Link to={`/admin/edit-project/${project.id}`} className="secondary-btn">Edit Project</Link>
+                    ) : (
+                      <button className="secondary-btn" disabled style={{ opacity: 0.5, cursor: 'not-allowed' }}>🔒 Edit Project</button>
+                    )}
+                    {can('edit') && (!isProjectUser || hasProjectAccess(project.id)) ? (
+                      <Link to={`/admin/add-unit?projectId=${project.id}`} className="primary-btn">+ Add Unit</Link>
+                    ) : (
+                      <button className="primary-btn" disabled style={{ opacity: 0.5, cursor: 'not-allowed' }}>🔒 Add Unit</button>
+                    )}
+                    {can('edit') && (!isProjectUser || hasProjectAccess(project.id)) ? (
+                      <Link to={`/admin/unit-structure?projectId=${project.id}`} className="primary-btn" style={{ backgroundColor: '#10b981' }}>+ Add Unit Structure</Link>
+                    ) : (
+                      <button className="primary-btn" disabled style={{ backgroundColor: '#d1d5db', cursor: 'not-allowed' }}>🔒 Add Unit Structure</button>
+                    )}
                 </div>
             </header>
 

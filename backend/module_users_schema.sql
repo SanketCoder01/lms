@@ -14,8 +14,8 @@ CREATE TABLE IF NOT EXISTS module_users (
   status          VARCHAR(20)  DEFAULT 'active',
   created_at      TIMESTAMPTZ  DEFAULT NOW(),
   updated_at      TIMESTAMPTZ  DEFAULT NOW(),
-  -- ONE user per module per company (enforced at DB level)
-  CONSTRAINT uq_company_module UNIQUE (company_id, module_name)
+  updated_at      TIMESTAMPTZ  DEFAULT NOW()
+  -- ONE user per module per company restriction removed for granular project access
 );
 
 CREATE INDEX IF NOT EXISTS idx_mu_company ON module_users(company_id);

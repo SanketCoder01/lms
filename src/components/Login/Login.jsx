@@ -74,6 +74,7 @@ const Login = () => {
       // Store company user session in sessionStorage (per-tab isolation)
       sessionStorage.setItem('company_token', data.token);
       sessionStorage.setItem('token', data.token); // also set as 'token' for API interceptor
+      sessionStorage.setItem('company_id', data.user.company_id || data.company_id || '');
       sessionStorage.setItem('company_user', JSON.stringify({
         ...data.user,
         session_id: data.session_id,
@@ -93,25 +94,69 @@ const Login = () => {
       }));
       sessionStorage.setItem('company_session_id', data.session_id || '');
 
-      // ── Module user: store permissions + redirect to assigned module ──────
+      // ── Module user: store permissions + ALL assigned modules ──────────────
       const isModuleUser = data.user.type === 'module_user';
+      const isProjectUser = data.user.type === 'project_user';
       sessionStorage.setItem('is_module_user', isModuleUser ? '1' : '0');
       sessionStorage.setItem('module_name', data.user.module_name || '');
       sessionStorage.setItem('permissions', JSON.stringify(data.user.permissions || {}));
 
+      // Store ALL assigned modules array — always set when available
+      const modulesAccess = data.user.modules_access;
+      if (isModuleUser && Array.isArray(modulesAccess) && modulesAccess.length > 0) {
+        sessionStorage.setItem('modules_access', JSON.stringify(modulesAccess));
+        console.log('[Login] modules_access stored:', modulesAccess.map(m => m.module_name));
+      } else if (isModuleUser && data.user.module_name) {
+        // Fallback: build single-entry array from primary module
+        const fallback = [{
+          module_name: data.user.module_name,
+          permissions: data.user.permissions || { view: true, edit: false, delete: false },
+        }];
+        sessionStorage.setItem('modules_access', JSON.stringify(fallback));
+        console.log('[Login] modules_access fallback:', data.user.module_name);
+      } else {
+        sessionStorage.removeItem('modules_access');
+      }
+
+      // Store project assignments for module_user who ALSO has project access
+      const projectsAccess = data.user.projects_access;
+      if (isModuleUser && Array.isArray(projectsAccess) && projectsAccess.length > 0) {
+        sessionStorage.setItem('projects_access', JSON.stringify(projectsAccess));
+        console.log('[Login] projects_access stored:', projectsAccess.map(p => p.project_name));
+      } else {
+        sessionStorage.removeItem('projects_access');
+      }
+
+      // ── Project user: store project-specific info
+      if (isProjectUser) {
+        sessionStorage.setItem('is_project_user', '1');
+        sessionStorage.setItem('project_id', data.user.project_id || '');
+        sessionStorage.setItem('project_name', data.user.project_name || '');
+        sessionStorage.setItem('project_permissions', JSON.stringify(data.user.permissions || {}));
+      } else {
+        sessionStorage.setItem('is_project_user', '0');
+      }
+
       const MODULE_ROUTES = {
         dashboard: '/admin/dashboard',
-        masters:   '/admin/filter-options',
-        leases:    '/admin/leases',
+        masters: '/admin/filter-options',
+        leases: '/admin/leases',
         ownership: '/admin/ownership-mapping',
-        projects:  '/admin/projects',
+        projects: '/admin/projects',
       };
 
-      if (isModuleUser && data.user.module_name) {
-        navigate(MODULE_ROUTES[data.user.module_name] || '/admin/dashboard');
+      if (isProjectUser) {
+        navigate('/admin/projects');
+      } else if (isModuleUser) {
+        // Navigate to the first assigned module (from full list or primary)
+        const firstModule = (Array.isArray(modulesAccess) && modulesAccess.length > 0)
+          ? modulesAccess[0].module_name
+          : data.user.module_name;
+        navigate(MODULE_ROUTES[firstModule] || '/admin/dashboard');
       } else {
         navigate('/admin/dashboard');
       }
+
     } catch {
       setError('Network error. Please check your connection and try again.');
     } finally {

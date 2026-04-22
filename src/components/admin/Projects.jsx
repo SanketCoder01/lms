@@ -11,7 +11,11 @@ const Projects = () => {
   const [projects, setProjects] = useState([]);
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState({ text: '', type: '' });
-  const { can } = usePermissions();
+  const { can, isModuleUser, isProjectUser, projectId, projectName, hasProjectAccess, assignedProjectIds, projectsAccess } = usePermissions();
+  // isRestrictedProjectUser: either a project_user OR a module_user with specific project assignments
+  const isRestrictedProjectUser = isProjectUser || (isModuleUser && projectsAccess && projectsAccess.length > 0);
+  // Stable string key to avoid infinite re-render from array reference changes
+  const assignedProjectIdsKey = JSON.stringify(assignedProjectIds || []);
   const [search, setSearch] = useState("");
   const [location, setLocation] = useState("All");
   const [type, setType] = useState("All");
@@ -90,12 +94,33 @@ const Projects = () => {
       try {
         setLoading(true);
         const params = {};
-        if (search) params.search = search;
-        if (location !== "All") params.location = location;
-        if (type !== "All") params.type = type;
+
+        // Project users can only see their assigned project
+        if (isProjectUser && projectId) {
+          params.projectId = projectId;
+        } else if (!isRestrictedProjectUser) {
+          // Full admins: apply search/location/type filters
+          if (search) params.search = search;
+          if (location !== "All") params.location = location;
+          if (type !== "All") params.type = type;
+        }
+        // For module_user with projects_access: fetch all then filter client-side
 
         const response = await getProjects(params);
-        setProjects(response.data.data || response.data);
+        let projectData = response.data.data || response.data;
+
+        // Filter for project_user (single project)
+        if (isProjectUser && projectId) {
+          projectData = projectData.filter(p => hasProjectAccess(p.id));
+        }
+
+        // Filter for module_user with specific project assignments
+        if (isModuleUser && assignedProjectIds && assignedProjectIds.length > 0) {
+          const assignedSet = new Set(assignedProjectIds.map(id => String(id)));
+          projectData = projectData.filter(p => assignedSet.has(String(p.id)));
+        }
+
+        setProjects(projectData);
       } catch (error) {
         console.error("Error fetching projects:", error);
       } finally {
@@ -103,13 +128,13 @@ const Projects = () => {
       }
     };
 
-    // Debounce search
     const timer = setTimeout(() => {
       fetchProjects();
     }, 500);
 
     return () => clearTimeout(timer);
-  }, [search, location, type]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [search, location, type, isProjectUser, isModuleUser, projectId, assignedProjectIdsKey]);
 
   /* ================= HANDLERS ================= */
   const handleSearch = (e) => setSearch(e.target.value);
@@ -195,26 +220,31 @@ const Projects = () => {
       <main className="main-content">
         <header className="page-header">
           <div className="header-text">
-            <h1>Projects</h1>
-            <p>Manage your commercial properties and business spaces</p>
+            <h1>{isRestrictedProjectUser ? (isProjectUser ? `Project: ${projectName || 'Assigned Project'}` : 'Assigned Projects') : 'Projects'}</h1>
+            <p>{isRestrictedProjectUser ? 'You can only access your assigned project(s). Other projects are restricted.' : 'Manage your commercial properties and business spaces'}</p>
           </div>
           <div style={{ display: 'flex', gap: '10px' }}>
-            <button onClick={handleExportCSV} className="secondary-btn" style={{ background: '#f8f9fa', color: '#333', border: '1px solid #ddd', padding: '8px 16px', borderRadius: '4px', cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ marginRight: '6px' }}><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
-              Export CSV
-            </button>
-            <button onClick={() => setShowReportModal(true)} className="secondary-btn" style={{ background: '#eff6ff', color: '#2e66ff', border: '1px solid #bfdbfe', padding: '8px 16px', borderRadius: '4px', cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ marginRight: '6px' }}><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line></svg>
-              Generate Report
-            </button>
-            {can('edit') ? (
+            {!isRestrictedProjectUser && (
+              <>
+                <button onClick={handleExportCSV} className="secondary-btn" style={{ background: '#f8f9fa', color: '#333', border: '1px solid #ddd', padding: '8px 16px', borderRadius: '4px', cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ marginRight: '6px' }}><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+                  Export CSV
+                </button>
+                <button onClick={() => setShowReportModal(true)} className="secondary-btn" style={{ background: '#eff6ff', color: '#2e66ff', border: '1px solid #bfdbfe', padding: '8px 16px', borderRadius: '4px', cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ marginRight: '6px' }}><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line></svg>
+                  Generate Report
+                </button>
+              </>
+            )}
+            {/* Restricted users (project_user / module_user with project access) cannot add new projects */}
+            {!isRestrictedProjectUser && (can('edit') ? (
               <Link to="/admin/add-project" className="primary-btn" style={{ textDecoration: "none", display: 'inline-flex', alignItems: 'center', gap: '8px' }}>
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
                 Add Project
               </Link>
             ) : (
               <button className="primary-btn" disabled title="No permission to add projects" style={{ opacity: 0.5, cursor: 'not-allowed', display: 'inline-flex', alignItems: 'center', gap: '6px' }}>🔒 Add Project</button>
-            )}
+            ))}
           </div>
         </header>
 
@@ -230,47 +260,46 @@ const Projects = () => {
         )}
 
         <div className="content-card">
-          {/* Filters */}
-          <div className="filters-bar">
-            <div className="search-wrapper">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
-              <input
-                type="text"
-                placeholder="Search projects by key name, city, or ID..."
-                value={search}
-                onChange={handleSearch}
-              />
-            </div>
-            <div className="filter-actions">
-              <div className="select-wrapper">
-                <span className="select-label">Location:</span>
-                <select
-                  value={location}
-                  onChange={(e) => setLocation(e.target.value)}
-                  className="filter-select"
-                >
-                  {availableLocations.map(loc => (
-                    <option key={loc} value={loc}>{loc}</option>
-                  ))}
-                </select>
+          {/* Filters - Hidden for restricted users */}
+          {!isRestrictedProjectUser && (
+            <div className="filters-bar">
+              <div className="search-wrapper">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+                <input
+                  type="text"
+                  placeholder="Search projects by key name, city, or ID..."
+                  value={search}
+                  onChange={handleSearch}
+                />
               </div>
-
-              <div className="select-wrapper">
-                <span className="select-label">Type:</span>
-                <select
-                  value={type}
-                  onChange={(e) => setType(e.target.value)}
-                  className="filter-select"
-                >
-                  {types.map(t => (
-                    <option key={t} value={t}>{t}</option>
-                  ))}
-                </select>
+              <div className="filter-actions">
+                <div className="select-wrapper">
+                  <span className="select-label">Location:</span>
+                  <select value={location} onChange={(e) => setLocation(e.target.value)} className="filter-select">
+                    {availableLocations.map(loc => (<option key={loc} value={loc}>{loc}</option>))}
+                  </select>
+                </div>
+                <div className="select-wrapper">
+                  <span className="select-label">Type:</span>
+                  <select value={type} onChange={(e) => setType(e.target.value)} className="filter-select">
+                    {types.map(t => (<option key={t} value={t}>{t}</option>))}
+                  </select>
+                </div>
+                <button className="clear-btn" onClick={clearFilters}>Clear filters</button>
               </div>
-
-              <button className="clear-btn" onClick={clearFilters}>Clear filters</button>
             </div>
-          </div>
+          )}
+
+          {/* Info banner for restricted project access */}
+          {isRestrictedProjectUser && (
+            <div style={{ background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: '8px', padding: '12px 16px', marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '12px' }}>
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#2e66ff" strokeWidth="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>
+              <div>
+                <div style={{ fontWeight: '600', color: '#1e40af' }}>Project-Specific Access</div>
+                <div style={{ fontSize: '0.85rem', color: '#3b82f6' }}>You can only access your assigned project(s). Other projects are restricted.</div>
+              </div>
+            </div>
+          )}
 
           {/* ================= TABLE ================= */}
           <div className="table-responsive">

@@ -25,33 +25,93 @@ const companyLogin = async (req, res) => {
       .single();
 
     if (error || !user) {
-      // ── 1a. Try module_users (sub-user assigned by super admin) ──────────────
-      const { data: moduleUser, error: muErr } = await supabase
+      // ── 1a. Try module_users (sub-user assigned by super admin / admin) ───────
+      // Fetch ALL rows for this email so users with multiple modules get full access
+      const { data: moduleRows, error: muErr } = await supabase
         .from('module_users')
         .select('*, company_users!module_users_company_id_fkey(company_name)')
         .eq('email', email)
-        .single();
+        .order('module_name');
 
-      if (!muErr && moduleUser) {
-        // Check status
-        if (moduleUser.status === 'suspended')
+      if (!muErr && moduleRows && moduleRows.length > 0) {
+        const firstRow = moduleRows[0];
+
+        // Check status on first row (all rows share same account)
+        if (firstRow.status === 'suspended')
           return res.status(403).json({ success: false, message: 'Your module account has been suspended.', code: 'SUSPENDED' });
 
-        const isValid = await bcrypt.compare(password, moduleUser.password_hash);
+        const isValid = await bcrypt.compare(password, firstRow.password_hash);
         if (!isValid)
           return res.status(401).json({ success: false, message: 'Invalid email or password.', code: 'INVALID_CREDENTIALS' });
 
-        const companyName = moduleUser.company_users?.company_name || '';
+        const companyName = firstRow.company_users?.company_name || '';
+
+        // ── Build modules_access — handles BOTH storage strategies ──────────
+        // Strategy A: multiple rows (composite unique constraint) → map each row
+        // Strategy B: single row with permissions._modules (old UNIQUE(email) constraint)
+        //             → expand the _modules array
+        let modules_access = [];
+        for (const r of moduleRows) {
+          if (Array.isArray(r.permissions?._modules) && r.permissions._modules.length > 0) {
+            // Strategy B: expand merged multi-module row
+            for (const m of r.permissions._modules) {
+              modules_access.push({
+                module_name: m.module_name,
+                permissions: m.permissions || { view: true, edit: false, delete: false },
+              });
+            }
+          } else {
+            // Strategy A: normal single-module row
+            const { _modules, ...cleanPerms } = r.permissions || {};
+            modules_access.push({
+              module_name: r.module_name,
+              permissions: cleanPerms || { view: true, edit: false, delete: false },
+            });
+          }
+        }
+        // Deduplicate in case of both formats in the same account
+        const seen = new Set();
+        modules_access = modules_access.filter(m => {
+          if (seen.has(m.module_name)) return false;
+          seen.add(m.module_name);
+          return true;
+        });
+
+        // ── Also check project_users for this email (same user may have project access too) ──
+        let projects_access = [];
+        try {
+          const { data: projectRows } = await supabase
+            .from('project_users')
+            .select('id, project_id, email, permissions, status, company_id, projects!project_users_project_id_fkey(id, project_name)')
+            .eq('email', email);
+
+          if (projectRows && projectRows.length > 0) {
+            projects_access = projectRows.map(p => ({
+              project_id:   p.project_id,
+              project_name: p.projects?.project_name || '',
+              permissions:  p.permissions || { view: true, edit: false, delete: false },
+              status:       p.status,
+            }));
+          }
+        } catch (projErr) {
+          console.warn('[login] Could not fetch project_users for module_user:', projErr.message);
+        }
+
+        // Primary module = first alphabetically (or the only one)
+        const primaryModule     = firstRow.module_name;
+        const primaryPermissions = firstRow.permissions;
 
         const token = jwt.sign(
           {
-            id: moduleUser.id,
-            email: moduleUser.email,
-            company_id: moduleUser.company_id,
-            company_name: companyName,
-            type: 'module_user',
-            module_name: moduleUser.module_name,
-            permissions: moduleUser.permissions,
+            id:             firstRow.id,
+            email:          firstRow.email,
+            company_id:     firstRow.company_id,
+            company_name:   companyName,
+            type:           'module_user',
+            module_name:    primaryModule,
+            modules_access,
+            projects_access,
+            permissions:    primaryPermissions,
           },
           COMPANY_JWT_SECRET,
           { expiresIn: '8h' }
@@ -62,20 +122,73 @@ const companyLogin = async (req, res) => {
           token,
           session_id: null,
           user: {
-            id: moduleUser.id,
-            email: moduleUser.email,
-            company_id: moduleUser.company_id,
-            company_name: companyName,
-            type: 'module_user',
-            module_name: moduleUser.module_name,
-            permissions: moduleUser.permissions,
-            status: moduleUser.status,
+            id:             firstRow.id,
+            email:          firstRow.email,
+            company_id:     firstRow.company_id,
+            company_name:   companyName,
+            type:           'module_user',
+            module_name:    primaryModule,
+            modules_access,
+            projects_access,  // ← new: list of { project_id, project_name, permissions }
+            permissions:    primaryPermissions,
+            status:         firstRow.status,
           },
           message: 'Login successful',
         });
       }
 
-      // ── 1b. Check pending/rejected registrations ──────────────────────────
+      // -- 1b. Try project_users (project-specific user) --
+      const { data: projectUser, error: puErr } = await supabase
+        .from('project_users')
+        .select(`*, projects!project_users_project_id_fkey(id, project_name, location)`)
+        .eq('email', email)
+        .single();
+
+      if (!puErr && projectUser) {
+        // Check status
+        if (projectUser.status === 'suspended')
+          return res.status(403).json({ success: false, message: 'Your project account has been suspended.', code: 'SUSPENDED' });
+
+        const isValid = await bcrypt.compare(password, projectUser.password_hash);
+        if (!isValid)
+          return res.status(401).json({ success: false, message: 'Invalid email or password.', code: 'INVALID_CREDENTIALS' });
+
+        const projectName = projectUser.projects?.project_name || '';
+        const projectId = projectUser.project_id;
+
+        const token = jwt.sign(
+          {
+            id: projectUser.id,
+            email: projectUser.email,
+            company_id: projectUser.company_id,
+            type: 'project_user',
+            project_id: projectId,
+            project_name: projectName,
+            permissions: projectUser.permissions,
+          },
+          COMPANY_JWT_SECRET,
+          { expiresIn: '8h' }
+        );
+
+        return res.json({
+          success: true,
+          token,
+          session_id: null,
+          user: {
+            id: projectUser.id,
+            email: projectUser.email,
+            company_id: projectUser.company_id,
+            type: 'project_user',
+            project_id: projectId,
+            project_name: projectName,
+            permissions: projectUser.permissions,
+            status: projectUser.status,
+          },
+          message: 'Login successful',
+        });
+      }
+
+      // ── 1c. Check pending/rejected registrations ──────────────────────────
       const { data: pending } = await supabase
         .from('company_registrations')
         .select('status')

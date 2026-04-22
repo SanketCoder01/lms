@@ -10,6 +10,7 @@ const {
 const {
   getModuleUsers, createModuleUser, updateModuleUser, deleteModuleUser, getModuleFeatures,
 } = require('../controllers/moduleUserController');
+const { getCompanyProjects } = require('../controllers/projectUserController');
 
 const router = express.Router();
 
@@ -18,6 +19,9 @@ router.post('/login', login);
 
 // All below require super admin JWT
 router.get('/dashboard-stats', superAdminAuth, getDashboardStats);
+
+// Company Projects (for project user assignment)
+router.get('/company-projects/:company_id', superAdminAuth, getCompanyProjects);
 
 // Company Users
 router.get('/users',                   superAdminAuth, getUsers);

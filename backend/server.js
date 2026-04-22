@@ -29,6 +29,7 @@ const ownershipRoutes = require("./routes/ownershipRoutes");
 const filterOptionsRoutes = require("./routes/filterOptionsRoutes");
 const companyAuthRoutes = require("./routes/companyAuthRoutes");  // Company login/register/heartbeat
 const superAdminRoutes  = require("./routes/superAdminRoutes");   // Super admin panel API
+const projectUserRoutes = require("./routes/projectUserRoutes"); // Project-specific users
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -115,6 +116,8 @@ app.use("/api/locations", require("./routes/locationRoutes"));
 app.use("/api/company-auth", companyAuthRoutes);
 // Super admin panel API
 app.use("/api/super-admin", superAdminRoutes);
+// Project-specific users API
+app.use("/api/project-users", projectUserRoutes);
 // Ownership routes registered
 
 /* =========================

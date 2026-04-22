@@ -141,7 +141,7 @@ function App() {
         {/* Other Admin Modules */}
         <Route path="/admin/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
         <Route path="/admin/role-management" element={<ProtectedRoute><RoleManagement /></ProtectedRoute>} />
-        <Route path="/admin/create-user" element={<ProtectedRoute><CreateUser /></ProtectedRoute>} />
+                <Route path="/admin/create-user" element={<ProtectedRoute><CreateUser /></ProtectedRoute>} />
 
         {/* Tenant Routes */}
         <Route path="/admin/tenants" element={<ProtectedRoute><TenantList /></ProtectedRoute>} />

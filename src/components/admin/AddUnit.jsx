@@ -2,12 +2,14 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import Sidebar from './Sidebar';
 import { unitAPI, getProjects, filterAPI, structureAPI, handleApiError } from '../../services/api';
+import usePermissions from '../../hooks/usePermissions';
 import './AddUnit.css';
 
 const AddUnit = () => {
     const navigate = useNavigate();
     const location = useLocation();
     const fileInputRef = useRef(null);
+    const { can, isProjectUser, projectId: assignedProjectId, hasProjectAccess } = usePermissions();
     // const [loading, setLoading] = useState(false);
     const [projects, setProjects] = useState([]);
     const [unitConditions, setUnitConditions] = useState([
@@ -25,8 +27,11 @@ const AddUnit = () => {
     const queryParams = new URLSearchParams(location.search);
     const preSelectedProjectId = queryParams.get('projectId') || '';
 
+    // For project users, always use their assigned project
+    const effectiveProjectId = isProjectUser ? assignedProjectId : preSelectedProjectId;
+
     const [formData, setFormData] = useState({
-        project_id: preSelectedProjectId,
+        project_id: effectiveProjectId,
         unit_number: '',
         floor_number: '',
         block_tower: '',
@@ -45,10 +50,23 @@ const AddUnit = () => {
     const [isSubmitting, setIsSubmitting] = useState(false);
 
     useEffect(() => {
+        // Check if user has permission to add units
+        if (!can('edit')) {
+            setSubmitMessage('You do not have permission to add units.');
+            return;
+        }
+
         const fetchProjects = async () => {
             try {
-                const res = await getProjects();
-                setProjects(res.data.data || res.data);
+                const res = await getProjects(isProjectUser ? { projectId: assignedProjectId } : {});
+                let projectData = res.data.data || res.data;
+
+                // Filter for project users
+                if (isProjectUser) {
+                    projectData = projectData.filter(p => hasProjectAccess(p.id));
+                }
+
+                setProjects(projectData);
             } catch (err) {
                 console.error("Failed to fetch projects", err);
             }
@@ -72,7 +90,7 @@ const AddUnit = () => {
                         { value: 'none', label: 'None' }
                     ]);
                 }
-                
+
                 // Floor and Block fetching handled by project selection effect
                 const catRes = await filterAPI.getFilterOptions("unit_category");
                 if (catRes.data?.data?.length > 0) {
@@ -88,6 +106,7 @@ const AddUnit = () => {
         };
         fetchProjects();
         fetchFilters();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
     // Load blocks and floors when project changes
@@ -227,6 +246,19 @@ const AddUnit = () => {
 
     const handleSubmit = async (e) => {
         e.preventDefault();
+
+        // Permission check
+        if (!can('edit')) {
+            setSubmitMessage('You do not have permission to add units.');
+            return;
+        }
+
+        // Project user check
+        if (isProjectUser && !hasProjectAccess(formData.project_id)) {
+            setSubmitMessage('You can only add units to your assigned project.');
+            return;
+        }
+
         setIsSubmitting(true);
         setSubmitMessage('');
 
