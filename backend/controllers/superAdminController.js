@@ -8,14 +8,14 @@
  *   - Announcements
  */
 
-const bcrypt   = require('bcryptjs');
-const jwt      = require('jsonwebtoken');
+const bcrypt = require('bcryptjs');
+const jwt = require('jsonwebtoken');
 const supabase = require('../config/db');
 
-const SUPER_ADMIN_EMAIL    = 'sanketg367@gmail.com';
+const SUPER_ADMIN_EMAIL = 'sanketg367@gmail.com';
 const SUPER_ADMIN_PASSWORD = 'sanket@99';
-const SUPER_ADMIN_SECRET   = process.env.SUPER_ADMIN_SECRET || 'SUPER_ADMIN_STATIC_SECRET_2024';
-const COMPANY_JWT_SECRET   = process.env.COMPANY_JWT_SECRET || 'COMPANY_USER_JWT_SECRET_2024';
+const SUPER_ADMIN_SECRET = process.env.SUPER_ADMIN_SECRET || 'SUPER_ADMIN_STATIC_SECRET_2024';
+const COMPANY_JWT_SECRET = process.env.COMPANY_JWT_SECRET || 'COMPANY_USER_JWT_SECRET_2024';
 
 // ─── LOGIN ────────────────────────────────────────────────────────────────────
 const login = async (req, res) => {
@@ -475,7 +475,7 @@ const getAnnouncements = async (req, res) => {
       .from('announcements')
       .select('*')
       .order('created_at', { ascending: false });
-    
+
     // Handle missing table gracefully
     if (error) {
       if (error.code === '42P01' || error.message?.includes('does not exist')) {
@@ -641,6 +641,237 @@ const deleteModuleUser = async (req, res) => {
   }
 };
 
+// ─── SUPER ADMIN — GET COMPANY PROJECT LIMIT ─────────────────────────────────
+const getCompanyProjectLimit = async (req, res) => {
+  try {
+    const { company_id } = req.params;
+    if (!company_id) return res.status(400).json({ success: false, message: 'company_id required' });
+
+    const { data: company } = await supabase
+      .from('company_users')
+      .select('id, company_name, project_limit')
+      .eq('id', company_id)
+      .single();
+
+    if (!company) return res.status(404).json({ success: false, message: 'Company not found' });
+
+    const { count } = await supabase
+      .from('projects')
+      .select('id', { count: 'exact', head: true })
+      .eq('company_id', Number(company_id))
+      .eq('status', 'active');
+
+    return res.json({
+      success: true,
+      project_limit: company.project_limit || null,
+      current_count: count || 0,
+      remaining: company.project_limit ? Math.max(0, company.project_limit - (count || 0)) : null,
+    });
+  } catch (err) {
+    console.error('[getCompanyProjectLimit]', err);
+    return res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+// ─── SUPER ADMIN — CREATE PROJECT FOR COMPANY ────────────────────────────────
+const createCompanyProject = async (req, res) => {
+  try {
+    const {
+      company_id, project_name, location, address, project_type,
+      calculation_type, total_floors, total_project_area, description,
+      project_limit   // NEW: max projects allowed for this company (1-12)
+    } = req.body;
+
+    if (!company_id || !project_name) {
+      return res.status(400).json({ success: false, message: 'company_id and project_name are required' });
+    }
+
+    // Verify company exists
+    const { data: company } = await supabase
+      .from('company_users')
+      .select('id, company_name, project_limit')
+      .eq('id', company_id)
+      .single();
+
+    if (!company) {
+      return res.status(404).json({ success: false, message: 'Company not found' });
+    }
+
+    // Determine effective limit (use new value if provided, else existing)
+    const effectiveLimit = project_limit ? parseInt(project_limit) : (company.project_limit || null);
+
+    // Count existing active projects for this company
+    const { count: currentCount } = await supabase
+      .from('projects')
+      .select('id', { count: 'exact', head: true })
+      .eq('company_id', Number(company_id))
+      .eq('status', 'active');
+
+    // Enforce the limit
+    if (effectiveLimit !== null && (currentCount || 0) >= effectiveLimit) {
+      return res.status(409).json({
+        success: false,
+        message: `Project limit reached. This company can have at most ${effectiveLimit} project(s). Currently has ${currentCount}.`,
+      });
+    }
+
+    // If a new limit is provided, save it to company_users
+    if (project_limit) {
+      await supabase
+        .from('company_users')
+        .update({ project_limit: parseInt(project_limit) })
+        .eq('id', Number(company_id));
+    }
+
+    let imageUrl = null;
+    if (req.file && req.file.buffer) {
+      const fileExt = req.file.originalname.split('.').pop();
+      const fileName = `projects/sa_project_${Date.now()}.${fileExt}`;
+      const { data: uploadData, error: uploadError } = await supabase.storage
+        .from('lms-storage')
+        .upload(fileName, req.file.buffer, { contentType: req.file.mimetype, upsert: true });
+      if (!uploadError) {
+        const { data: publicUrlData } = supabase.storage.from('lms-storage').getPublicUrl(fileName);
+        imageUrl = publicUrlData.publicUrl;
+      }
+    }
+
+    const { data, error } = await supabase
+      .from('projects')
+      .insert({
+        company_id: Number(company_id),
+        project_name,
+        location: location || null,
+        address: address || null,
+        project_type: project_type || null,
+        calculation_type: calculation_type || 'Chargeable Area',
+        total_floors: total_floors ? parseInt(total_floors) : 0,
+        total_project_area: total_project_area ? parseFloat(total_project_area) : 0,
+        description: description || null,
+        project_image: imageUrl,
+        status: 'active',
+      })
+      .select('id, company_id, project_name, location, project_type, total_floors, status, created_at')
+      .single();
+
+    if (error) throw error;
+
+    return res.status(201).json({
+      success: true,
+      project: data,
+      project_limit: effectiveLimit,
+      current_count: (currentCount || 0) + 1,
+      message: `Project "${project_name}" created for ${company.company_name}`,
+    });
+  } catch (err) {
+    console.error('[createCompanyProject]', err);
+    return res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+
+// ─── SUPER ADMIN — UPDATE COMPANY QUOTA ONLY (no project creation) ────────────
+const updateCompanyQuota = async (req, res) => {
+  try {
+    const { company_id, project_limit } = req.body;
+
+    if (!company_id) {
+      return res.status(400).json({ success: false, message: 'company_id is required' });
+    }
+
+    // Validate limit value
+    const newLimit = project_limit === null || project_limit === '' ? null : parseInt(project_limit);
+    if (newLimit !== null && (isNaN(newLimit) || newLimit < 1 || newLimit > 50)) {
+      return res.status(400).json({ success: false, message: 'project_limit must be between 1 and 50, or null to remove the limit.' });
+    }
+
+    // Verify company exists
+    const { data: company } = await supabase
+      .from('company_users')
+      .select('id, company_name')
+      .eq('id', company_id)
+      .single();
+
+    if (!company) {
+      return res.status(404).json({ success: false, message: 'Company not found' });
+    }
+
+    // Update the limit
+    const { error } = await supabase
+      .from('company_users')
+      .update({ project_limit: newLimit })
+      .eq('id', Number(company_id));
+
+    if (error) throw error;
+
+    // Return updated quota info
+    const { count: currentCount } = await supabase
+      .from('projects')
+      .select('id', { count: 'exact', head: true })
+      .eq('company_id', Number(company_id))
+      .eq('status', 'active');
+
+    return res.json({
+      success: true,
+      message: newLimit
+        ? `Quota for ${company.company_name} set to ${newLimit} project(s).`
+        : `Quota removed — ${company.company_name} now has unlimited projects.`,
+      project_limit: newLimit,
+      current_count: currentCount || 0,
+      remaining: newLimit !== null ? Math.max(0, newLimit - (currentCount || 0)) : null,
+    });
+  } catch (err) {
+    console.error('[updateCompanyQuota]', err);
+    return res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+
+// ─── SUPER ADMIN — DELETE COMPANY PROJECT ─────────────────────────────────────
+const deleteCompanyProject = async (req, res) => {
+  try {
+    const { id } = req.params;
+    if (!id) return res.status(400).json({ success: false, message: 'Project id is required.' });
+
+    // Verify project exists and get its name + company
+    const { data: project } = await supabase
+      .from('projects')
+      .select('id, project_name, company_id')
+      .eq('id', id)
+      .single();
+
+    if (!project) return res.status(404).json({ success: false, message: 'Project not found.' });
+
+    // 1. Remove project_users assigned to this project
+    await supabase.from('project_users').delete().eq('project_id', id);
+
+    // 2. Remove leases linked to this project
+    await supabase.from('leases').delete().eq('project_id', id);
+
+    // 3. Remove units (and their images)
+    const { data: units } = await supabase.from('units').select('id').eq('project_id', id);
+    if (units && units.length > 0) {
+      const unitIds = units.map(u => u.id);
+      await supabase.from('unit_images').delete().in('unit_id', unitIds);
+      await supabase.from('unit_ownerships').delete().in('unit_id', unitIds);
+      await supabase.from('units').delete().eq('project_id', id);
+    }
+
+    // 4. Delete the project itself
+    const { error } = await supabase.from('projects').delete().eq('id', id);
+    if (error) throw error;
+
+    return res.json({
+      success: true,
+      message: `Project "${project.project_name}" has been deleted.`,
+      deleted_project_id: Number(id),
+    });
+  } catch (err) {
+    console.error('[deleteCompanyProject]', err);
+    return res.status(500).json({ success: false, message: err.message });
+  }
+};
+
 module.exports = {
   login,
   getDashboardStats,
@@ -649,4 +880,8 @@ module.exports = {
   getSessions, killSession,
   getAnnouncements, createAnnouncement, toggleAnnouncement, deleteAnnouncement,
   getModuleUsers, createModuleUser, updateModuleUser, deleteModuleUser,
+  createCompanyProject, getCompanyProjectLimit, updateCompanyQuota, deleteCompanyProject,
 };
+
+
+

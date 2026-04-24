@@ -33,19 +33,51 @@ const EchoDashboard = () => {
   const [allLeases, setAllLeases] = useState([]);
   const [allUnits, setAllUnits] = useState([]);
 
-  // Fetch projects for dropdown
+  // Fetch projects for dropdown — filtered by assigned access for module_users
   useEffect(() => {
     const fetchProjects = async () => {
       try {
         const res = await getProjects();
         const projectList = res.data?.data || res.data || [];
-        setProjects(projectList);
+
+        // Read user info from sessionStorage (set at login)
+        const user = JSON.parse(sessionStorage.getItem('user') || '{}');
+        const isModuleUser = sessionStorage.getItem('is_module_user') === '1';
+        const isProjectUser = sessionStorage.getItem('is_project_user') === '1';
+
+        // projects_access can be in sessionStorage standalone OR inside user object
+        let projectsAccess = [];
+        try {
+          const raw = sessionStorage.getItem('projects_access');
+          if (raw) projectsAccess = JSON.parse(raw);
+          // fallback: check user object
+          if (projectsAccess.length === 0 && Array.isArray(user.projects_access)) {
+            projectsAccess = user.projects_access;
+          }
+        } catch { projectsAccess = []; }
+
+        // module_user or project_user with specific project assignments → restrict dropdown
+        if ((isModuleUser || isProjectUser) && projectsAccess.length > 0) {
+          const allowedIds = new Set(projectsAccess.map(p => String(p.project_id)));
+          const filtered = projectList.filter(p => allowedIds.has(String(p.id)));
+          setProjects(filtered);
+          // Auto-select if only 1 project; otherwise default to first
+          if (filtered.length >= 1) setSelectedProject(filtered[0].id);
+        } else if (isProjectUser) {
+          // pure project_user with single project from JWT
+          const pid = sessionStorage.getItem('project_id');
+          const filtered = pid ? projectList.filter(p => String(p.id) === String(pid)) : projectList;
+          setProjects(filtered);
+          if (filtered.length === 1) setSelectedProject(filtered[0].id);
+        } else {
+          setProjects(projectList);
+        }
       } catch (err) {
         console.error('Error fetching projects:', err);
       }
     };
     fetchProjects();
-    
+
     // Get user info from sessionStorage (per-tab isolation)
     const user = JSON.parse(sessionStorage.getItem('user') || '{}');
     if (user && (user.first_name || user.last_name || user.name)) {
@@ -61,6 +93,13 @@ const EchoDashboard = () => {
     }
   }, []);
 
+  // Derive whether user has restricted project access
+  const _isModuleUser = sessionStorage.getItem('is_module_user') === '1';
+  const _isProjectUser = sessionStorage.getItem('is_project_user') === '1';
+  let _projectsAccess = [];
+  try { const r = sessionStorage.getItem('projects_access'); if (r) _projectsAccess = JSON.parse(r); } catch { }
+  const isRestrictedDashboard = (_isModuleUser || _isProjectUser) && _projectsAccess.length > 0;
+
   // Fetch dashboard data based on selected project
   useEffect(() => {
     const fetchData = async () => {
@@ -68,12 +107,12 @@ const EchoDashboard = () => {
       try {
         const unitParams = selectedProject !== 'All' ? { projectId: selectedProject } : {};
         const unitsRes = await unitAPI.getUnits(unitParams);
-        
+
         // Calculate unit breakdown by actual unit names (unit_number)
         const units = unitsRes.data?.data || unitsRes.data || [];
         console.log('Fetched units:', units.length, units);
         setAllUnits(units); // Store all units for other components
-        
+
         // Calculate total projected rent from ALL units (sum of projected_rent field)
         let totalProjRent = 0;
         units.forEach(unit => {
@@ -83,7 +122,7 @@ const EchoDashboard = () => {
         });
         console.log('Total projected rent from all units:', totalProjRent);
         setProjectedRent(totalProjRent);
-        
+
         const breakdown = {};
         units.forEach(unit => {
           // Use actual unit_number or unit name
@@ -192,9 +231,9 @@ const EchoDashboard = () => {
             }
           });
           console.log('Rent composition totals:', { fixedTotal, mgTotal, revShareTotal, fixedUnits, mgUnits, revShareUnits });
-          setRentComposition({ 
-            fixed: fixedTotal, 
-            mg: mgTotal, 
+          setRentComposition({
+            fixed: fixedTotal,
+            mg: mgTotal,
             revenueShare: revShareTotal,
             fixedUnits,
             mgUnits,
@@ -251,8 +290,8 @@ const EchoDashboard = () => {
 
             activeLeasesList.forEach(lease => {
               const hasReg = !!(lease.registration_date && String(lease.registration_date).trim());
-              const hasAgr = !!(lease.agreement_date    && String(lease.agreement_date).trim());
-              const hasLoi = !!(lease.loi_date          && String(lease.loi_date).trim());
+              const hasAgr = !!(lease.agreement_date && String(lease.agreement_date).trim());
+              const hasLoi = !!(lease.loi_date && String(lease.loi_date).trim());
 
               if (hasReg) counts.registered += 1;
               if (hasLoi && !hasReg && !hasAgr) counts.loi += 1;
@@ -265,7 +304,7 @@ const EchoDashboard = () => {
           const loiCount = statusCounts.loi;
           const executedCount = statusCounts.executed;
           const registeredCount = statusCounts.registered;
-          
+
           setLeasingStats({
             newLeases: recentLeases.length,
             areaLeased: recentLeases.reduce((sum, l) => sum + (parseFloat(l.area_leased) || 0), 0),
@@ -313,20 +352,20 @@ const EchoDashboard = () => {
             return status === 'active' || status === 'approved' || status === 'leased' || status === 'executed' || status === 'registered';
           });
           focusCounts.executed = activeLeasesList.length;
-          
+
           activeLeasesList.forEach(lease => {
             const hasReg = !!(lease.registration_date && String(lease.registration_date).trim());
-            const hasAgr = !!(lease.agreement_date    && String(lease.agreement_date).trim());
-            const hasLoi = !!(lease.loi_date          && String(lease.loi_date).trim());
-            
+            const hasAgr = !!(lease.agreement_date && String(lease.agreement_date).trim());
+            const hasLoi = !!(lease.loi_date && String(lease.loi_date).trim());
+
             if (hasReg) focusCounts.registered += 1;
             if (hasLoi && !hasReg && !hasAgr) focusCounts.loi += 1;
           });
           setLeasingStats(prev => ({
             ...prev,
-            executedCount:    focusCounts.executed,
-            registeredCount:  focusCounts.registered,
-            loiCount:         focusCounts.loi,
+            executedCount: focusCounts.executed,
+            registeredCount: focusCounts.registered,
+            loiCount: focusCounts.loi,
           }));
 
           // Calculate zoning from unit_zoning_type
@@ -358,13 +397,13 @@ const EchoDashboard = () => {
       };
       fetchData();
     };
-    
+
     window.addEventListener('focus', handleFocus);
     return () => window.removeEventListener('focus', handleFocus);
   }, [selectedProject]);
 
-  const selectedProjectName = selectedProject === 'All' 
-    ? 'All Projects' 
+  const selectedProjectName = selectedProject === 'All'
+    ? 'All Projects'
     : projects.find(p => p.id === selectedProject)?.project_name || 'Select Project';
 
   // PDF Export function
@@ -372,29 +411,29 @@ const EchoDashboard = () => {
     try {
       const doc = new jsPDF('p', 'mm', 'a4');
       const pageWidth = doc.internal.pageSize.getWidth();
-      
+
       // Title
       doc.setFontSize(20);
       doc.setFont('helvetica', 'bold');
       doc.text('Leasing Dashboard Report', pageWidth / 2, 20, { align: 'center' });
-      
+
       // Subtitle
       doc.setFontSize(12);
       doc.setFont('helvetica', 'normal');
       doc.text(`${selectedProjectName} - ${new Date().toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}`, pageWidth / 2, 28, { align: 'center' });
-      
+
       // Line separator
       doc.setDrawColor(200, 200, 200);
       doc.line(15, 32, pageWidth - 15, 32);
-      
+
       let yPos = 42;
-      
+
       // KPI Summary Section
       doc.setFontSize(14);
       doc.setFont('helvetica', 'bold');
       doc.text('Key Performance Indicators', 15, yPos);
       yPos += 8;
-      
+
       const kpiData = [
         ['Total Units', totalUnits.toString()],
         ['Total Area', `${totalArea.toLocaleString('en-IN')} sqft`],
@@ -407,7 +446,7 @@ const EchoDashboard = () => {
         ['Actual Rent', `₹${actualRent.toLocaleString('en-IN')}`],
         ['Opportunity Loss', `₹${opportunityLoss.toLocaleString('en-IN')}`],
       ];
-      
+
       doc.autoTable({
         startY: yPos,
         head: [['Metric', 'Value']],
@@ -416,27 +455,27 @@ const EchoDashboard = () => {
         headStyles: { fillColor: [30, 58, 95] },
         margin: { left: 15, right: 15 },
       });
-      
+
       yPos = doc.lastAutoTable.finalY + 10;
-      
+
       // Rent Composition Section
       if (yPos > 240) {
         doc.addPage();
         yPos = 20;
       }
-      
+
       doc.setFontSize(14);
       doc.setFont('helvetica', 'bold');
       doc.text('Rent Composition', 15, yPos);
       yPos += 8;
-      
+
       const rentData = [
         ['Fixed Rent', `₹${rentComposition.fixed.toLocaleString('en-IN')}`, rentComposition.fixedUnits.toString()],
         ['MG Rent', `₹${rentComposition.mg.toLocaleString('en-IN')}`, rentComposition.mgUnits.toString()],
         ['Revenue Share', `₹${rentComposition.revenueShare.toLocaleString('en-IN')}`, rentComposition.revShareUnits.toString()],
         ['Total Actual Rent', `₹${(rentComposition.fixed + rentComposition.mg + rentComposition.revenueShare).toLocaleString('en-IN')}`, ''],
       ];
-      
+
       doc.autoTable({
         startY: yPos,
         head: [['Type', 'Amount', 'Units']],
@@ -445,25 +484,25 @@ const EchoDashboard = () => {
         headStyles: { fillColor: [30, 58, 95] },
         margin: { left: 15, right: 15 },
       });
-      
+
       yPos = doc.lastAutoTable.finalY + 10;
-      
+
       // Leasing Activity Section
       if (yPos > 240) {
         doc.addPage();
         yPos = 20;
       }
-      
+
       doc.setFontSize(14);
       doc.setFont('helvetica', 'bold');
       doc.text('Leasing Activity (Last 6 Months)', 15, yPos);
       yPos += 8;
-      
+
       const leasingData = [
         ['New Leases', leasingStats.newLeases.toString()],
         ['Area Leased', `${leasingStats.areaLeased.toLocaleString('en-IN')} sqft`],
       ];
-      
+
       doc.autoTable({
         startY: yPos,
         head: [['Metric', 'Value']],
@@ -472,20 +511,20 @@ const EchoDashboard = () => {
         headStyles: { fillColor: [30, 58, 95] },
         margin: { left: 15, right: 15 },
       });
-      
+
       yPos = doc.lastAutoTable.finalY + 10;
-      
+
       // Lease Expiry Section
       if (yPos > 200) {
         doc.addPage();
         yPos = 20;
       }
-      
+
       doc.setFontSize(14);
       doc.setFont('helvetica', 'bold');
       doc.text('Leases Nearing Expiry', 15, yPos);
       yPos += 8;
-      
+
       const expiryData = allLeases
         .filter(lease => {
           const expiryDate = new Date(lease.lease_expiry);
@@ -499,7 +538,7 @@ const EchoDashboard = () => {
           new Date(lease.lease_expiry).toLocaleDateString(),
           `₹${parseFloat(lease.monthly_rent || 0).toLocaleString('en-IN')}`
         ]);
-      
+
       if (expiryData.length > 0) {
         doc.autoTable({
           startY: yPos,
@@ -515,12 +554,12 @@ const EchoDashboard = () => {
         doc.text('No leases nearing expiry', 15, yPos);
         yPos += 10;
       }
-      
+
       // Footer
       doc.setFontSize(8);
       doc.setFont('helvetica', 'italic');
       doc.text(`Generated on ${new Date().toLocaleString()} by LeaseOS`, pageWidth / 2, doc.internal.pageSize.getHeight() - 10, { align: 'center' });
-      
+
       // Save the PDF
       const fileName = `Leasing_Dashboard_${selectedProjectName.replace(/\s+/g, '_')}_${new Date().toISOString().split('T')[0]}.pdf`;
       doc.save(fileName);
@@ -577,12 +616,13 @@ const EchoDashboard = () => {
       <nav className="echo-navbar">
         <div className="echo-navbar-left">
           <div className="echo-project-dropdown">
-            <select 
-              value={selectedProject} 
+            <select
+              value={selectedProject}
               onChange={(e) => setSelectedProject(e.target.value)}
               className="echo-project-select"
             >
-              <option value="All">All Projects</option>
+              {/* Show 'All Projects' only if user is not restricted to specific projects */}
+              {!isRestrictedDashboard && <option value="All">All Projects</option>}
               {projects.map(p => (
                 <option key={p.id} value={p.id}>{p.project_name}</option>
               ))}
@@ -674,7 +714,7 @@ const EchoDashboard = () => {
             revShareUnits={rentComposition.revShareUnits}
             loading={loading}
           />
-          <LeasingActivity 
+          <LeasingActivity
             chartData={leasingStats.chartData}
             newLeases={leasingStats.newLeases}
             areaLeased={leasingStats.areaLeased}

@@ -17,6 +17,31 @@ const addProject = async (req, res) => {
       total_floors, total_project_area, description
     } = req.body;
 
+    // ── Enforce project_limit set by Super Admin ──────────────────────────────
+    if (req.companyId) {
+      const { data: companyData } = await supabase
+        .from('company_users')
+        .select('project_limit')
+        .eq('id', req.companyId)
+        .single();
+
+      const limit = companyData?.project_limit || null;
+      if (limit !== null) {
+        const { count: currentCount } = await supabase
+          .from('projects')
+          .select('id', { count: 'exact', head: true })
+          .eq('company_id', req.companyId)
+          .eq('status', 'active');
+
+        if ((currentCount || 0) >= limit) {
+          return res.status(409).json({
+            success: false,
+            message: `Project limit reached. Your plan allows a maximum of ${limit} project(s). You currently have ${currentCount}. Please contact your administrator to increase the limit.`,
+          });
+        }
+      }
+    }
+
     let imageUrl = null;
     if (req.file && req.file.buffer) {
       const fileExt = req.file.originalname.split('.').pop();
@@ -65,6 +90,7 @@ const addProject = async (req, res) => {
     res.status(500).json({ success: false, message: error.message });
   }
 };
+
 
 /* ================= GET ALL PROJECTS ================= */
 const getProjects = async (req, res) => {
@@ -348,6 +374,39 @@ const getUnitsByProject = async (req, res) => {
   }
 };
 
+/* ================= GET PROJECT QUOTA ================= */
+const getProjectQuota = async (req, res) => {
+  try {
+    if (!req.companyId) {
+      return res.json({ success: true, project_limit: null, current_count: 0, remaining: null });
+    }
+
+    const { data: company } = await supabase
+      .from('company_users')
+      .select('project_limit')
+      .eq('id', req.companyId)
+      .single();
+
+    const limit = company?.project_limit || null;
+
+    const { count } = await supabase
+      .from('projects')
+      .select('id', { count: 'exact', head: true })
+      .eq('company_id', req.companyId)
+      .eq('status', 'active');
+
+    return res.json({
+      success: true,
+      project_limit: limit,
+      current_count: count || 0,
+      remaining: limit !== null ? Math.max(0, limit - (count || 0)) : null,
+    });
+  } catch (error) {
+    console.error('getProjectQuota error:', error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
 module.exports = {
   addProject,
   getProjects,
@@ -355,7 +414,9 @@ module.exports = {
   updateProject,
   deleteProject,
   getProjectDashboardStats,
+  getProjectQuota,
   getUnitsByProject,
   getProjectLocations,
   upload
 };
+

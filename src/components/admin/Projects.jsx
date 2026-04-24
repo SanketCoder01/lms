@@ -20,6 +20,7 @@ const Projects = () => {
   const [location, setLocation] = useState("All");
   const [type, setType] = useState("All");
   const [availableLocations, setAvailableLocations] = useState(["All"]);
+  const [quotaInfo, setQuotaInfo] = useState(null); // { project_limit, current_count, remaining }
 
   const [types, setTypes] = useState(["All"]);
   const [showReportModal, setShowReportModal] = useState(false);
@@ -84,8 +85,24 @@ const Projects = () => {
       }
     };
 
+    // Fetch quota (only for full company admins)
+    const fetchQuota = async () => {
+      try {
+        const token = sessionStorage.getItem('company_token') || sessionStorage.getItem('token');
+        const apiBase = process.env.REACT_APP_API_URL || '/api';
+        const base = apiBase.endsWith('/api') ? apiBase.replace(/\/api$/, '') : apiBase;
+        const res = await fetch(`${base}/api/projects/quota`, { headers: { Authorization: `Bearer ${token}` } });
+        if (res.ok) {
+          const data = await res.json();
+          if (data.success) setQuotaInfo(data);
+        }
+      } catch (e) { /* quota is optional */ }
+    };
+
     fetchLocations();
     fetchTypes();
+    if (!isRestrictedProjectUser) fetchQuota();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   /* ================= FETCH PROJECTS ================= */
@@ -133,7 +150,7 @@ const Projects = () => {
     }, 500);
 
     return () => clearTimeout(timer);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [search, location, type, isProjectUser, isModuleUser, projectId, assignedProjectIdsKey]);
 
   /* ================= HANDLERS ================= */
@@ -200,11 +217,11 @@ const Projects = () => {
       (p.description || 'N/A').substring(0, 100),
       p.created_at ? new Date(p.created_at).toLocaleDateString() : 'N/A'
     ]);
-    
-    let csvContent = "data:text/csv;charset=utf-8," 
+
+    let csvContent = "data:text/csv;charset=utf-8,"
       + headers.join(",") + "\n"
       + rows.map(r => r.map(cell => `"${(cell || '').toString().replace(/"/g, '""')}"`).join(",")).join("\n");
-        
+
     const encodedUri = encodeURI(csvContent);
     const link = document.createElement("a");
     link.setAttribute("href", encodedUri);
@@ -247,6 +264,28 @@ const Projects = () => {
             ))}
           </div>
         </header>
+
+        {/* ── Project Quota Banner (company admins only) ────────────────────── */}
+        {!isRestrictedProjectUser && quotaInfo && quotaInfo.project_limit && (
+          <div style={{
+            display: 'flex', alignItems: 'center', gap: 12,
+            padding: '10px 16px', borderRadius: 8, marginBottom: 16,
+            background: quotaInfo.remaining === 0 ? 'rgba(248,113,113,0.1)' : quotaInfo.remaining <= 2 ? 'rgba(251,191,36,0.1)' : 'rgba(99,102,241,0.07)',
+            border: `1px solid ${quotaInfo.remaining === 0 ? '#fca5a5' : quotaInfo.remaining <= 2 ? '#fde68a' : 'rgba(99,102,241,0.2)'}`,
+          }}>
+            <span style={{ fontSize: 18 }}>{quotaInfo.remaining === 0 ? '🚫' : quotaInfo.remaining <= 2 ? '⚠️' : '📊'}</span>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontSize: 12, fontWeight: 700, color: quotaInfo.remaining === 0 ? '#dc2626' : 'var(--text-primary, #1e293b)' }}>
+                Projects: {quotaInfo.current_count} / {quotaInfo.project_limit} used
+                {quotaInfo.remaining > 0 && <span style={{ fontWeight: 400, color: '#64748b', marginLeft: 8 }}>({quotaInfo.remaining} slot{quotaInfo.remaining !== 1 ? 's' : ''} remaining)</span>}
+                {quotaInfo.remaining === 0 && <span style={{ marginLeft: 8 }}>— Limit reached. Contact your Super Admin to increase the quota.</span>}
+              </div>
+              <div style={{ height: 4, borderRadius: 3, background: '#e2e8f0', marginTop: 4, overflow: 'hidden' }}>
+                <div style={{ height: '100%', borderRadius: 3, background: quotaInfo.remaining === 0 ? '#ef4444' : quotaInfo.remaining <= 2 ? '#f59e0b' : '#6366f1', width: `${Math.min(100, (quotaInfo.current_count / quotaInfo.project_limit) * 100)}%`, transition: 'width 0.4s' }} />
+              </div>
+            </div>
+          </div>
+        )}
 
         {message.text && (
           <div style={{
@@ -373,25 +412,25 @@ const Projects = () => {
                           <svg viewBox="0 0 24 24" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
                         </Link>
                         {can('edit') ? (
-                          <Link to={`/admin/add-unit?projectId=${project.id}`} className="action-icon-btn add-unit-btn" title="Add Unit" style={{ width:'32px',height:'32px',borderRadius:'50%',background:'#f0fdf4',border:'2px solid #10b981',color:'#10b981',display:'flex',alignItems:'center',justifyContent:'center',fontSize:'20px',fontWeight:'700',lineHeight:'1',textDecoration:'none',cursor:'pointer',transition:'all 0.2s',flexShrink:0 }} onMouseEnter={e=>{e.currentTarget.style.background='#10b981';e.currentTarget.style.color='#fff';}} onMouseLeave={e=>{e.currentTarget.style.background='#f0fdf4';e.currentTarget.style.color='#10b981';}}>
+                          <Link to={`/admin/add-unit?projectId=${project.id}`} className="action-icon-btn add-unit-btn" title="Add Unit" style={{ width: '32px', height: '32px', borderRadius: '50%', background: '#f0fdf4', border: '2px solid #10b981', color: '#10b981', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '20px', fontWeight: '700', lineHeight: '1', textDecoration: 'none', cursor: 'pointer', transition: 'all 0.2s', flexShrink: 0 }} onMouseEnter={e => { e.currentTarget.style.background = '#10b981'; e.currentTarget.style.color = '#fff'; }} onMouseLeave={e => { e.currentTarget.style.background = '#f0fdf4'; e.currentTarget.style.color = '#10b981'; }}>
                             +
                           </Link>
                         ) : (
-                          <button disabled title="No permission to add units" style={{ width:'32px',height:'32px',borderRadius:'50%',background:'#f3f4f6',border:'2px solid #d1d5db',color:'#9ca3af',display:'flex',alignItems:'center',justifyContent:'center',fontSize:'14px',cursor:'not-allowed',flexShrink:0 }}>🔒</button>
+                          <button disabled title="No permission to add units" style={{ width: '32px', height: '32px', borderRadius: '50%', background: '#f3f4f6', border: '2px solid #d1d5db', color: '#9ca3af', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '14px', cursor: 'not-allowed', flexShrink: 0 }}>🔒</button>
                         )}
                         {can('edit') ? (
                           <Link to={`/admin/edit-project/${project.id}`} className="action-icon-btn edit" title="Edit">
                             <svg viewBox="0 0 24 24" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
                           </Link>
                         ) : (
-                          <button className="action-icon-btn" disabled title="No edit permission" style={{ opacity:0.4, cursor:'not-allowed', fontSize:'14px' }}>🔒</button>
+                          <button className="action-icon-btn" disabled title="No edit permission" style={{ opacity: 0.4, cursor: 'not-allowed', fontSize: '14px' }}>🔒</button>
                         )}
                         {can('delete') ? (
                           <button className="action-icon-btn delete" onClick={() => handleDelete(project.id)} title="Delete">
                             <svg viewBox="0 0 24 24" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
                           </button>
                         ) : (
-                          <button className="action-icon-btn" disabled title="No delete permission" style={{ opacity:0.4, cursor:'not-allowed', fontSize:'14px' }}>🔒</button>
+                          <button className="action-icon-btn" disabled title="No delete permission" style={{ opacity: 0.4, cursor: 'not-allowed', fontSize: '14px' }}>🔒</button>
                         )}
                       </div>
                     </td>

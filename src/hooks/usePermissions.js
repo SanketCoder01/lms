@@ -104,6 +104,16 @@ const usePermissions = () => {
    * @param {string} [forModule] - optional module key to check specific module perms
    * @returns {boolean}
    */
+  // ── Helper: combined permissions across all assigned projects ───────────────
+  const combinedProjectPerms = projectsAccess.reduce(
+    (acc, p) => ({
+      view:   acc.view   || !!p.permissions?.view,
+      edit:   acc.edit   || !!p.permissions?.edit,
+      delete: acc.delete || !!p.permissions?.delete,
+    }),
+    { view: false, edit: false, delete: false }
+  );
+
   const can = (action, forModule) => {
     // Company admins can do everything
     if (!isModuleUser && !isProjectUser) return true;
@@ -111,8 +121,12 @@ const usePermissions = () => {
     // Project users check project permissions
     if (isProjectUser) return !!projectPermissions[action];
 
-    // Module users: if a specific module is requested, look up that module's permissions
+    // Module users
     if (isModuleUser) {
+      // Special case: 'projects' module — use combined project permissions if available
+      if (forModule === 'projects' && projectsAccess.length > 0) {
+        return !!combinedProjectPerms[action];
+      }
       if (forModule && modulePermissionsMap[forModule]) {
         return !!modulePermissionsMap[forModule][action];
       }
@@ -159,6 +173,10 @@ const usePermissions = () => {
    */
   const getModulePermissions = (moduleKey) => {
     if (!isModuleUser) return { view: true, edit: true, delete: true };
+    // If this is the 'projects' key and the user has project assignments, derive from those
+    if (moduleKey === 'projects' && projectsAccess.length > 0) {
+      return combinedProjectPerms;
+    }
     return modulePermissionsMap[moduleKey] || { view: false, edit: false, delete: false };
   };
 
@@ -168,8 +186,14 @@ const usePermissions = () => {
    * @returns {boolean}
    */
   const hasProjectAccess = (checkProjectId) => {
-    if (!isProjectUser) return true;
-    return String(projectId) === String(checkProjectId);
+    // Pure project_user: only their single assigned project
+    if (isProjectUser) return String(projectId) === String(checkProjectId);
+    // Module user with project assignments: check projectsAccess list
+    if (isModuleUser && projectsAccess.length > 0) {
+      return projectsAccess.some(p => String(p.project_id) === String(checkProjectId));
+    }
+    // Company admin or module user without project restrictions: allow all
+    return true;
   };
 
   /**

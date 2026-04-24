@@ -24,10 +24,10 @@ export const saFetch = async (url, options = {}) => {
 };
 
 const navItems = [
-  { path: '/super-admin/dashboard',     label: 'Dashboard',     icon: '📊' },
-  { path: '/super-admin/users',         label: 'Companies',     icon: '🏢' },
-  { path: '/super-admin/approvals',     label: 'Approvals',     icon: '✅', badge: true },
-  { path: '/super-admin/module-users',  label: 'Module Access', icon: '🔐' },
+  { path: '/super-admin/dashboard', label: 'Dashboard', icon: '📊' },
+  { path: '/super-admin/users', label: 'Companies', icon: '🏢' },
+  { path: '/super-admin/approvals', label: 'Approvals', icon: '✅', badge: true },
+  { path: '/super-admin/module-users', label: 'Module Access', icon: '🔐' },
   { path: '/super-admin/live-activity', label: 'Live Activity', icon: '👁️', live: true },
   { path: '/super-admin/announcements', label: 'Announcements', icon: '📢' },
 ];
@@ -67,17 +67,17 @@ const SuperAdminLayout = ({ children, title, subtitle, pendingCount = 0 }) => {
   return (
     <div id="sa-root" className="sa-layout" data-theme={isDarkMode ? 'dark' : 'light'}>
       {/* Mobile sidebar overlay */}
-      <div 
+      <div
         className={`sa-sidebar-overlay ${sidebarOpen ? 'active' : ''}`}
         onClick={() => setSidebarOpen(false)}
       />
-      
+
       {/* ── Sidebar ─────────────────────────────────────────────── */}
       <aside className={`sa-sidebar ${sidebarOpen ? 'open' : ''}`}>
         <div className="sa-sidebar-brand">
           <div className="sa-brand-icon">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+              <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
             </svg>
           </div>
           <div className="sa-brand-text">
@@ -118,7 +118,7 @@ const SuperAdminLayout = ({ children, title, subtitle, pendingCount = 0 }) => {
       </aside>
 
       {/* Mobile menu toggle */}
-      <button 
+      <button
         className="sa-mobile-toggle"
         onClick={() => setSidebarOpen(!sidebarOpen)}
         style={{ position: 'fixed', top: '12px', left: '16px', zIndex: 1001 }}
@@ -127,7 +127,7 @@ const SuperAdminLayout = ({ children, title, subtitle, pendingCount = 0 }) => {
         <span></span>
         <span></span>
       </button>
-      
+
       {/* ── Main content ──────────────────────────────────────────── */}
       <div className="sa-main">
         {/* Topbar — theme toggle lives here */}

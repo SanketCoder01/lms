@@ -77,25 +77,41 @@ const companyLogin = async (req, res) => {
           return true;
         });
 
-        // ── Also check project_users for this email (same user may have project access too) ──
+        // ── Also check project_users for this email+company ──────────────────────
+        // (same user may have been assigned specific project access in addition to module access)
         let projects_access = [];
         try {
-          const { data: projectRows } = await supabase
+          const { data: projectRows, error: prErr } = await supabase
             .from('project_users')
-            .select('id, project_id, email, permissions, status, company_id, projects!project_users_project_id_fkey(id, project_name)')
-            .eq('email', email);
+            .select('id, project_id, email, permissions, status, company_id')
+            .eq('email', email)
+            .eq('company_id', firstRow.company_id)
+            .neq('status', 'suspended');
 
-          if (projectRows && projectRows.length > 0) {
+          if (!prErr && projectRows && projectRows.length > 0) {
+            // Fetch project names in a separate query (avoids FK join name issues)
+            const projectIds = projectRows.map(p => p.project_id);
+            const { data: projectData } = await supabase
+              .from('projects')
+              .select('id, project_name')
+              .in('id', projectIds);
+
+            const nameMap = {};
+            (projectData || []).forEach(p => { nameMap[p.id] = p.project_name; });
+
             projects_access = projectRows.map(p => ({
               project_id:   p.project_id,
-              project_name: p.projects?.project_name || '',
+              project_name: nameMap[p.project_id] || '',
               permissions:  p.permissions || { view: true, edit: false, delete: false },
               status:       p.status,
             }));
+            console.log('[login] module_user also has project access:',
+              projects_access.map(p => `${p.project_name}(${p.project_id})`).join(', '));
           }
         } catch (projErr) {
           console.warn('[login] Could not fetch project_users for module_user:', projErr.message);
         }
+
 
         // Primary module = first alphabetically (or the only one)
         const primaryModule     = firstRow.module_name;
@@ -138,33 +154,87 @@ const companyLogin = async (req, res) => {
       }
 
       // -- 1b. Try project_users (project-specific user) --
-      const { data: projectUser, error: puErr } = await supabase
+      // Fetch ALL project rows for this email (user could have access to multiple projects)
+      const { data: projectUserRows, error: puErr } = await supabase
         .from('project_users')
-        .select(`*, projects!project_users_project_id_fkey(id, project_name, location)`)
+        .select('id, project_id, email, permissions, status, company_id, password_hash')
         .eq('email', email)
-        .single();
+        .neq('status', 'suspended');
 
-      if (!puErr && projectUser) {
-        // Check status
-        if (projectUser.status === 'suspended')
+      if (!puErr && projectUserRows && projectUserRows.length > 0) {
+        // Use the first row to validate password
+        const firstPU = projectUserRows[0];
+
+        if (firstPU.status === 'suspended')
           return res.status(403).json({ success: false, message: 'Your project account has been suspended.', code: 'SUSPENDED' });
 
-        const isValid = await bcrypt.compare(password, projectUser.password_hash);
+        const isValid = await bcrypt.compare(password, firstPU.password_hash);
         if (!isValid)
           return res.status(401).json({ success: false, message: 'Invalid email or password.', code: 'INVALID_CREDENTIALS' });
 
-        const projectName = projectUser.projects?.project_name || '';
-        const projectId = projectUser.project_id;
+        // Fetch project names separately for all assigned projects
+        const projectIds = projectUserRows.map(p => p.project_id);
+        const { data: projectData } = await supabase
+          .from('projects')
+          .select('id, project_name')
+          .in('id', projectIds);
+        const nameMap = {};
+        (projectData || []).forEach(p => { nameMap[p.id] = p.project_name; });
+
+        const projects_access = projectUserRows.map(p => ({
+          project_id:   p.project_id,
+          project_name: nameMap[p.project_id] || '',
+          permissions:  p.permissions || { view: true, edit: false, delete: false },
+          status:       p.status,
+        }));
+
+        // Also check module_users for the same email+company (same user may have module assignments too)
+        let modules_access = [];
+        try {
+          const { data: moduleRows } = await supabase
+            .from('module_users')
+            .select('id, module_name, permissions')
+            .eq('email', email)
+            .eq('company_id', firstPU.company_id);
+
+          if (moduleRows && moduleRows.length > 0) {
+            for (const r of moduleRows) {
+              if (Array.isArray(r.permissions?._modules) && r.permissions._modules.length > 0) {
+                for (const m of r.permissions._modules) {
+                  modules_access.push({ module_name: m.module_name, permissions: m.permissions || { view: true, edit: false, delete: false } });
+                }
+              } else {
+                const { _modules, ...cleanPerms } = r.permissions || {};
+                modules_access.push({ module_name: r.module_name, permissions: cleanPerms });
+              }
+            }
+            // Deduplicate
+            const seen = new Set();
+            modules_access = modules_access.filter(m => { if (seen.has(m.module_name)) return false; seen.add(m.module_name); return true; });
+          }
+        } catch (modErr) {
+          console.warn('[login] Could not fetch module_users for project_user:', modErr.message);
+        }
+
+        // If user also has module assignments, log them in as module_user type so they see both
+        const hasModuleAssignments = modules_access.length > 0;
+        const userType = hasModuleAssignments ? 'module_user' : 'project_user';
+
+        // Primary project (first one, for backwards compat)
+        const primaryProjectId   = firstPU.project_id;
+        const primaryProjectName = nameMap[primaryProjectId] || '';
 
         const token = jwt.sign(
           {
-            id: projectUser.id,
-            email: projectUser.email,
-            company_id: projectUser.company_id,
-            type: 'project_user',
-            project_id: projectId,
-            project_name: projectName,
-            permissions: projectUser.permissions,
+            id:             firstPU.id,
+            email:          firstPU.email,
+            company_id:     firstPU.company_id,
+            type:           userType,
+            project_id:     primaryProjectId,
+            project_name:   primaryProjectName,
+            permissions:    firstPU.permissions,
+            projects_access,
+            modules_access,
           },
           COMPANY_JWT_SECRET,
           { expiresIn: '8h' }
@@ -175,18 +245,21 @@ const companyLogin = async (req, res) => {
           token,
           session_id: null,
           user: {
-            id: projectUser.id,
-            email: projectUser.email,
-            company_id: projectUser.company_id,
-            type: 'project_user',
-            project_id: projectId,
-            project_name: projectName,
-            permissions: projectUser.permissions,
-            status: projectUser.status,
+            id:             firstPU.id,
+            email:          firstPU.email,
+            company_id:     firstPU.company_id,
+            type:           userType,
+            project_id:     primaryProjectId,
+            project_name:   primaryProjectName,
+            permissions:    firstPU.permissions,
+            projects_access,
+            modules_access,
+            status:         firstPU.status,
           },
           message: 'Login successful',
         });
       }
+
 
       // ── 1c. Check pending/rejected registrations ──────────────────────────
       const { data: pending } = await supabase

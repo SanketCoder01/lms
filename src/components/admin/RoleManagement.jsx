@@ -583,7 +583,7 @@ const RoleManagement = () => {
                     <div className="form-group">
                       <label>Assigned Modules (select multiple)</label>
                       <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px', marginTop: '10px' }}>
-                        {Object.keys(MODULE_DEFS).filter(k => !MODULE_DEFS[k].isProjectModule).map(key => {
+                        {Object.keys(MODULE_DEFS).map(key => {
                           const isSelected = formData.selected_modules.some(m => m.name === key);
                           return (
                             <label

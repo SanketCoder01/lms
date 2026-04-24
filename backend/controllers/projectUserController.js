@@ -73,7 +73,7 @@ const createProjectUser = async (req, res) => {
       });
     }
 
-    // Check if email already exists in company_users (admin)
+    // Check if email already exists in company_users (admin) — always block
     const { data: existingCompanyUser } = await supabase
       .from('company_users')
       .select('id')
@@ -87,19 +87,22 @@ const createProjectUser = async (req, res) => {
       });
     }
 
-    // Check if email already exists in project_users
-    const { data: existingProjectUser } = await supabase
+    // Check if email already exists in project_users for a DIFFERENT company
+    const { data: existingProjectUsers } = await supabase
       .from('project_users')
-      .select('id')
-      .eq('email', email)
-      .single();
+      .select('id, company_id')
+      .eq('email', email);
     
-    if (existingProjectUser) {
+    const crossCompanyConflict = (existingProjectUsers || []).find(
+      u => Number(u.company_id) !== Number(company_id)
+    );
+    if (crossCompanyConflict) {
       return res.status(409).json({
         success: false,
-        message: 'This email is already assigned to another project.',
+        message: 'This email is already assigned to a project in another company. Use a different email.',
       });
     }
+    // Same company: allow multiple project assignments for the same email
 
     // Verify project exists and belongs to the company
     const { data: project } = await supabase

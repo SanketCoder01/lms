@@ -1,4 +1,5 @@
 const express = require('express');
+const multer = require('multer');
 const superAdminAuth = require('../middleware/superAdminAuth');
 const {
   login, getDashboardStats,
@@ -6,13 +7,14 @@ const {
   getRegistrations, approveRegistration, rejectRegistration,
   getSessions, killSession,
   getAnnouncements, createAnnouncement, toggleAnnouncement, deleteAnnouncement,
+  createCompanyProject, getCompanyProjectLimit, updateCompanyQuota, deleteCompanyProject,
 } = require('../controllers/superAdminController');
-const {
-  getModuleUsers, createModuleUser, updateModuleUser, deleteModuleUser, getModuleFeatures,
-} = require('../controllers/moduleUserController');
+const { getModuleUsers, createModuleUser, updateModuleUser, deleteModuleUser, getModuleFeatures } =
+  require('../controllers/moduleUserController');
 const { getCompanyProjects } = require('../controllers/projectUserController');
 
 const router = express.Router();
+const upload = multer({ storage: multer.memoryStorage() });
 
 // Public — login only
 router.post('/login', login);
@@ -20,8 +22,12 @@ router.post('/login', login);
 // All below require super admin JWT
 router.get('/dashboard-stats', superAdminAuth, getDashboardStats);
 
-// Company Projects (for project user assignment)
+// Company Projects (for project user assignment + super-admin creation)
 router.get('/company-projects/:company_id', superAdminAuth, getCompanyProjects);
+router.get('/company-project-limit/:company_id', superAdminAuth, getCompanyProjectLimit);
+router.post('/company-projects', superAdminAuth, upload.single('project_image'), createCompanyProject);
+router.delete('/company-projects/:id', superAdminAuth, deleteCompanyProject);
+router.post('/update-company-quota', superAdminAuth, updateCompanyQuota);
 
 // Company Users
 router.get('/users',                   superAdminAuth, getUsers);

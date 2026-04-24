@@ -8,6 +8,8 @@ router.post('/', projectController.upload.single('image'), projectController.add
 router.get('/locations', projectController.getProjectLocations);
 // Dashboard Stats (Must be before :id to prevent conflict)
 router.get('/dashboard-stats', projectController.getProjectDashboardStats);
+// Project quota for company admin
+router.get('/quota', projectController.getProjectQuota);
 
 router.get('/', projectController.getProjects);
 router.get('/:id', projectController.getProjectById);

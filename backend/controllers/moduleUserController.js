@@ -250,10 +250,14 @@ const createModuleUser = async (req, res) => {
         }
         
         if (puRow) {
-          return res.status(409).json({
-            success: false,
-            message: 'This email is already assigned as a project user. Please use a different email address.',
-          });
+          // Allow same email in project_users if it belongs to the SAME company
+          if (Number(puRow.company_id) !== companyIdNum) {
+            return res.status(409).json({
+              success: false,
+              message: 'This email is already assigned to a project in another company. Please use a different email address.',
+            });
+          }
+          // Same company — cross-table coexistence is fine, continue to insert
         }
         
         if (cuRow) {

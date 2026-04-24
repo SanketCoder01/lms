@@ -103,7 +103,7 @@ const Login = () => {
 
       // Store ALL assigned modules array — always set when available
       const modulesAccess = data.user.modules_access;
-      if (isModuleUser && Array.isArray(modulesAccess) && modulesAccess.length > 0) {
+      if ((isModuleUser || isProjectUser) && Array.isArray(modulesAccess) && modulesAccess.length > 0) {
         sessionStorage.setItem('modules_access', JSON.stringify(modulesAccess));
         console.log('[Login] modules_access stored:', modulesAccess.map(m => m.module_name));
       } else if (isModuleUser && data.user.module_name) {
@@ -118,9 +118,9 @@ const Login = () => {
         sessionStorage.removeItem('modules_access');
       }
 
-      // Store project assignments for module_user who ALSO has project access
+      // Store project assignments — for both module_user with projects AND project_user
       const projectsAccess = data.user.projects_access;
-      if (isModuleUser && Array.isArray(projectsAccess) && projectsAccess.length > 0) {
+      if (Array.isArray(projectsAccess) && projectsAccess.length > 0) {
         sessionStorage.setItem('projects_access', JSON.stringify(projectsAccess));
         console.log('[Login] projects_access stored:', projectsAccess.map(p => p.project_name));
       } else {
@@ -145,17 +145,19 @@ const Login = () => {
         projects: '/admin/projects',
       };
 
-      if (isProjectUser) {
+      if (isProjectUser && !(Array.isArray(modulesAccess) && modulesAccess.length > 0)) {
+        // Pure project user — go directly to projects
         navigate('/admin/projects');
-      } else if (isModuleUser) {
+      } else if (isModuleUser || (isProjectUser && Array.isArray(modulesAccess) && modulesAccess.length > 0)) {
         // Navigate to the first assigned module (from full list or primary)
         const firstModule = (Array.isArray(modulesAccess) && modulesAccess.length > 0)
           ? modulesAccess[0].module_name
           : data.user.module_name;
-        navigate(MODULE_ROUTES[firstModule] || '/admin/dashboard');
+        navigate(MODULE_ROUTES[firstModule] || '/admin/projects');
       } else {
         navigate('/admin/dashboard');
       }
+
 
     } catch {
       setError('Network error. Please check your connection and try again.');
