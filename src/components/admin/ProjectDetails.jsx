@@ -259,17 +259,17 @@ const ProjectDetails = () => {
                     </div>
                 </div>
                 <div className="header-actions">
-                    {can('edit') && (!isProjectUser || hasProjectAccess(project.id)) ? (
+                    {can('edit', 'projects') && (!isProjectUser || hasProjectAccess(project.id)) ? (
                       <Link to={`/admin/edit-project/${project.id}`} className="secondary-btn">Edit Project</Link>
                     ) : (
                       <button className="secondary-btn" disabled style={{ opacity: 0.5, cursor: 'not-allowed' }}>🔒 Edit Project</button>
                     )}
-                    {can('edit') && (!isProjectUser || hasProjectAccess(project.id)) ? (
+                    {can('edit', 'projects') && (!isProjectUser || hasProjectAccess(project.id)) ? (
                       <Link to={`/admin/add-unit?projectId=${project.id}`} className="primary-btn">+ Add Unit</Link>
                     ) : (
                       <button className="primary-btn" disabled style={{ opacity: 0.5, cursor: 'not-allowed' }}>🔒 Add Unit</button>
                     )}
-                    {can('edit') && (!isProjectUser || hasProjectAccess(project.id)) ? (
+                    {can('edit', 'projects') && (!isProjectUser || hasProjectAccess(project.id)) ? (
                       <Link to={`/admin/unit-structure?projectId=${project.id}`} className="primary-btn" style={{ backgroundColor: '#10b981' }}>+ Add Unit Structure</Link>
                     ) : (
                       <button className="primary-btn" disabled style={{ backgroundColor: '#d1d5db', cursor: 'not-allowed' }}>🔒 Add Unit Structure</button>

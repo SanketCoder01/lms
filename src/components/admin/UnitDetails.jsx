@@ -2,10 +2,12 @@ import React, { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import Sidebar from './Sidebar';
 import { unitAPI, ownershipAPI, leaseAPI } from '../../services/api';
+import usePermissions from '../../hooks/usePermissions';
 import './UnitDetails.css';
 
 const UnitDetails = () => {
     const { id } = useParams();
+    const { can } = usePermissions();
     const [unit, setUnit] = useState(null);
     const [loading, setLoading] = useState(true);
     // const [error, setError] = useState(null);
@@ -28,11 +30,11 @@ const UnitDetails = () => {
                 // Fetch Active Lease - only if unit is not vacant
                 const unitStatus = (res.data.data || res.data).status || '';
                 const isVacant = unitStatus.toLowerCase() === 'vacant' || unitStatus.toLowerCase() === 'available';
-                
+
                 if (!isVacant) {
                     // Try multiple status values and also fetch by unit_id
                     let activeLeaseData = null;
-                    
+
                     // First try: get leases for this unit with active status
                     for (const status of ['active', 'Active', 'leased', 'occupied', 'approved', 'Leased']) {
                         const leaseRes = await leaseAPI.getAllLeases({ unit_id: id, status: status, limit: 1 });
@@ -42,7 +44,7 @@ const UnitDetails = () => {
                             break;
                         }
                     }
-                    
+
                     // Second try: get all leases for this unit and find the most recent active one
                     if (!activeLeaseData) {
                         const allLeasesRes = await leaseAPI.getAllLeases({ unit_id: id, limit: 10 });
@@ -53,7 +55,7 @@ const UnitDetails = () => {
                             return s === 'active' || s === 'approved' || s === 'occupied' || s === 'leased';
                         }) || allLeases[0]; // Fallback to most recent lease if no active found
                     }
-                    
+
                     if (activeLeaseData) {
                         setActiveLease(activeLeaseData);
                     }
@@ -100,15 +102,17 @@ const UnitDetails = () => {
                             </p>
                         </div>
 
-                        <Link to={`/admin/edit-unit/${unit.id}`} className="edit-unit-btn">
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
-                                stroke="currentColor" strokeWidth="2"
-                                strokeLinecap="round" strokeLinejoin="round">
-                                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
-                                <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
-                            </svg>
-                            Edit Unit
-                        </Link>
+                        {can('edit', 'projects') && (
+                            <Link to={`/admin/edit-unit/${unit.id}`} className="edit-unit-btn">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
+                                    stroke="currentColor" strokeWidth="2"
+                                    strokeLinecap="round" strokeLinejoin="round">
+                                    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                                    <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                                </svg>
+                                Edit Unit
+                            </Link>
+                        )}
                     </header>
 
                     {/* Content Grid */}

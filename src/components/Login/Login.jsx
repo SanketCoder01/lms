@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
 import './Login.css';
 
 // Use the company-auth backend, NOT Supabase Auth directly for company users
@@ -10,7 +9,6 @@ const getApiBase = () => {
 const API = getApiBase();
 
 const Login = () => {
-  const navigate = useNavigate();
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [loading, setLoading] = useState(false);

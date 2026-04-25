@@ -51,7 +51,7 @@ const AddUnit = () => {
 
     useEffect(() => {
         // Check if user has permission to add units
-        if (!can('edit')) {
+        if (!can('edit', 'projects')) {
             setSubmitMessage('You do not have permission to add units.');
             return;
         }
@@ -248,7 +248,7 @@ const AddUnit = () => {
         e.preventDefault();
 
         // Permission check
-        if (!can('edit')) {
+        if (!can('edit', 'projects')) {
             setSubmitMessage('You do not have permission to add units.');
             return;
         }
