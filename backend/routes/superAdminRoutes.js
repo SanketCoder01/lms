@@ -8,6 +8,7 @@ const {
   getSessions, killSession,
   getAnnouncements, createAnnouncement, toggleAnnouncement, deleteAnnouncement,
   createCompanyProject, getCompanyProjectLimit, updateCompanyQuota, deleteCompanyProject,
+  getCompanyUserLimit, updateCompanyUserLimit,
 } = require('../controllers/superAdminController');
 const { getModuleUsers, createModuleUser, updateModuleUser, deleteModuleUser, getModuleFeatures } =
   require('../controllers/moduleUserController');
@@ -28,6 +29,10 @@ router.get('/company-project-limit/:company_id', superAdminAuth, getCompanyProje
 router.post('/company-projects', superAdminAuth, upload.single('project_image'), createCompanyProject);
 router.delete('/company-projects/:id', superAdminAuth, deleteCompanyProject);
 router.post('/update-company-quota', superAdminAuth, updateCompanyQuota);
+
+// User limit (how many users a company can create/assign)
+router.get('/company-user-limit/:company_id', superAdminAuth, getCompanyUserLimit);
+router.post('/update-company-user-limit', superAdminAuth, updateCompanyUserLimit);
 
 // Company Users
 router.get('/users',                   superAdminAuth, getUsers);

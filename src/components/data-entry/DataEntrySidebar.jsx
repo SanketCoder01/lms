@@ -18,6 +18,14 @@ const DataEntrySidebar = () => {
         return () => window.removeEventListener('resize', handleResize);
     }, []);
 
+    // Read company name dynamically from session
+    const companyName = (() => {
+      try {
+        const u = JSON.parse(sessionStorage.getItem('user') || '{}');
+        return u.company_name || 'Cusec Consulting LLP';
+      } catch { return 'Cusec Consulting LLP'; }
+    })();
+
     const handleLogout = () => {
         // Use sessionStorage for per-tab session isolation
         sessionStorage.removeItem('token');
@@ -94,7 +102,7 @@ const DataEntrySidebar = () => {
                                 <path d="M20 10L10 18V30H16V22H24V30H30V18L20 10Z" fill="#2E66FF" />
                             </svg>
                         </div>
-                        <span className="logo-text">Cusec Consulting LLP</span>
+                        <span className="logo-text">{companyName}</span>
                         {isMobile && (
                             <button onClick={() => setIsOpen(false)} style={{ background: 'none', border: 'none', marginLeft: 'auto', cursor: 'pointer' }}>
                                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#64748b" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>

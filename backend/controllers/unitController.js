@@ -5,6 +5,17 @@
 const supabase = require('../config/db');
 const { handleDbError } = require('../utils/errorHandler');
 
+const applyScopes = (query, req) => {
+    let q = query;
+    if (req.companyId) q = q.eq('company_id', req.companyId);
+    if (req.isRestrictedToProjects) {
+        const allowedIds = (req.projectsAccess || []).map(p => p.project_id);
+        if (allowedIds.length > 0) q = q.in('project_id', allowedIds);
+        else q = q.eq('project_id', -1);
+    }
+    return q;
+};
+
 /* ═══════════════════════════════════════════════════════════
  * GET UNITS (with owner name via unit_ownerships + parties)
  * ══════════════════════════════════════════════════════════ */
@@ -12,7 +23,7 @@ const getUnits = async (req, res) => {
   try {
     const { projectId, search, status, excludeSold } = req.query;
 
-    let query = supabase
+    let query = applyScopes(supabase
       .from('units')
       .select(`
         id, unit_number, block_tower, floor_number, chargeable_area, status, project_id,
@@ -22,16 +33,8 @@ const getUnits = async (req, res) => {
           id, ownership_status, share_percentage,
           parties ( id, first_name, last_name, company_name, party_type )
         )
-      `)
+      `), req)
       .order('id', { ascending: false });
-
-    // Multi-tenant: company users only see their own units
-    if (req.companyId) query = query.eq('company_id', req.companyId);
-
-    // Project-specific users only see units from their assigned project
-    if (req.isProjectUser && req.projectId) {
-      query = query.eq('project_id', req.projectId);
-    }
 
     if (projectId && projectId !== 'All') {
       query = query.eq('project_id', parseInt(projectId));
@@ -108,23 +111,20 @@ const getUnitById = async (req, res) => {
   try {
     const { id } = req.params;
 
-    const { data, error } = await supabase
+    const { data, error } = await applyScopes(supabase
       .from('units')
       .select(`
         *,
         projects ( project_name, id ),
         unit_images ( image_path )
-      `)
+      `), req)
       .eq('id', id)
       .single();
 
     if (error) throw error;
     if (!data) return res.status(404).json({ message: 'Unit not found' });
 
-    // Multi-tenant: silently hide units from other companies
-    if (req.companyId && data.company_id && data.company_id !== req.companyId) {
-      return res.status(404).json({ message: 'Unit not found' });
-    }
+    if (!data) return res.status(404).json({ message: 'Unit not found' });
 
     res.json({
       ...data,

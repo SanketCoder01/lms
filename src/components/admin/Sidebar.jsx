@@ -3,37 +3,32 @@ import { NavLink } from 'react-router-dom';
 import usePermissions from '../../hooks/usePermissions';
 import './Sidebar.css';
 
-// Lock icon component
-const LockIcon = () => (
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginLeft: 'auto', opacity: 0.5 }}>
-    <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
-    <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
-  </svg>
-);
-
 const Sidebar = () => {
     const [isOpen, setIsOpen] = useState(false);
     const { isModuleUser, isProjectUser, hasModuleAccess, projectName } = usePermissions();
+
+    // Read company name dynamically from session (works for all user types)
+    const companyName = (() => {
+      try {
+        const u = JSON.parse(sessionStorage.getItem('user') || '{}');
+        return u.company_name || 'Cusec Consulting LLP';
+      } catch { return 'Cusec Consulting LLP'; }
+    })();
+
 
     const toggleSidebar = () => {
         setIsOpen(!isOpen);
     };
 
-    // Nav item component with lock support
+    // Nav item component — hides module if not assigned to this user type
     const NavItem = ({ to, icon, label, moduleKey, onClick }) => {
       const hasAccess = hasModuleAccess(moduleKey);
-      
+
+      // For module/project users: hide completely if not assigned (no lock icon)
       if (!hasAccess && (isModuleUser || isProjectUser)) {
-        // Show locked module
-        return (
-          <div className="nav-item locked" title="No access - Contact admin">
-            <span className="icon">{icon}</span>
-            <span className="label">{label}</span>
-            <LockIcon />
-          </div>
-        );
+        return null;
       }
-      
+
       return (
         <NavLink to={to} className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`} onClick={onClick}>
           <span className="icon">{icon}</span>
@@ -61,7 +56,7 @@ const Sidebar = () => {
                                 <path d="M18 18L22 18V20H18V18Z" fill="white" />
                             </svg>
                         </div>
-                        <span className="logo-text">Cusec Consulting LLP</span>
+                        <span className="logo-text">{companyName}</span>
                     </div>
                 </div>
 
@@ -75,14 +70,14 @@ const Sidebar = () => {
                       icon={<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg>}
                     />
 
-                    {/* 2. Filter Options (Masters) */}
-                    <NavItem 
-                      to="/admin/filter-options" 
-                      moduleKey="masters"
-                      label="Filter Options"
-                      onClick={() => setIsOpen(false)}
-                      icon={<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3" /></svg>}
-                    />
+                    {/* 2. Filter Options (Masters) — Admin only, never shown to module/project users */}
+                    {!isModuleUser && !isProjectUser && (
+                      <NavLink to="/admin/filter-options" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`} onClick={() => setIsOpen(false)}
+                        icon={<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3" /></svg>}>
+                        <span className="icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3" /></svg></span>
+                        Filter Options
+                      </NavLink>
+                    )}
 
                     {/* 3. Projects */}
                     <NavItem 

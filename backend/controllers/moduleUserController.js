@@ -121,8 +121,41 @@ const createModuleUser = async (req, res) => {
     // NOTE: We allow same email to exist in both module_users AND project_users
     // Each table manages its own access type
 
-    // ── Step 1: Find existing row for same email+module+company ──────────────
+    // ── Check User Limit (Quota) ──────────────────────────────────────────────
     const companyIdNum = Number(company_id);
+    let isNewEmailForCompany = false;
+    
+    // Check if this email already exists in either module_users or project_users for this company
+    const [modCheck, projCheck] = await Promise.all([
+      supabase.from('module_users').select('id').eq('company_id', companyIdNum).eq('email', normalizedEmail).limit(1),
+      supabase.from('project_users').select('id').eq('company_id', companyIdNum).eq('email', normalizedEmail).limit(1)
+    ]);
+    
+    if ((!modCheck.data || modCheck.data.length === 0) && (!projCheck.data || projCheck.data.length === 0)) {
+      isNewEmailForCompany = true;
+    }
+
+    if (isNewEmailForCompany) {
+      // It's a completely new user email for this company. Check quota.
+      const { data: company } = await supabase.from('company_users').select('user_limit').eq('id', companyIdNum).single();
+      const limit = company?.user_limit;
+      if (limit !== null && limit !== undefined) {
+        // Count UNIQUE emails assigned across module_users and project_users
+        const [modRes, projRes] = await Promise.all([
+          supabase.from('module_users').select('email').eq('company_id', companyIdNum),
+          supabase.from('project_users').select('email').eq('company_id', companyIdNum),
+        ]);
+        const uniqueEmails = new Set();
+        if (modRes.data) modRes.data.forEach(u => uniqueEmails.add(u.email.toLowerCase()));
+        if (projRes.data) projRes.data.forEach(u => uniqueEmails.add(u.email.toLowerCase()));
+        
+        if (uniqueEmails.size >= limit) {
+          return res.status(403).json({ success: false, message: `Company user limit reached (${limit}). Cannot assign a new user email.` });
+        }
+      }
+    }
+
+    // ── Step 1: Find existing row for same email+module+company ──────────────
     const { data: sameRow } = await supabase
       .from('module_users')
       .select('id, password_hash, permissions')

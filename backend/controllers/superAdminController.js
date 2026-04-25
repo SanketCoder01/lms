@@ -827,6 +827,101 @@ const updateCompanyQuota = async (req, res) => {
 };
 
 
+// ─── SUPER ADMIN — GET COMPANY USER LIMIT ─────────────────────────────────────
+const getCompanyUserLimit = async (req, res) => {
+  try {
+    const { company_id } = req.params;
+    if (!company_id) return res.status(400).json({ success: false, message: 'company_id required' });
+
+    const { data: company } = await supabase
+      .from('company_users')
+      .select('id, company_name, user_limit')
+      .eq('id', company_id)
+      .single();
+
+    if (!company) return res.status(404).json({ success: false, message: 'Company not found' });
+
+    const limit = company.user_limit || null;
+
+    // Count UNIQUE emails assigned across module_users and project_users for this company
+    const [modRes, projRes] = await Promise.all([
+      supabase.from('module_users').select('email').eq('company_id', Number(company_id)),
+      supabase.from('project_users').select('email').eq('company_id', Number(company_id)),
+    ]);
+    
+    const uniqueEmails = new Set();
+    if (modRes.data) modRes.data.forEach(u => uniqueEmails.add(u.email.toLowerCase()));
+    if (projRes.data) projRes.data.forEach(u => uniqueEmails.add(u.email.toLowerCase()));
+    
+    const current_count = uniqueEmails.size;
+
+    return res.json({
+      success: true,
+      user_limit: limit,
+      current_count,
+      remaining: limit !== null ? Math.max(0, limit - current_count) : null,
+    });
+  } catch (err) {
+    console.error('[getCompanyUserLimit]', err);
+    return res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+// ─── SUPER ADMIN — UPDATE COMPANY USER LIMIT ──────────────────────────────────
+const updateCompanyUserLimit = async (req, res) => {
+  try {
+    const { company_id, user_limit } = req.body;
+    if (!company_id) return res.status(400).json({ success: false, message: 'company_id is required' });
+
+    const newLimit = user_limit === null || user_limit === '' ? null : parseInt(user_limit);
+    if (newLimit !== null && (isNaN(newLimit) || newLimit < 1 || newLimit > 500)) {
+      return res.status(400).json({ success: false, message: 'user_limit must be between 1 and 500, or null to remove the limit.' });
+    }
+
+    const { data: company } = await supabase
+      .from('company_users')
+      .select('id, company_name')
+      .eq('id', company_id)
+      .single();
+
+    if (!company) return res.status(404).json({ success: false, message: 'Company not found' });
+
+    const { error } = await supabase
+      .from('company_users')
+      .update({ user_limit: newLimit })
+      .eq('id', Number(company_id));
+
+    if (error) throw error;
+
+    // Count UNIQUE emails
+    const [modRes, projRes] = await Promise.all([
+      supabase.from('module_users').select('email').eq('company_id', Number(company_id)),
+      supabase.from('project_users').select('email').eq('company_id', Number(company_id)),
+    ]);
+    
+    const uniqueEmails = new Set();
+    if (modRes.data) modRes.data.forEach(u => uniqueEmails.add(u.email.toLowerCase()));
+    if (projRes.data) projRes.data.forEach(u => uniqueEmails.add(u.email.toLowerCase()));
+    
+    const current_count = uniqueEmails.size;
+
+    return res.json({
+      success: true,
+      message: newLimit
+        ? `User limit for ${company.company_name} set to ${newLimit}.`
+        : `User limit removed — ${company.company_name} now has unlimited users.`,
+      user_limit: newLimit,
+      current_count,
+      remaining: newLimit !== null ? Math.max(0, newLimit - current_count) : null,
+    });
+  } catch (err) {
+    console.error('[updateCompanyUserLimit]', err);
+    return res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+
+
 // ─── SUPER ADMIN — DELETE COMPANY PROJECT ─────────────────────────────────────
 const deleteCompanyProject = async (req, res) => {
   try {
@@ -881,6 +976,7 @@ module.exports = {
   getAnnouncements, createAnnouncement, toggleAnnouncement, deleteAnnouncement,
   getModuleUsers, createModuleUser, updateModuleUser, deleteModuleUser,
   createCompanyProject, getCompanyProjectLimit, updateCompanyQuota, deleteCompanyProject,
+  getCompanyUserLimit, updateCompanyUserLimit,
 };
 
 

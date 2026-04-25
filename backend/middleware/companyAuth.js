@@ -25,6 +25,8 @@ const companyAuth = (req, _res, next) => {
   req.moduleName    = null;
   req.projectId     = null;
   req.permissions   = {};
+  req.projectsAccess = [];
+  req.isRestrictedToProjects = false;
 
   try {
     const authHeader = req.headers['authorization'];
@@ -38,6 +40,12 @@ const companyAuth = (req, _res, next) => {
       if (decoded && decoded.company_id) {
         req.companyId   = decoded.company_id;
         req.companyUser = decoded;
+        
+        // Extract project assignments directly from token payload
+        req.projectsAccess = decoded.projects_access || [];
+        // If they are a module user OR project user, but have project assignments, they are restricted to those projects.
+        // Full company admins (type: company_user) are not restricted.
+        req.isRestrictedToProjects = (decoded.type !== 'company_user') && (req.projectsAccess.length > 0);
 
         if (decoded.type === 'module_user') {
           req.isModuleUser = true;

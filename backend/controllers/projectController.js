@@ -102,9 +102,11 @@ const getProjects = async (req, res) => {
     // Multi-tenant: company users only see their own data
     if (req.companyId) query = query.eq('company_id', req.companyId);
 
-    // Project-specific users only see their assigned project
-    if (req.isProjectUser && req.projectId) {
-      query = query.eq('id', req.projectId);
+    // Project-specific users only see their assigned projects
+    if (req.isRestrictedToProjects) {
+      const allowedIds = (req.projectsAccess || []).map(p => p.project_id);
+      if (allowedIds.length > 0) query = query.in('id', allowedIds);
+      else query = query.eq('id', -1);
     }
 
     if (location && location !== 'All') query = query.eq('location', location);

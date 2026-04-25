@@ -5,9 +5,19 @@ exports.getAllOwnerships = async (req, res) => {
     try {
         const { search } = req.query;
         let query = supabase.from('unit_ownerships')
-            .select('*, units(unit_number, company_id, projects(project_name)), parties(first_name, last_name, company_name)')
+            .select('*, units!inner(unit_number, company_id, project_id, projects(project_name)), parties(first_name, last_name, company_name)')
             .eq('ownership_status', 'Active')
             .order('created_at', { ascending: false });
+
+        // Project Segregation
+        if (req.isRestrictedToProjects) {
+            const allowedIds = (req.projectsAccess || []).map(p => p.project_id);
+            if (allowedIds.length > 0) {
+                query = query.in('units.project_id', allowedIds);
+            } else {
+                query = query.eq('units.project_id', -1); // Force empty
+            }
+        }
 
         const { data, error } = await query;
         if (error) throw error;

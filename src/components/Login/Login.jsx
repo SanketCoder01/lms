@@ -85,12 +85,13 @@ const Login = () => {
         first_name: data.user.company_name || data.user.email,
         last_name: '',
         role: data.user.role || 'Admin',
-        company_name: data.user.company_name,
+        company_name: data.user.company_name || '',   // ← now populated for all user types
         phone: data.user.phone,
         address: data.user.address,
         modules_access: data.user.modules_access,
         type: data.user.type,
         module_name: data.user.module_name,
+        projects_access: data.user.projects_access,   // ← include here too for easy access
       }));
       sessionStorage.setItem('company_session_id', data.session_id || '');
 
@@ -147,15 +148,15 @@ const Login = () => {
 
       if (isProjectUser && !(Array.isArray(modulesAccess) && modulesAccess.length > 0)) {
         // Pure project user — go directly to projects
-        navigate('/admin/projects');
+        window.location.href = '/admin/projects';
       } else if (isModuleUser || (isProjectUser && Array.isArray(modulesAccess) && modulesAccess.length > 0)) {
         // Navigate to the first assigned module (from full list or primary)
         const firstModule = (Array.isArray(modulesAccess) && modulesAccess.length > 0)
           ? modulesAccess[0].module_name
           : data.user.module_name;
-        navigate(MODULE_ROUTES[firstModule] || '/admin/projects');
+        window.location.href = MODULE_ROUTES[firstModule] || '/admin/projects';
       } else {
-        navigate('/admin/dashboard');
+        window.location.href = '/admin/dashboard';
       }
 
 

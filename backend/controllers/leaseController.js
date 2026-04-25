@@ -15,20 +15,32 @@ const getDateStrs = () => {
     };
 };
 
+const applyScopes = (query, req) => {
+    let q = query;
+    if (req.companyId) q = q.eq('company_id', req.companyId);
+    if (req.isRestrictedToProjects) {
+        const allowedIds = (req.projectsAccess || []).map(p => p.project_id);
+        if (allowedIds.length > 0) q = q.in('project_id', allowedIds);
+        else q = q.eq('project_id', -1); // Force empty if no projects
+    }
+    return q;
+};
+
 const getLeaseDashboardStats = async (req, res) => {
     try {
         const { today, d30 } = getDateStrs();
 
         const [{ count: pending }, { count: active }, { count: expiring }, { count: renewals }] = await Promise.all([
-            supabase.from('leases').select('*', { count: 'exact', head: true }).eq('status', 'draft'),
-            supabase.from('leases').select('*', { count: 'exact', head: true }).eq('status', 'active'),
-            supabase.from('leases').select('*', { count: 'exact', head: true }).eq('status', 'active').lte('lease_end', d30),
-            supabase.from('leases').select('*', { count: 'exact', head: true }).eq('status', 'active').gte('lease_end', today).lte('lease_end', d30)
+            applyScopes(supabase.from('leases').select('*', { count: 'exact', head: true }), req).eq('status', 'draft'),
+            applyScopes(supabase.from('leases').select('*', { count: 'exact', head: true }), req).eq('status', 'active'),
+            applyScopes(supabase.from('leases').select('*', { count: 'exact', head: true }), req).eq('status', 'active').lte('lease_end', d30),
+            applyScopes(supabase.from('leases').select('*', { count: 'exact', head: true }), req).eq('status', 'active').gte('lease_end', today).lte('lease_end', d30)
         ]);
 
-        const { data: escData } = await supabase.from('lease_escalations')
-            .select('lease_id')
+        const escQuery = applyScopes(supabase.from('lease_escalations').select('lease_id, leases!inner(company_id, project_id)'), req)
             .gte('effective_from', today).lte('effective_from', d30);
+            
+        const { data: escData } = await escQuery;
         const escalations = new Set((escData || []).map(e => e.lease_id)).size;
 
         res.json({
@@ -49,13 +61,15 @@ const getLeaseManagerStats = async (req, res) => {
     try {
         const { today, d30, d60, d90 } = getDateStrs();
 
-        const pendingQuery = await supabase.from('leases').select('*', { count: 'exact', head: true }).in('status', ['draft', 'pending_review']);
-        const exp30Query = await supabase.from('leases').select('*', { count: 'exact', head: true }).eq('status', 'active').lte('lease_end', d30);
-        const exp60Query = await supabase.from('leases').select('*', { count: 'exact', head: true }).eq('status', 'active').gt('lease_end', d30).lte('lease_end', d60);
-        const exp90Query = await supabase.from('leases').select('*', { count: 'exact', head: true }).eq('status', 'active').gt('lease_end', d60).lte('lease_end', d90);
-        const renewalsQuery = await supabase.from('leases').select('*', { count: 'exact', head: true }).eq('status', 'active').gte('lease_end', today).lte('lease_end', d90);
+        const pendingQuery = await applyScopes(supabase.from('leases').select('*', { count: 'exact', head: true }), req).in('status', ['draft', 'pending_review']);
+        const exp30Query = await applyScopes(supabase.from('leases').select('*', { count: 'exact', head: true }), req).eq('status', 'active').lte('lease_end', d30);
+        const exp60Query = await applyScopes(supabase.from('leases').select('*', { count: 'exact', head: true }), req).eq('status', 'active').gt('lease_end', d30).lte('lease_end', d60);
+        const exp90Query = await applyScopes(supabase.from('leases').select('*', { count: 'exact', head: true }), req).eq('status', 'active').gt('lease_end', d60).lte('lease_end', d90);
+        const renewalsQuery = await applyScopes(supabase.from('leases').select('*', { count: 'exact', head: true }), req).eq('status', 'active').gte('lease_end', today).lte('lease_end', d90);
 
-        const { data: escData } = await supabase.from('lease_escalations').select('lease_id').gte('effective_from', today).lte('effective_from', d30);
+        const escQuery = applyScopes(supabase.from('lease_escalations').select('lease_id, leases!inner(company_id, project_id)'), req)
+            .gte('effective_from', today).lte('effective_from', d30);
+        const { data: escData } = await escQuery;
         const escalations = new Set((escData || []).map(e => e.lease_id)).size;
 
         res.json({
@@ -84,8 +98,8 @@ const getLeaseManagerStats = async (req, res) => {
 const getNeedAttentionLeases = async (req, res) => {
     try {
         const { d30 } = getDateStrs();
-        const { data: leases, error } = await supabase.from('leases')
-            .select(`id, status, lease_end, parties!leases_party_tenant_id_fkey(company_name, first_name, last_name)`)
+        const { data: leases, error } = await applyScopes(supabase.from('leases')
+            .select(`id, status, lease_end, parties!leases_party_tenant_id_fkey(company_name, first_name, last_name)`), req)
             .or(`status.in.(draft,dispute),and(status.eq.active,lease_end.lte.${d30})`)
             .order('created_at', { ascending: false })
             .limit(5);
@@ -115,8 +129,8 @@ const getNeedAttentionLeases = async (req, res) => {
 
 const getPendingLeases = async (req, res) => {
     try {
-        const { data: leases, error } = await supabase.from('leases')
-            .select(`id, monthly_rent, lease_start, lease_end, parties!leases_party_tenant_id_fkey(company_name, first_name, last_name)`)
+        const { data: leases, error } = await applyScopes(supabase.from('leases')
+            .select(`id, monthly_rent, lease_start, lease_end, parties!leases_party_tenant_id_fkey(company_name, first_name, last_name)`), req)
             .eq('status', 'draft')
             .order('created_at', { ascending: false });
 
@@ -170,8 +184,8 @@ const rejectLease = async (req, res) => {
 const getExpiringLeases = async (req, res) => {
     try {
         const { d90 } = getDateStrs();
-        const { data: leases, error } = await supabase.from('leases')
-            .select(`id, monthly_rent, lease_end, parties!leases_party_tenant_id_fkey(company_name, first_name, last_name)`)
+        const { data: leases, error } = await applyScopes(supabase.from('leases')
+            .select(`id, monthly_rent, lease_end, parties!leases_party_tenant_id_fkey(company_name, first_name, last_name)`), req)
             .lte('lease_end', d90);
 
         if (error) throw error;
@@ -197,12 +211,12 @@ const getLeaseReportStats = async (req, res) => {
         const { d30, d60 } = getDateStrs();
 
         const [exp30Query, exp60Query, noticeQuery] = await Promise.all([
-            supabase.from('leases').select('*', { count: 'exact', head: true }).eq('status', 'active').lte('lease_end', d30),
-            supabase.from('leases').select('*', { count: 'exact', head: true }).eq('status', 'active').lte('lease_end', d60),
-            supabase.from('leases').select('*', { count: 'exact', head: true }).eq('status', 'active').gt('notice_period_months', 0)
+            applyScopes(supabase.from('leases').select('*', { count: 'exact', head: true }), req).eq('status', 'active').lte('lease_end', d30),
+            applyScopes(supabase.from('leases').select('*', { count: 'exact', head: true }), req).eq('status', 'active').lte('lease_end', d60),
+            applyScopes(supabase.from('leases').select('*', { count: 'exact', head: true }), req).eq('status', 'active').gt('notice_period_months', 0)
         ]);
 
-        const { data: valData } = await supabase.from('leases').select('monthly_rent').eq('status', 'active').lte('lease_end', d60);
+        const { data: valData } = await applyScopes(supabase.from('leases').select('monthly_rent'), req).eq('status', 'active').lte('lease_end', d60);
         const riskValue = (valData || []).reduce((sum, item) => sum + Number(item.monthly_rent || 0), 0);
 
         res.json({
@@ -255,15 +269,17 @@ const getLeaseTrackerStats = async (req, res) => {
         const { today, d30, d60, d90 } = getDateStrs();
 
         const [exp90, renewals] = await Promise.all([
-            supabase.from('leases').select('*', { count: 'exact', head: true }).eq('status', 'active').lte('lease_end', d90),
-            supabase.from('leases').select('*', { count: 'exact', head: true }).eq('status', 'active').gte('lease_end', today).lte('lease_end', d60)
+            applyScopes(supabase.from('leases').select('*', { count: 'exact', head: true }), req).eq('status', 'active').lte('lease_end', d90),
+            applyScopes(supabase.from('leases').select('*', { count: 'exact', head: true }), req).eq('status', 'active').gte('lease_end', today).lte('lease_end', d60)
         ]);
 
-        const { data: escData } = await supabase.from('lease_escalations').select('lease_id').gte('effective_from', today).lte('effective_from', d30);
+        const escQuery = applyScopes(supabase.from('lease_escalations').select('lease_id, leases!inner(company_id, project_id)'), req)
+            .gte('effective_from', today).lte('effective_from', d30);
+        const { data: escData } = await escQuery;
         const escalations = new Set((escData || []).map(e => e.lease_id)).size;
 
         // Custom JS mapping for lock in calculation since raw interval math is tricky in JS client
-        const { data: allActive } = await supabase.from('leases').select('lease_start, lockin_period_months').eq('status', 'active');
+        const { data: allActive } = await applyScopes(supabase.from('leases').select('lease_start, lockin_period_months'), req).eq('status', 'active');
         let lockInCount = 0;
         const d30Time = new Date(d30).getTime();
         const todayTime = new Date(today).getTime();
@@ -454,7 +470,7 @@ const getAllLeases = async (req, res) => {
     try {
         const { status, project_id, location, search, expires_in, upcoming_escalations, lease_type } = req.query;
 
-        let query = supabase.from('leases').select(`
+        let query = applyScopes(supabase.from('leases').select(`
             id, lease_type, rent_model, lease_start, lease_end, monthly_rent, security_deposit, status,
             mg_amount, mg_amount_sqft, revenue_share_percentage,
             monthly_net_sales, sub_lease_area_sqft, lockin_period_months, created_at,
@@ -464,10 +480,7 @@ const getAllLeases = async (req, res) => {
             units(unit_number, chargeable_area),
             tenant:parties!leases_party_tenant_id_fkey(id, company_name, first_name, last_name, brand_name),
             owner:parties!leases_party_owner_id_fkey(id, company_name, first_name, last_name, brand_name)
-        `).order('created_at', { ascending: false });
-
-        // Multi-tenant: company users only see their own leases
-        if (req.companyId) query = query.eq('company_id', req.companyId);
+        `), req).order('created_at', { ascending: false });
 
         // Don't filter by lease_type by default - show all leases for dashboard
         if (status) query = query.eq('status', status);
@@ -575,7 +588,7 @@ const getAllLeases = async (req, res) => {
 
 const getLeaseById = async (req, res) => {
     try {
-        const { data, error } = await supabase.from('leases').select(`
+        let query = applyScopes(supabase.from('leases').select(`
             *,
             company_id,
             projects(project_name, location),
@@ -583,14 +596,11 @@ const getLeaseById = async (req, res) => {
             tenant:parties!leases_party_tenant_id_fkey(company_name, first_name, last_name, email, phone),
             owner:parties!leases_party_owner_id_fkey(company_name, first_name, last_name),
             sub_tenants(company_name)
-        `).eq('id', req.params.id).single();
+        `), req).eq('id', req.params.id).single();
+        
+        const { data, error } = await query;
 
         if (error || !data) return res.status(404).json({ message: 'Lease not found' });
-
-        // Multi-tenant: silently hide leases from other companies
-        if (req.companyId && data.company_id && data.company_id !== req.companyId) {
-            return res.status(404).json({ message: 'Lease not found' });
-        }
 
         const mapped = {
             ...data,

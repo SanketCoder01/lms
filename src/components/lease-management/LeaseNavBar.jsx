@@ -6,6 +6,14 @@ const LeaseNavBar = () => {
     const location = useLocation();
     const [isOpen, setIsOpen] = useState(false);
 
+    // Read company name dynamically from session
+    const companyName = (() => {
+      try {
+        const u = JSON.parse(sessionStorage.getItem('user') || '{}');
+        return u.company_name || 'Cusec Consulting LLP';
+      } catch { return 'Cusec Consulting LLP'; }
+    })();
+
     // Helper to check active state
     const isActive = (path) => location.pathname === path || location.pathname.startsWith(path + '/');
 
@@ -20,7 +28,7 @@ const LeaseNavBar = () => {
                             <polyline points="9 22 9 12 15 12 15 22"></polyline>
                         </svg>
                     </div>
-                    <span className="brand-name">Cusec Consulting LLP</span>
+                    <span className="brand-name">{companyName}</span>
                 </div>
 
                 {/* Links */}

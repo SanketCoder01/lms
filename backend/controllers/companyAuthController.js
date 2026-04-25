@@ -188,6 +188,17 @@ const companyLogin = async (req, res) => {
           status:       p.status,
         }));
 
+        // Fetch the company name for this project user (so sidebar shows it)
+        let companyNamePU = '';
+        try {
+          const { data: companyRow } = await supabase
+            .from('company_users')
+            .select('company_name')
+            .eq('id', firstPU.company_id)
+            .single();
+          companyNamePU = companyRow?.company_name || '';
+        } catch (cnErr) { console.warn('[login] Could not fetch company_name for project_user:', cnErr.message); }
+
         // Also check module_users for the same email+company (same user may have module assignments too)
         let modules_access = [];
         try {
@@ -248,6 +259,7 @@ const companyLogin = async (req, res) => {
             id:             firstPU.id,
             email:          firstPU.email,
             company_id:     firstPU.company_id,
+            company_name:   companyNamePU,
             type:           userType,
             project_id:     primaryProjectId,
             project_name:   primaryProjectName,

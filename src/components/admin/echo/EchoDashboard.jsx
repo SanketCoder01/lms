@@ -63,6 +63,10 @@ const EchoDashboard = () => {
           setProjects(filtered);
           // Auto-select if only 1 project; otherwise default to first
           if (filtered.length >= 1) setSelectedProject(filtered[0].id);
+        } else if (isModuleUser && projectsAccess.length === 0) {
+          // Dashboard-only module user: no project assignments → hide dropdown entirely
+          setProjects([]);
+          setSelectedProject('All');
         } else if (isProjectUser) {
           // pure project_user with single project from JWT
           const pid = sessionStorage.getItem('project_id');
@@ -615,20 +619,23 @@ const EchoDashboard = () => {
       {/* Navbar with Project Selector */}
       <nav className="echo-navbar">
         <div className="echo-navbar-left">
-          <div className="echo-project-dropdown">
-            <select
-              value={selectedProject}
-              onChange={(e) => setSelectedProject(e.target.value)}
-              className="echo-project-select"
-            >
-              {/* Show 'All Projects' only if user is not restricted to specific projects */}
-              {!isRestrictedDashboard && <option value="All">All Projects</option>}
-              {projects.map(p => (
-                <option key={p.id} value={p.id}>{p.project_name}</option>
-              ))}
-            </select>
-            <ChevronDown className="echo-chevron" />
-          </div>
+          {/* Hide project dropdown for module users with no project access (dashboard-only) */}
+          {!(_isModuleUser && projects.length === 0) && (
+            <div className="echo-project-dropdown">
+              <select
+                value={selectedProject}
+                onChange={(e) => setSelectedProject(e.target.value)}
+                className="echo-project-select"
+              >
+                {/* Show 'All Projects' only if user is not restricted to specific projects */}
+                {!isRestrictedDashboard && <option value="All">All Projects</option>}
+                {projects.map(p => (
+                  <option key={p.id} value={p.id}>{p.project_name}</option>
+                ))}
+              </select>
+              <ChevronDown className="echo-chevron" />
+            </div>
+          )}
         </div>
 
         {/* Critical notification ticker — floats between logo and avatar */}

@@ -53,6 +53,10 @@ const RoleManagement = () => {
   const [activeActionMenu, setActiveActionMenu] = useState(null); // ID of user whose menu is open
   const actionMenuRef = useRef(null);
 
+  // "Also grant module access" state for project user form
+  const [grantModuleAccess, setGrantModuleAccess] = useState(false);
+  const [projectUserModules, setProjectUserModules] = useState([]); // [{name, permissions}]
+
   const fetchProjects = () => {
     setLoadingProjects(true);
     userAPI.getProjects()
@@ -224,6 +228,8 @@ const RoleManagement = () => {
     setIsEditing(false);
     setCurrentUserId(null);
     setSubmitting(false);
+    setGrantModuleAccess(false);
+    setProjectUserModules([]);
   };
 
   const handleOpenCreate = () => {
@@ -329,6 +335,25 @@ const RoleManagement = () => {
 
         if (isEditing) await userAPI.updateProjectUser(currentUserId, payload);
         else await userAPI.createProjectUser(payload);
+
+        // If admin also wants to grant module access, create module_user rows
+        if (grantModuleAccess && projectUserModules.length > 0) {
+          for (const mod of projectUserModules) {
+            try {
+              const modPayload = {
+                company_id,
+                module_name: mod.name,
+                email: formData.email,
+                password: formData.password,
+                permissions: mod.permissions,
+                status: 'active',
+              };
+              await userAPI.createModuleUser(modPayload);
+            } catch (modErr) {
+              console.warn(`[grantModuleAccess] Failed for module ${mod.name}:`, modErr);
+            }
+          }
+        }
       } else if (formData.is_module_user) {
         const company_id = sessionStorage.getItem('company_id');
 
@@ -720,6 +745,81 @@ const RoleManagement = () => {
                         </div>
                       </div>
                     )}
+
+                    {/* ── Also grant module access ──────────────────────── */}
+                    <div className="form-group" style={{ marginTop: 8, padding: '12px', border: '1px solid #e2e8f0', borderRadius: 8, background: '#f8fafc' }}>
+                      <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontWeight: 600, fontSize: 13.5 }}>
+                        <input
+                          type="checkbox"
+                          checked={grantModuleAccess}
+                          onChange={e => {
+                            setGrantModuleAccess(e.target.checked);
+                            if (!e.target.checked) setProjectUserModules([]);
+                          }}
+                          style={{ accentColor: 'var(--primary-color)', width: 15, height: 15 }}
+                        />
+                        Also grant module access to this user
+                      </label>
+
+                      {grantModuleAccess && (
+                        <div style={{ marginTop: 12 }}>
+                          <div style={{ fontSize: 12, color: '#64748b', marginBottom: 8 }}>Select modules and permissions:</div>
+                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 10 }}>
+                            {Object.keys(MODULE_DEFS).map(key => {
+                              const isSel = projectUserModules.some(m => m.name === key);
+                              return (
+                                <label key={key} style={{
+                                  display: 'flex', alignItems: 'center', gap: 5,
+                                  padding: '6px 10px', border: `2px solid ${isSel ? MODULE_DEFS[key].color : '#e2e8f0'}`,
+                                  borderRadius: 7, cursor: 'pointer', fontSize: 12.5, fontWeight: isSel ? 600 : 400,
+                                  background: isSel ? `${MODULE_DEFS[key].color}15` : 'white',
+                                }}>
+                                  <input
+                                    type="checkbox"
+                                    checked={isSel}
+                                    onChange={ev => {
+                                      if (ev.target.checked) {
+                                        setProjectUserModules(prev => [...prev, { name: key, permissions: { view: true, edit: false, delete: false } }]);
+                                      } else {
+                                        setProjectUserModules(prev => prev.filter(m => m.name !== key));
+                                      }
+                                    }}
+                                    style={{ accentColor: MODULE_DEFS[key].color, width: 13, height: 13 }}
+                                  />
+                                  {MODULE_DEFS[key].label}
+                                </label>
+                              );
+                            })}
+                          </div>
+                          {projectUserModules.length > 0 && (
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                              {projectUserModules.map((mod, idx) => (
+                                <div key={mod.name} style={{ padding: '8px 12px', border: '1px solid #e2e8f0', borderRadius: 7, background: 'white' }}>
+                                  <div style={{ fontWeight: 600, fontSize: 12, color: MODULE_DEFS[mod.name]?.color || '#333', marginBottom: 6 }}>{MODULE_DEFS[mod.name]?.label}</div>
+                                  <div style={{ display: 'flex', gap: 12 }}>
+                                    {['view', 'edit', 'delete'].map(feat => (
+                                      <label key={feat} style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 12, cursor: 'pointer' }}>
+                                        <input
+                                          type="checkbox"
+                                          checked={!!mod.permissions[feat]}
+                                          onChange={ev => {
+                                            const updated = [...projectUserModules];
+                                            updated[idx] = { ...mod, permissions: { ...mod.permissions, [feat]: ev.target.checked } };
+                                            setProjectUserModules(updated);
+                                          }}
+                                          style={{ accentColor: 'var(--primary-color)', width: 13, height: 13 }}
+                                        />
+                                        {feat.charAt(0).toUpperCase() + feat.slice(1)}
+                                      </label>
+                                    ))}
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
                   </>
                 )}
 

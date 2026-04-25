@@ -292,6 +292,10 @@ const ProjectAssignModal = ({ company, onClose, onSave, notify }) => {
   const [quotaSaving, setQuotaSaving] = useState(false);
   const [quotaMsg, setQuotaMsg] = useState({ type: '', text: '' });
 
+  // "Also grant module access" state — for project user form in SA panel
+  const [saGrantModuleAccess, setSaGrantModuleAccess] = useState(false);
+  const [saProjectUserModules, setSaProjectUserModules] = useState([]); // [{name, permissions}]
+
   // Load projects + limit for this company
   useEffect(() => {
     const loadProjects = async () => {
@@ -367,6 +371,23 @@ const ProjectAssignModal = ({ company, onClose, onSave, notify }) => {
           }),
         });
         if (res.success) {
+          // If SA also wants to grant module access for this project user
+          if (saGrantModuleAccess && saProjectUserModules.length > 0) {
+            for (const mod of saProjectUserModules) {
+              try {
+                await saFetch(`${SA_API}/api/super-admin/module-users`, {
+                  method: 'POST',
+                  body: JSON.stringify({
+                    company_id: company.id,
+                    module_name: mod.name,
+                    email: formData.email,
+                    password: formData.password,
+                    permissions: mod.permissions,
+                  }),
+                });
+              } catch (modErr) { console.warn('[SA grantModuleAccess]', modErr); }
+            }
+          }
           notify('success', 'User assigned to project!');
           loadProjectUsers(selectedProject.id);
           setShowUserForm(false);
@@ -400,6 +421,8 @@ const ProjectAssignModal = ({ company, onClose, onSave, notify }) => {
   const openAddUser = () => {
     setEditingUser(null);
     setFormData({ email: '', password: '', permissions: { view: true, edit: false, delete: false } });
+    setSaGrantModuleAccess(false);
+    setSaProjectUserModules([]);
     setShowUserForm(true);
   };
 
@@ -640,6 +663,69 @@ const ProjectAssignModal = ({ company, onClose, onSave, notify }) => {
                             ))}
                           </div>
                         </div>
+                        {/* ── Also grant module access (SA) ─────────────────────── */}
+                        {!editingUser && (
+                          <div style={{ marginTop: 8, padding: '10px 12px', border: '1px solid var(--sa-border)', borderRadius: 7, background: 'rgba(99,102,241,0.03)' }}>
+                            <label style={{ display: 'flex', alignItems: 'center', gap: 7, cursor: 'pointer', fontWeight: 600, fontSize: 12.5, color: 'var(--sa-text)' }}>
+                              <input
+                                type="checkbox"
+                                checked={saGrantModuleAccess}
+                                onChange={e => { setSaGrantModuleAccess(e.target.checked); if (!e.target.checked) setSaProjectUserModules([]); }}
+                                style={{ accentColor: 'var(--sa-primary)', width: 14, height: 14 }}
+                              />
+                              Also grant module access to this user
+                            </label>
+                            {saGrantModuleAccess && (
+                              <div style={{ marginTop: 10 }}>
+                                <div style={{ fontSize: 11, color: 'var(--sa-muted)', marginBottom: 7 }}>Select modules:</div>
+                                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 8 }}>
+                                  {Object.keys(MODULE_DEFS).map(key => {
+                                    const isSel = saProjectUserModules.some(m => m.name === key);
+                                    return (
+                                      <label key={key} style={{
+                                        display: 'flex', alignItems: 'center', gap: 4,
+                                        padding: '4px 8px', border: `1.5px solid ${isSel ? MODULE_DEFS[key].color : 'var(--sa-border)'}`,
+                                        borderRadius: 6, cursor: 'pointer', fontSize: 11.5, fontWeight: isSel ? 600 : 400,
+                                        background: isSel ? `${MODULE_DEFS[key].color}18` : 'transparent',
+                                      }}>
+                                        <input type="checkbox" checked={isSel}
+                                          onChange={ev => {
+                                            if (ev.target.checked) setSaProjectUserModules(prev => [...prev, { name: key, permissions: { view: true, edit: false, delete: false } }]);
+                                            else setSaProjectUserModules(prev => prev.filter(m => m.name !== key));
+                                          }}
+                                          style={{ accentColor: MODULE_DEFS[key].color, width: 12, height: 12 }} />
+                                        {MODULE_DEFS[key].label}
+                                      </label>
+                                    );
+                                  })}
+                                </div>
+                                {saProjectUserModules.length > 0 && (
+                                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                                    {saProjectUserModules.map((mod, idx) => (
+                                      <div key={mod.name} style={{ padding: '6px 10px', border: '1px solid var(--sa-border)', borderRadius: 6, background: 'var(--sa-card)' }}>
+                                        <div style={{ fontWeight: 600, fontSize: 11, color: MODULE_DEFS[mod.name]?.color, marginBottom: 4 }}>{MODULE_DEFS[mod.name]?.label}</div>
+                                        <div style={{ display: 'flex', gap: 10 }}>
+                                          {['view', 'edit', 'delete'].map(feat => (
+                                            <label key={feat} style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, cursor: 'pointer' }}>
+                                              <input type="checkbox" checked={!!mod.permissions[feat]}
+                                                onChange={ev => {
+                                                  const upd = [...saProjectUserModules];
+                                                  upd[idx] = { ...mod, permissions: { ...mod.permissions, [feat]: ev.target.checked } };
+                                                  setSaProjectUserModules(upd);
+                                                }}
+                                                style={{ accentColor: 'var(--sa-primary)', width: 12, height: 12 }} />
+                                              {feat.charAt(0).toUpperCase() + feat.slice(1)}
+                                            </label>
+                                          ))}
+                                        </div>
+                                      </div>
+                                    ))}
+                                  </div>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        )}
                         <div style={{ display: 'flex', gap: 8 }}>
                           <button className="sa-btn sa-btn-ghost sa-btn-sm" onClick={() => { setShowUserForm(false); setEditingUser(null); }}>Cancel</button>
                           <button className="sa-btn sa-btn-primary sa-btn-sm" disabled={saving} onClick={handleSaveUser}>{saving ? 'Saving…' : editingUser ? 'Update' : 'Assign'}</button>
@@ -873,7 +959,7 @@ const ProjectAssignModal = ({ company, onClose, onSave, notify }) => {
                             height: '100%', borderRadius: 6, transition: 'width 0.4s',
                             background: limitInfo.current_count >= limitInfo.project_limit ? '#ef4444'
                               : (limitInfo.current_count / limitInfo.project_limit) > 0.75 ? '#f59e0b'
-                              : '#6366f1',
+                                : '#6366f1',
                             width: `${Math.min(100, (limitInfo.current_count / limitInfo.project_limit) * 100)}%`,
                           }} />
                         </div>
@@ -944,7 +1030,7 @@ const ProjectAssignModal = ({ company, onClose, onSave, notify }) => {
               </div>
 
               <div style={{ fontSize: 11, color: 'var(--sa-muted)', textAlign: 'center' }}>
-                💡 This limit applies to the company admin's ability to create projects. Super Admin can always update or override it.
+
               </div>
             </div>
           )}
@@ -1105,6 +1191,10 @@ const ModuleAssignment = () => {
   const [projectModal, setProjectModal] = useState(false); // for project-specific users
   const [search, setSearch] = useState('');
   const [msg, setMsg] = useState(null);
+  const [userLimitInfo, setUserLimitInfo] = useState(null); // {user_limit, current_count, remaining}
+  const [userLimitInput, setUserLimitInput] = useState('');
+  const [userLimitSaving, setUserLimitSaving] = useState(false);
+  const [userLimitMsg, setUserLimitMsg] = useState(null);
 
   const notify = (type, text) => {
     setMsg({ type, text });
@@ -1136,7 +1226,14 @@ const ModuleAssignment = () => {
   const selectCompany = (company) => {
     setSelected(company);
     setModuleUsers([]);
+    setUserLimitInfo(null);
+    setUserLimitInput('');
+    setUserLimitMsg(null);
     loadModuleUsers(company.id);
+    // Load user limit for this company
+    saFetch(`${SA_API}/api/super-admin/company-user-limit/${company.id}`)
+      .then(res => { if (res.success) { setUserLimitInfo(res); setUserLimitInput(res.user_limit?.toString() || ''); } })
+      .catch(() => {});
   };
 
   const handleRemove = async (id) => {
@@ -1241,6 +1338,93 @@ const ModuleAssignment = () => {
                 </div>
                 {loadingModules && <span className="sa-spinner" />}
               </div>
+
+            {/* ── User Limit Banner ────────────────────────────────────────── */}
+            <div style={{
+              display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 12,
+              padding: '12px 16px', borderRadius: 10, marginBottom: 20,
+              background: userLimitInfo?.user_limit
+                ? (userLimitInfo.remaining === 0 ? 'rgba(239,68,68,0.08)' : 'rgba(99,102,241,0.06)')
+                : 'rgba(16,185,129,0.06)',
+              border: `1px solid ${
+                userLimitInfo?.user_limit
+                  ? (userLimitInfo.remaining === 0 ? 'rgba(239,68,68,0.25)' : 'rgba(99,102,241,0.2)')
+                  : 'rgba(16,185,129,0.2)'
+              }`,
+            }}>
+              {/* Status pill */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1 }}>
+                <span style={{ fontSize: 18 }}>{userLimitInfo?.user_limit ? (userLimitInfo.remaining === 0 ? '🛑' : '👥') : '♾️'}</span>
+                <div>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--sa-text)' }}>
+                    User Limit: {userLimitInfo?.user_limit ? `${userLimitInfo.current_count} / ${userLimitInfo.user_limit} used` : 'Unlimited'}
+                  </div>
+                  <div style={{ fontSize: 11, color: 'var(--sa-muted)' }}>
+                    {userLimitInfo?.user_limit
+                      ? (userLimitInfo.remaining === 0 ? '⚠️ This company has reached their user limit.' : `${userLimitInfo.remaining} slot(s) remaining.`)
+                      : 'No restriction set. Admins can create unlimited users.'}
+                  </div>
+                </div>
+              </div>
+
+              {/* Progress bar */}
+              {userLimitInfo?.user_limit && (
+                <div style={{ width: 120, height: 6, background: 'var(--sa-border)', borderRadius: 4, overflow: 'hidden' }}>
+                  <div style={{
+                    height: '100%', borderRadius: 4, transition: 'width 0.4s',
+                    background: userLimitInfo.remaining === 0 ? '#ef4444' : userLimitInfo.current_count / userLimitInfo.user_limit > 0.75 ? '#f59e0b' : '#6366f1',
+                    width: `${Math.min(100, (userLimitInfo.current_count / userLimitInfo.user_limit) * 100)}%`,
+                  }} />
+                </div>
+              )}
+
+              {/* Inline editor */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <input
+                  type="number" min="1" max="500" placeholder="Set limit"
+                  value={userLimitInput}
+                  onChange={e => setUserLimitInput(e.target.value)}
+                  style={{ width: 80, padding: '5px 8px', borderRadius: 6, border: '1px solid var(--sa-border)', fontSize: 12, background: 'transparent', color: 'var(--sa-text)' }}
+                />
+                <button
+                  className="sa-btn sa-btn-primary sa-btn-sm"
+                  disabled={userLimitSaving}
+                  onClick={async () => {
+                    setUserLimitSaving(true); setUserLimitMsg(null);
+                    try {
+                      const res = await saFetch(`${SA_API}/api/super-admin/update-company-user-limit`, {
+                        method: 'POST',
+                        body: JSON.stringify({ company_id: selectedCompany.id, user_limit: userLimitInput || null }),
+                      });
+                      if (res.success) { setUserLimitInfo(res); setUserLimitMsg({ type: 'ok', text: res.message }); }
+                      else setUserLimitMsg({ type: 'err', text: res.message || 'Failed.' });
+                    } catch (e) { setUserLimitMsg({ type: 'err', text: e.message }); }
+                    setUserLimitSaving(false);
+                  }}
+                >{userLimitSaving ? '…' : 'Set'}</button>
+                {userLimitInfo?.user_limit && (
+                  <button
+                    className="sa-btn sa-btn-ghost sa-btn-sm"
+                    disabled={userLimitSaving}
+                    onClick={async () => {
+                      setUserLimitSaving(true);
+                      try {
+                        const res = await saFetch(`${SA_API}/api/super-admin/update-company-user-limit`, {
+                          method: 'POST', body: JSON.stringify({ company_id: selectedCompany.id, user_limit: null }),
+                        });
+                        if (res.success) { setUserLimitInfo(res); setUserLimitInput(''); setUserLimitMsg({ type: 'ok', text: 'Limit removed.' }); }
+                      } catch (e) { setUserLimitMsg({ type: 'err', text: e.message }); }
+                      setUserLimitSaving(false);
+                    }}
+                  >Remove</button>
+                )}
+              </div>
+              {userLimitMsg && (
+                <div style={{ width: '100%', fontSize: 11, fontWeight: 600, color: userLimitMsg.type === 'ok' ? '#34d399' : '#fca5a5' }}>
+                  {userLimitMsg.text}
+                </div>
+              )}
+            </div>
 
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 16 }}>
                 {MODULE_KEYS.map(mod => (
