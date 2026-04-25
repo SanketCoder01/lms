@@ -119,7 +119,12 @@ const usePermissions = () => {
     if (!isModuleUser && !isProjectUser) return true;
 
     // Project users check project permissions
-    if (isProjectUser) return !!projectPermissions[action];
+    if (isProjectUser) {
+      if (projectsAccess.length > 0) {
+        return !!combinedProjectPerms[action];
+      }
+      return !!projectPermissions[action];
+    }
 
     // Module users
     if (isModuleUser) {

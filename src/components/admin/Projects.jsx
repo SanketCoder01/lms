@@ -411,21 +411,21 @@ const Projects = () => {
                         <Link to={`/admin/projects/${project.id}`} className="action-icon-btn view" title="View Details">
                           <svg viewBox="0 0 24 24" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
                         </Link>
-                        {can('edit') ? (
+                        {can('edit', 'projects') ? (
                           <Link to={`/admin/add-unit?projectId=${project.id}`} className="action-icon-btn add-unit-btn" title="Add Unit" style={{ width: '32px', height: '32px', borderRadius: '50%', background: '#f0fdf4', border: '2px solid #10b981', color: '#10b981', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '20px', fontWeight: '700', lineHeight: '1', textDecoration: 'none', cursor: 'pointer', transition: 'all 0.2s', flexShrink: 0 }} onMouseEnter={e => { e.currentTarget.style.background = '#10b981'; e.currentTarget.style.color = '#fff'; }} onMouseLeave={e => { e.currentTarget.style.background = '#f0fdf4'; e.currentTarget.style.color = '#10b981'; }}>
                             +
                           </Link>
                         ) : (
                           <button disabled title="No permission to add units" style={{ width: '32px', height: '32px', borderRadius: '50%', background: '#f3f4f6', border: '2px solid #d1d5db', color: '#9ca3af', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '14px', cursor: 'not-allowed', flexShrink: 0 }}>🔒</button>
                         )}
-                        {can('edit') ? (
+                        {can('edit', 'projects') ? (
                           <Link to={`/admin/edit-project/${project.id}`} className="action-icon-btn edit" title="Edit">
                             <svg viewBox="0 0 24 24" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
                           </Link>
                         ) : (
                           <button className="action-icon-btn" disabled title="No edit permission" style={{ opacity: 0.4, cursor: 'not-allowed', fontSize: '14px' }}>🔒</button>
                         )}
-                        {can('delete') ? (
+                        {can('delete', 'projects') ? (
                           <button className="action-icon-btn delete" onClick={() => handleDelete(project.id)} title="Delete">
                             <svg viewBox="0 0 24 24" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
                           </button>
