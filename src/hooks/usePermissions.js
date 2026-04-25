@@ -11,11 +11,11 @@
 
 // Define all modules with their routes (home/landing route for each)
 export const MODULES = [
-  { key: 'dashboard', label: 'Dashboard',  route: '/admin/dashboard' },
-  { key: 'projects',  label: 'Projects',   route: '/admin/projects' },
-  { key: 'masters',   label: 'Masters',    route: '/admin/filter-options' }, // also covers /admin/parties
-  { key: 'ownership', label: 'Ownership',  route: '/admin/ownership-mapping' },
-  { key: 'leases',    label: 'Leases',     route: '/admin/leases' },
+  { key: 'dashboard', label: 'Dashboard', route: '/admin/dashboard' },
+  { key: 'projects', label: 'Projects', route: '/admin/projects' },
+  { key: 'masters', label: 'Masters', route: '/admin/filter-options' }, // also covers /admin/parties
+  { key: 'ownership', label: 'Ownership', route: '/admin/ownership-mapping' },
+  { key: 'leases', label: 'Leases', route: '/admin/leases' },
 ];
 
 // Action types for permissions
@@ -23,13 +23,13 @@ export const ACTIONS = ['view', 'create', 'edit', 'delete'];
 
 const usePermissions = () => {
   // Read from sessionStorage (no state - synchronous, fast)
-  const isModuleUser  = sessionStorage.getItem('is_module_user') === '1';
+  const isModuleUser = sessionStorage.getItem('is_module_user') === '1';
   const isProjectUser = sessionStorage.getItem('is_project_user') === '1';
-  const moduleName    = sessionStorage.getItem('module_name') || ''; // primary module (legacy)
-  const userType      = sessionStorage.getItem('user_type') || 'company_user';
+  const moduleName = sessionStorage.getItem('module_name') || ''; // primary module (legacy)
+  const userType = sessionStorage.getItem('user_type') || 'company_user';
 
   // Project-specific data
-  const projectId   = sessionStorage.getItem('project_id') || '';
+  const projectId = sessionStorage.getItem('project_id') || '';
   const projectName = sessionStorage.getItem('project_name') || '';
 
   // ── Parse the full modules_access array (multi-module support) ──────────────
@@ -107,8 +107,8 @@ const usePermissions = () => {
   // ── Helper: combined permissions across all assigned projects ───────────────
   const combinedProjectPerms = projectsAccess.reduce(
     (acc, p) => ({
-      view:   acc.view   || !!p.permissions?.view,
-      edit:   acc.edit   || !!p.permissions?.edit,
+      view: acc.view || !!p.permissions?.view,
+      edit: acc.edit || !!p.permissions?.edit,
       delete: acc.delete || !!p.permissions?.delete,
     }),
     { view: false, edit: false, delete: false }
@@ -208,7 +208,7 @@ const usePermissions = () => {
   const getAccessibleModules = () => {
     return MODULES.map(module => {
       const access = hasModuleAccess(module.key);
-      const perms  = access ? (modulePermissionsMap[module.key] || modulePermissions) : null;
+      const perms = access ? (modulePermissionsMap[module.key] || modulePermissions) : null;
       return { ...module, hasAccess: access, permissions: perms };
     });
   };
@@ -216,9 +216,9 @@ const usePermissions = () => {
   // Names of all modules the user has access to (useful for display)
   const assignedModuleNames = modulesAccess.map(m => m.module_name);
   // Project IDs accessible to this user (for filtering project lists)
-  const assignedProjectIds  = projectsAccess.map(p => p.project_id);
+  const assignedProjectIds = projectsAccess.map(p => p.project_id);
 
-  return { 
+  return {
     can,
     isModuleUser,
     isProjectUser,
