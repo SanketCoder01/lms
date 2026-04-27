@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useCallback } from "react";
 import { Link } from "react-router-dom";
 import Sidebar from "./Sidebar";
 import { getProjects, deleteProject as deleteProjectAPI, getProjectLocations, filterAPI } from "../../services/api";
@@ -60,6 +60,20 @@ const Projects = () => {
     { key: 'updated_at', label: 'Updated Date' }
   ];
 
+  const fetchQuota = useCallback(async () => {
+    if (isRestrictedProjectUser) return;
+    try {
+      const token = sessionStorage.getItem('company_token') || sessionStorage.getItem('token');
+      const apiBase = process.env.REACT_APP_API_URL || '/api';
+      const base = apiBase.endsWith('/api') ? apiBase.replace(/\/api$/, '') : apiBase;
+      const res = await fetch(`${base}/api/projects/quota`, { headers: { Authorization: `Bearer ${token}` } });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.success) setQuotaInfo(data);
+      }
+    } catch (e) { /* quota is optional */ }
+  }, [isRestrictedProjectUser]);
+
   /* ================= FETCH LOCATIONS ================= */
   useEffect(() => {
     const fetchLocations = async () => {
@@ -85,25 +99,11 @@ const Projects = () => {
       }
     };
 
-    // Fetch quota (only for full company admins)
-    const fetchQuota = async () => {
-      try {
-        const token = sessionStorage.getItem('company_token') || sessionStorage.getItem('token');
-        const apiBase = process.env.REACT_APP_API_URL || '/api';
-        const base = apiBase.endsWith('/api') ? apiBase.replace(/\/api$/, '') : apiBase;
-        const res = await fetch(`${base}/api/projects/quota`, { headers: { Authorization: `Bearer ${token}` } });
-        if (res.ok) {
-          const data = await res.json();
-          if (data.success) setQuotaInfo(data);
-        }
-      } catch (e) { /* quota is optional */ }
-    };
-
+    fetchQuota();
     fetchLocations();
     fetchTypes();
-    if (!isRestrictedProjectUser) fetchQuota();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [fetchQuota]); // Depend on fetchQuota (which is now stable via useCallback)
 
   /* ================= FETCH PROJECTS ================= */
   useEffect(() => {
@@ -183,6 +183,7 @@ const Projects = () => {
         await deleteProjectAPI(id);
         const filtered = projects.filter(project => project.id !== id);
         setProjects(filtered);
+        fetchQuota(); // REFRESH QUOTA UI
         setMessage({ text: 'Project deleted successfully', type: 'success' });
         // Clear message after 3 seconds
         setTimeout(() => setMessage({ text: '', type: '' }), 3000);

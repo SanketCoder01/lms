@@ -9,48 +9,9 @@ exports.getAllParties = async (req, res) => {
         // Multi-tenant: company users only see their own parties
         if (req.companyId) query = query.eq('company_id', req.companyId);
 
-        // Project Segregation - show parties linked to projects OR created by user
-        if (req.isRestrictedToProjects) {
-            const allowedIds = (req.projectsAccess || []).map(p => p.project_id);
-            if (allowedIds.length > 0) {
-                // Fetch party IDs from leases in these projects
-                const { data: leaseData } = await supabase.from('leases')
-                    .select('party_tenant_id, party_owner_id')
-                    .in('project_id', allowedIds);
-
-                // Fetch party IDs from ownerships in units of these projects
-                const { data: ownData } = await supabase.from('unit_ownerships')
-                    .select('party_id, units!inner(project_id)')
-                    .in('units.project_id', allowedIds);
-
-                const validPartyIds = new Set();
-                (leaseData || []).forEach(l => {
-                    if (l.party_tenant_id) validPartyIds.add(l.party_tenant_id);
-                    if (l.party_owner_id) validPartyIds.add(l.party_owner_id);
-                });
-                (ownData || []).forEach(o => {
-                    if (o.party_id) validPartyIds.add(o.party_id);
-                });
-
-                // Also include parties created by this user (for newly created parties not yet linked)
-                const { data: userParties } = await supabase.from('parties')
-                    .select('id')
-                    .eq('company_id', req.companyId);
-
-                (userParties || []).forEach(p => {
-                    if (p.id) validPartyIds.add(p.id);
-                });
-
-                if (validPartyIds.size > 0) {
-                    query = query.in('id', Array.from(validPartyIds));
-                } else {
-                    query = query.eq('id', -1); // Force empty if no related parties found
-                }
-            } else {
-                // No projects assigned - still show company parties for masters access
-                // Don't force empty, let company_id filter work
-            }
-        }
+        // Masters (Tenants/Owners) are company-wide concepts. 
+        // All users with access to the Masters module should see all parties in the company pool.
+        // Project-level filtering is intentionally removed here.
 
         const { data, error } = await query;
         if (error) throw error;
@@ -74,17 +35,7 @@ exports.getPartyById = async (req, res) => {
             return res.status(404).json({ message: 'Party not found' });
         }
 
-        // Project Segregation check (strict check for direct party fetch)
-        if (req.isRestrictedToProjects) {
-            const allowedIds = (req.projectsAccess || []).map(p => p.project_id);
-            const [{ data: lData }, { data: oData }] = await Promise.all([
-                supabase.from('leases').select('id').in('project_id', allowedIds).or(`party_tenant_id.eq.${data.id},party_owner_id.eq.${data.id}`).limit(1),
-                supabase.from('unit_ownerships').select('id, units!inner(project_id)').in('units.project_id', allowedIds).eq('party_id', data.id).limit(1)
-            ]);
-            if ((!lData || lData.length === 0) && (!oData || oData.length === 0)) {
-                return res.status(404).json({ message: 'Party not found' });
-            }
-        }
+        // Project Segregation check removed for Masters to ensure visibility for all company users
 
         res.json(data);
     } catch (err) {

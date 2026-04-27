@@ -22,7 +22,7 @@ const addProject = async (req, res) => {
       const { data: companyData } = await supabase
         .from('company_users')
         .select('project_limit')
-        .eq('id', req.companyId)
+        .eq('id', Number(req.companyId))
         .single();
 
       const limit = companyData?.project_limit || null;
@@ -30,7 +30,7 @@ const addProject = async (req, res) => {
         const { count: currentCount } = await supabase
           .from('projects')
           .select('id', { count: 'exact', head: true })
-          .eq('company_id', req.companyId)
+          .eq('company_id', Number(req.companyId))
           .eq('status', 'active');
 
         if ((currentCount || 0) >= limit) {
@@ -386,7 +386,7 @@ const getProjectQuota = async (req, res) => {
     const { data: company } = await supabase
       .from('company_users')
       .select('project_limit')
-      .eq('id', req.companyId)
+      .eq('id', Number(req.companyId))
       .single();
 
     const limit = company?.project_limit || null;
@@ -394,7 +394,7 @@ const getProjectQuota = async (req, res) => {
     const { count } = await supabase
       .from('projects')
       .select('id', { count: 'exact', head: true })
-      .eq('company_id', req.companyId)
+      .eq('company_id', Number(req.companyId))
       .eq('status', 'active');
 
     return res.json({
