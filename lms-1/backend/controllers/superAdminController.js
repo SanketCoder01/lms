@@ -649,7 +649,7 @@ const getCompanyProjectLimit = async (req, res) => {
 
     const { data: company } = await supabase
       .from('company_users')
-      .select('id, company_name, project_limit')
+      .select('id, company_name, project_limit, user_limit')
       .eq('id', company_id)
       .single();
 
@@ -661,11 +661,24 @@ const getCompanyProjectLimit = async (req, res) => {
       .eq('company_id', Number(company_id))
       .eq('status', 'active');
 
+    // Get current unique user count
+    const [modRes, projRes] = await Promise.all([
+      supabase.from('module_users').select('email').eq('company_id', Number(company_id)),
+      supabase.from('project_users').select('email').eq('company_id', Number(company_id)),
+    ]);
+    const uniqueEmails = new Set();
+    if (modRes.data) modRes.data.forEach(u => uniqueEmails.add(u.email.toLowerCase()));
+    if (projRes.data) projRes.data.forEach(u => uniqueEmails.add(u.email.toLowerCase()));
+    const userCount = uniqueEmails.size;
+
     return res.json({
       success: true,
       project_limit: company.project_limit || null,
+      user_limit: company.user_limit || null,
       current_count: count || 0,
+      user_count: userCount,
       remaining: company.project_limit ? Math.max(0, company.project_limit - (count || 0)) : null,
+      user_remaining: company.user_limit ? Math.max(0, company.user_limit - userCount) : null,
     });
   } catch (err) {
     console.error('[getCompanyProjectLimit]', err);
@@ -773,16 +786,22 @@ const createCompanyProject = async (req, res) => {
 // ─── SUPER ADMIN — UPDATE COMPANY QUOTA ONLY (no project creation) ────────────
 const updateCompanyQuota = async (req, res) => {
   try {
-    const { company_id, project_limit } = req.body;
+    const { company_id, project_limit, user_limit } = req.body;
 
     if (!company_id) {
       return res.status(400).json({ success: false, message: 'company_id is required' });
     }
 
-    // Validate limit value
-    const newLimit = project_limit === null || project_limit === '' ? null : parseInt(project_limit);
-    if (newLimit !== null && (isNaN(newLimit) || newLimit < 1 || newLimit > 50)) {
+    // Validate project_limit value
+    const newProjectLimit = project_limit === null || project_limit === '' ? null : parseInt(project_limit);
+    if (newProjectLimit !== null && (isNaN(newProjectLimit) || newProjectLimit < 1 || newProjectLimit > 50)) {
       return res.status(400).json({ success: false, message: 'project_limit must be between 1 and 50, or null to remove the limit.' });
+    }
+
+    // Validate user_limit value
+    const newUserLimit = user_limit === null || user_limit === '' ? null : parseInt(user_limit);
+    if (newUserLimit !== null && (isNaN(newUserLimit) || newUserLimit < 1 || newUserLimit > 100)) {
+      return res.status(400).json({ success: false, message: 'user_limit must be between 1 and 100, or null to remove the limit.' });
     }
 
     // Verify company exists
@@ -796,29 +815,44 @@ const updateCompanyQuota = async (req, res) => {
       return res.status(404).json({ success: false, message: 'Company not found' });
     }
 
-    // Update the limit
+    // Update the limits
+    const updatePayload = {};
+    if (project_limit !== undefined) updatePayload.project_limit = newProjectLimit;
+    if (user_limit !== undefined) updatePayload.user_limit = newUserLimit;
+
     const { error } = await supabase
       .from('company_users')
-      .update({ project_limit: newLimit })
+      .update(updatePayload)
       .eq('id', Number(company_id));
 
     if (error) throw error;
 
-    // Return updated quota info
-    const { count: currentCount } = await supabase
+    // Get current project count
+    const { count: projectCount } = await supabase
       .from('projects')
       .select('id', { count: 'exact', head: true })
       .eq('company_id', Number(company_id))
       .eq('status', 'active');
 
+    // Get current unique user count (module_users + project_users)
+    const [modRes, projRes] = await Promise.all([
+      supabase.from('module_users').select('email').eq('company_id', Number(company_id)),
+      supabase.from('project_users').select('email').eq('company_id', Number(company_id)),
+    ]);
+    const uniqueEmails = new Set();
+    if (modRes.data) modRes.data.forEach(u => uniqueEmails.add(u.email.toLowerCase()));
+    if (projRes.data) projRes.data.forEach(u => uniqueEmails.add(u.email.toLowerCase()));
+    const userCount = uniqueEmails.size;
+
     return res.json({
       success: true,
-      message: newLimit
-        ? `Quota for ${company.company_name} set to ${newLimit} project(s).`
-        : `Quota removed — ${company.company_name} now has unlimited projects.`,
-      project_limit: newLimit,
-      current_count: currentCount || 0,
-      remaining: newLimit !== null ? Math.max(0, newLimit - (currentCount || 0)) : null,
+      message: `Quotas updated for ${company.company_name}.`,
+      project_limit: newProjectLimit,
+      user_limit: newUserLimit,
+      project_count: projectCount || 0,
+      user_count: userCount,
+      project_remaining: newProjectLimit !== null ? Math.max(0, newProjectLimit - (projectCount || 0)) : null,
+      user_remaining: newUserLimit !== null ? Math.max(0, newUserLimit - userCount) : null,
     });
   } catch (err) {
     console.error('[updateCompanyQuota]', err);

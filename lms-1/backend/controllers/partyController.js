@@ -5,11 +5,11 @@ const { handleDbError } = require('../utils/errorHandler');
 exports.getAllParties = async (req, res) => {
     try {
         let query = supabase.from('parties').select('*').order('created_at', { ascending: false });
-        
+
         // Multi-tenant: company users only see their own parties
         if (req.companyId) query = query.eq('company_id', req.companyId);
 
-        // Project Segregation
+        // Project Segregation - show parties linked to projects OR created by user
         if (req.isRestrictedToProjects) {
             const allowedIds = (req.projectsAccess || []).map(p => p.project_id);
             if (allowedIds.length > 0) {
@@ -17,7 +17,7 @@ exports.getAllParties = async (req, res) => {
                 const { data: leaseData } = await supabase.from('leases')
                     .select('party_tenant_id, party_owner_id')
                     .in('project_id', allowedIds);
-                
+
                 // Fetch party IDs from ownerships in units of these projects
                 const { data: ownData } = await supabase.from('unit_ownerships')
                     .select('party_id, units!inner(project_id)')
@@ -32,13 +32,23 @@ exports.getAllParties = async (req, res) => {
                     if (o.party_id) validPartyIds.add(o.party_id);
                 });
 
+                // Also include parties created by this user (for newly created parties not yet linked)
+                const { data: userParties } = await supabase.from('parties')
+                    .select('id')
+                    .eq('company_id', req.companyId);
+
+                (userParties || []).forEach(p => {
+                    if (p.id) validPartyIds.add(p.id);
+                });
+
                 if (validPartyIds.size > 0) {
                     query = query.in('id', Array.from(validPartyIds));
                 } else {
                     query = query.eq('id', -1); // Force empty if no related parties found
                 }
             } else {
-                query = query.eq('id', -1); // Force empty if no projects
+                // No projects assigned - still show company parties for masters access
+                // Don't force empty, let company_id filter work
             }
         }
 
@@ -63,7 +73,7 @@ exports.getPartyById = async (req, res) => {
         if (req.companyId && data.company_id && data.company_id !== req.companyId) {
             return res.status(404).json({ message: 'Party not found' });
         }
-        
+
         // Project Segregation check (strict check for direct party fetch)
         if (req.isRestrictedToProjects) {
             const allowedIds = (req.projectsAccess || []).map(p => p.project_id);
@@ -106,7 +116,7 @@ exports.createParty = async (req, res) => {
         const { data, error } = await supabase.from('parties').insert(insertPayload).select('id').single();
 
         if (error) return res.status(500).json(handleDbError(error));
-        
+
         res.status(201).json({ success: true, id: data.id, ...req.body });
     } catch (err) {
         console.error("createParty Error:", err);
@@ -141,7 +151,7 @@ exports.updateParty = async (req, res) => {
         }).eq('id', req.params.id);
 
         if (error) return res.status(500).json(handleDbError(error));
-        
+
         res.json({ success: true, message: 'Party updated successfully' });
     } catch (err) {
         console.error("updateParty Error:", err);
@@ -162,9 +172,9 @@ exports.deleteParty = async (req, res) => {
         }
 
         const { error } = await supabase.from('parties').delete().eq('id', req.params.id);
-        
+
         if (error) return res.status(500).json(handleDbError(error));
-        
+
         res.json({ success: true, message: 'Party deleted successfully' });
     } catch (err) {
         console.error("deleteParty Error:", err);

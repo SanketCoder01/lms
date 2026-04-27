@@ -74,13 +74,13 @@ class SupabaseQueryBuilder {
   lt(col, val) { this.queryParams.append(col, `lt.${val}`); return this; }
   lte(col, val) { this.queryParams.append(col, `lte.${val}`); return this; }
   ilike(col, val) { this.queryParams.append(col, `ilike.${val}`); return this; }
-  
+
   in(col, vals) {
     const joined = Array.isArray(vals) ? vals.join(',') : vals;
     this.queryParams.append(col, `in.(${joined})`);
     return this;
   }
-  
+
   or(condition) {
     this.queryParams.append('or', `(${condition})`);
     return this;
@@ -91,13 +91,13 @@ class SupabaseQueryBuilder {
     const asc = options.ascending === false ? 'desc' : 'asc';
     let existing = this.queryParams.get('order');
     if (existing) {
-        this.queryParams.set('order', `${existing},${col}.${asc}`);
+      this.queryParams.set('order', `${existing},${col}.${asc}`);
     } else {
-        this.queryParams.set('order', `${col}.${asc}`);
+      this.queryParams.set('order', `${col}.${asc}`);
     }
     return this;
   }
-  
+
   limit(n) {
     this.queryParams.set('limit', n);
     return this;
@@ -117,20 +117,20 @@ class SupabaseQueryBuilder {
   async then(resolve, reject) {
     try {
       if (!this.url || !this.key) {
-        return resolve({ 
-          data: null, 
-          error: { message: "Database not configured. Missing credentials." } 
+        return resolve({
+          data: null,
+          error: { message: "Database not configured. Missing credentials." }
         });
       }
 
       const qs = this.queryParams.toString();
       const reqUrl = `${this.url}/rest/v1/${this.table}${qs ? '?' + qs : ''}`;
-      
+
       const options = {
         method: this.method,
         headers: this.headers,
       };
-      
+
       if (this.bodyData && this.method !== 'GET' && this.method !== 'HEAD') {
         options.body = JSON.stringify(this.bodyData);
       }
@@ -138,8 +138,8 @@ class SupabaseQueryBuilder {
       const res = await fetch(reqUrl, options);
       const isJson = res.headers.get('content-type')?.includes('application/json');
       let data = null;
-      
-      if (isJson) {
+
+      if (isJson && this.method !== 'HEAD') {
         data = await res.json();
       }
 
@@ -161,7 +161,7 @@ class SupabaseQueryBuilder {
       if (this.method === 'DELETE' && !data) {
         data = [];
       }
-      
+
       let count = null;
       if (this.countRequested) {
         const range = res.headers.get('content-range');
@@ -197,7 +197,7 @@ class SupabaseREST {
             const res = await fetch(uploadUrl, { method: 'POST', headers, body: fileBuffer });
             if (!res.ok) {
               let errData;
-              try { errData = await res.json(); } catch(e) { errData = { message: res.statusText }; }
+              try { errData = await res.json(); } catch (e) { errData = { message: res.statusText }; }
               return { data: null, error: errData };
             }
             return { data: { path }, error: null };

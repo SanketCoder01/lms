@@ -285,10 +285,11 @@ const ProjectAssignModal = ({ company, onClose, onSave, notify }) => {
   const [createErr, setCreateErr] = useState('');
   const [createdProject, setCreatedProject] = useState(null);
   const [assignAfter, setAssignAfter] = useState({ email: '', password: '', permissions: { view: true, edit: false, delete: false } });
-  const [limitInfo, setLimitInfo] = useState(null); // { project_limit, current_count, remaining }
+  const [limitInfo, setLimitInfo] = useState(null); // { project_limit, user_limit, current_count, user_count, remaining, user_remaining }
 
   // Manage-Quota tab state
   const [quotaInput, setQuotaInput] = useState('');
+  const [userQuotaInput, setUserQuotaInput] = useState('');
   const [quotaSaving, setQuotaSaving] = useState(false);
   const [quotaMsg, setQuotaMsg] = useState({ type: '', text: '' });
 
@@ -502,23 +503,39 @@ const ProjectAssignModal = ({ company, onClose, onSave, notify }) => {
 
   // ── Standalone quota update (no project creation) ─────────────────────────
   const handleUpdateQuota = async () => {
-    if (!quotaInput || isNaN(parseInt(quotaInput))) { setQuotaMsg({ type: 'err', text: 'Enter a valid number (1–50).' }); return; }
-    const newLimit = parseInt(quotaInput);
-    if (newLimit < 1 || newLimit > 50) { setQuotaMsg({ type: 'err', text: 'Limit must be between 1 and 50.' }); return; }
+    const newProjectLimit = quotaInput ? parseInt(quotaInput) : null;
+    const newUserLimit = userQuotaInput ? parseInt(userQuotaInput) : null;
+    
+    if (newProjectLimit !== null && (isNaN(newProjectLimit) || newProjectLimit < 1 || newProjectLimit > 50)) {
+      setQuotaMsg({ type: 'err', text: 'Project limit must be between 1 and 50.' }); return;
+    }
+    if (newUserLimit !== null && (isNaN(newUserLimit) || newUserLimit < 1 || newUserLimit > 100)) {
+      setQuotaMsg({ type: 'err', text: 'User limit must be between 1 and 100.' }); return;
+    }
+    if (!newProjectLimit && !newUserLimit) { setQuotaMsg({ type: 'err', text: 'Enter at least one limit value.' }); return; }
+    
     setQuotaSaving(true); setQuotaMsg({ type: '', text: '' });
     try {
       const res = await saFetch(`${SA_API}/api/super-admin/update-company-quota`, {
         method: 'POST',
-        body: JSON.stringify({ company_id: company.id, project_limit: newLimit }),
+        body: JSON.stringify({ 
+          company_id: company.id, 
+          project_limit: newProjectLimit,
+          user_limit: newUserLimit 
+        }),
       });
       if (res.success) {
         setLimitInfo(prev => ({
           ...prev,
-          project_limit: newLimit,
-          remaining: Math.max(0, newLimit - (prev?.current_count || 0)),
+          project_limit: res.project_limit,
+          user_limit: res.user_limit,
+          current_count: res.project_count,
+          user_count: res.user_count,
+          remaining: res.project_remaining,
+          user_remaining: res.user_remaining,
         }));
-        setQuotaMsg({ type: 'ok', text: `✅ Quota updated to ${newLimit} project${newLimit !== 1 ? 's' : ''} successfully.` });
-        notify('success', `Quota for ${company.company_name} set to ${newLimit}.`);
+        setQuotaMsg({ type: 'ok', text: `✅ Quotas updated successfully.` });
+        notify('success', `Quotas updated for ${company.company_name}.`);
       } else {
         setQuotaMsg({ type: 'err', text: res.message || 'Failed to update quota.' });
       }
@@ -527,18 +544,19 @@ const ProjectAssignModal = ({ company, onClose, onSave, notify }) => {
   };
 
   const handleRemoveQuota = async () => {
-    if (!window.confirm('Remove the project limit for this company? They will have unlimited projects.')) return;
+    if (!window.confirm('Remove all limits for this company? They will have unlimited projects and users.')) return;
     setQuotaSaving(true); setQuotaMsg({ type: '', text: '' });
     try {
       const res = await saFetch(`${SA_API}/api/super-admin/update-company-quota`, {
         method: 'POST',
-        body: JSON.stringify({ company_id: company.id, project_limit: null }),
+        body: JSON.stringify({ company_id: company.id, project_limit: null, user_limit: null }),
       });
       if (res.success) {
-        setLimitInfo(prev => ({ ...prev, project_limit: null, remaining: null }));
+        setLimitInfo(prev => ({ ...prev, project_limit: null, user_limit: null, remaining: null, user_remaining: null }));
         setQuotaInput('');
-        setQuotaMsg({ type: 'ok', text: '✅ Quota removed — company now has unlimited projects.' });
-        notify('success', `Quota removed for ${company.company_name}.`);
+        setUserQuotaInput('');
+        setQuotaMsg({ type: 'ok', text: '✅ All limits removed — company now has unlimited access.' });
+        notify('success', `Limits removed for ${company.company_name}.`);
       } else {
         setQuotaMsg({ type: 'err', text: res.message || 'Failed.' });
       }
@@ -942,8 +960,9 @@ const ProjectAssignModal = ({ company, onClose, onSave, notify }) => {
                     <div style={{ display: 'flex', gap: 12, marginBottom: 14 }}>
                       {[
                         { label: 'Projects Used', value: limitInfo.current_count, color: '#6366f1' },
-                        { label: 'Quota Limit', value: limitInfo.project_limit ?? '∞ Unlimited', color: limitInfo.project_limit ? '#f59e0b' : '#10b981' },
-                        { label: 'Remaining', value: limitInfo.project_limit ? Math.max(0, limitInfo.project_limit - limitInfo.current_count) : '∞', color: (!limitInfo.project_limit || (limitInfo.project_limit - limitInfo.current_count) > 2) ? '#10b981' : '#ef4444' },
+                        { label: 'Project Limit', value: limitInfo.project_limit ?? '∞', color: limitInfo.project_limit ? '#f59e0b' : '#10b981' },
+                        { label: 'Users', value: limitInfo.user_count ?? 0, color: '#8b5cf6' },
+                        { label: 'User Limit', value: limitInfo.user_limit ?? '∞', color: limitInfo.user_limit ? '#ec4899' : '#10b981' },
                       ].map(s => (
                         <div key={s.label} style={{ flex: 1, background: 'var(--sa-surface)', border: '1px solid var(--sa-border)', borderRadius: 8, padding: '10px 12px', textAlign: 'center' }}>
                           <div style={{ fontSize: 20, fontWeight: 800, color: s.color }}>{s.value}</div>
@@ -968,6 +987,24 @@ const ProjectAssignModal = ({ company, onClose, onSave, notify }) => {
                         </div>
                       </>
                     )}
+
+                    {/* User limit progress bar */}
+                    {limitInfo.user_limit && (
+                      <>
+                        <div style={{ height: 8, borderRadius: 6, background: 'var(--sa-border)', overflow: 'hidden', marginBottom: 6, marginTop: 14 }}>
+                          <div style={{
+                            height: '100%', borderRadius: 6, transition: 'width 0.4s',
+                            background: limitInfo.user_count >= limitInfo.user_limit ? '#ef4444'
+                              : (limitInfo.user_count / limitInfo.user_limit) > 0.75 ? '#f59e0b'
+                                : '#8b5cf6',
+                            width: `${Math.min(100, (limitInfo.user_count / limitInfo.user_limit) * 100)}%`,
+                          }} />
+                        </div>
+                        <div style={{ fontSize: 11, color: 'var(--sa-muted)', textAlign: 'right' }}>
+                          Users: {limitInfo.user_count} / {limitInfo.user_limit} ({Math.round((limitInfo.user_count / limitInfo.user_limit) * 100)}% used)
+                        </div>
+                      </>
+                    )}
                   </>
                 ) : (
                   <div style={{ color: 'var(--sa-muted)', fontSize: 13 }}>Loading quota information…</div>
@@ -976,43 +1013,67 @@ const ProjectAssignModal = ({ company, onClose, onSave, notify }) => {
 
               {/* Set new quota */}
               <div style={{ border: '1px solid var(--sa-border)', borderRadius: 12, padding: 20, marginBottom: 16 }}>
-                <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--sa-text)', marginBottom: 4 }}>Set New Quota Limit</div>
+                <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--sa-text)', marginBottom: 4 }}>Set Quota Limits</div>
                 <div style={{ fontSize: 12, color: 'var(--sa-muted)', marginBottom: 14 }}>
-                  Define the maximum number of projects this company can have. Use "Remove Limit" to make it unlimited.
+                  Define maximum projects and users this company can have. Leave empty to keep current value.
                 </div>
 
-                <div style={{ fontSize: 11, color: 'var(--sa-muted)', marginBottom: 6 }}>Quick select:</div>
-                <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap', marginBottom: 14 }}>
-                  {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 12, 15, 20, 25, 30, 50].map(n => (
-                    <button key={n} type="button" onClick={() => setQuotaInput(String(n))}
-                      style={{
-                        padding: '4px 10px', borderRadius: 5, fontSize: 12, border: '1px solid var(--sa-border)',
-                        background: quotaInput === String(n) ? 'var(--sa-primary)' : 'transparent',
-                        color: quotaInput === String(n) ? '#fff' : 'var(--sa-muted)',
-                        cursor: 'pointer', fontWeight: quotaInput === String(n) ? 700 : 400,
-                      }}>{n}</button>
-                  ))}
-                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 14 }}>
+                  {/* Project Limit */}
+                  <div>
+                    <label style={lblS}>📁 Project Limit (1 – 50)</label>
+                    <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', marginBottom: 8 }}>
+                      {[3, 5, 10, 15, 20, 30, 50].map(n => (
+                        <button key={n} type="button" onClick={() => setQuotaInput(String(n))}
+                          style={{
+                            padding: '3px 8px', borderRadius: 4, fontSize: 11, border: '1px solid var(--sa-border)',
+                            background: quotaInput === String(n) ? 'var(--sa-primary)' : 'transparent',
+                            color: quotaInput === String(n) ? '#fff' : 'var(--sa-muted)',
+                            cursor: 'pointer',
+                          }}>{n}</button>
+                      ))}
+                    </div>
+                    <input
+                      type="number" min="1" max="50" step="1"
+                      value={quotaInput}
+                      onChange={e => setQuotaInput(e.target.value)}
+                      placeholder={limitInfo?.project_limit ? `Current: ${limitInfo.project_limit}` : 'e.g. 10'}
+                      style={inpS}
+                    />
+                  </div>
 
-                <div style={{ marginBottom: 14 }}>
-                  <label style={lblS}>Or enter a custom number (1 – 50)</label>
-                  <input
-                    type="number" min="1" max="50" step="1"
-                    value={quotaInput}
-                    onChange={e => setQuotaInput(e.target.value)}
-                    placeholder={limitInfo?.project_limit ? `Current limit: ${limitInfo.project_limit}` : 'e.g. 8'}
-                    style={{ ...inpS, maxWidth: 200 }}
-                  />
+                  {/* User Limit */}
+                  <div>
+                    <label style={lblS}>👥 User Limit (1 – 100)</label>
+                    <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', marginBottom: 8 }}>
+                      {[5, 10, 20, 30, 50, 75, 100].map(n => (
+                        <button key={n} type="button" onClick={() => setUserQuotaInput(String(n))}
+                          style={{
+                            padding: '3px 8px', borderRadius: 4, fontSize: 11, border: '1px solid var(--sa-border)',
+                            background: userQuotaInput === String(n) ? '#8b5cf6' : 'transparent',
+                            color: userQuotaInput === String(n) ? '#fff' : 'var(--sa-muted)',
+                            cursor: 'pointer',
+                          }}>{n}</button>
+                      ))}
+                    </div>
+                    <input
+                      type="number" min="1" max="100" step="1"
+                      value={userQuotaInput}
+                      onChange={e => setUserQuotaInput(e.target.value)}
+                      placeholder={limitInfo?.user_limit ? `Current: ${limitInfo.user_limit}` : 'e.g. 20'}
+                      style={inpS}
+                    />
+                  </div>
                 </div>
 
                 <div style={{ display: 'flex', gap: 10 }}>
-                  <button className="sa-btn sa-btn-primary" disabled={quotaSaving || !quotaInput} onClick={handleUpdateQuota} style={{ flex: 1 }}>
-                    {quotaSaving ? <><span className="sa-spinner" /> Saving…</> : '💾 Update Quota'}
+                  <button className="sa-btn sa-btn-primary" disabled={quotaSaving || (!quotaInput && !userQuotaInput)} onClick={handleUpdateQuota} style={{ flex: 1 }}>
+                    {quotaSaving ? <><span className="sa-spinner" /> Saving…</> : '💾 Update Quotas'}
                   </button>
-                  {limitInfo?.project_limit && (
+                  {(limitInfo?.project_limit || limitInfo?.user_limit) && (
                     <button className="sa-btn sa-btn-ghost" disabled={quotaSaving} onClick={handleRemoveQuota}
                       style={{ color: '#f87171', borderColor: 'rgba(248,113,113,0.3)' }}>
-                      🗑️ Remove Limit
+                      🗑️ Remove All
                     </button>
                   )}
                 </div>
