@@ -1,0 +1,591 @@
+/* LeaseDetails.css */
+.lease-details-container {
+    padding: 24px;
+    background-color: #f8f9fa;
+    min-height: 100vh;
+}
+
+.details-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 24px;
+    background: white;
+    padding: 24px;
+    border-radius: 12px;
+    border: 1px solid #edf2f7;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.02);
+}
+
+.header-title-section h1 {
+    font-size: 1.5rem;
+    margin: 0 0 8px 0;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.status-badge {
+    font-size: 0.8rem;
+    padding: 4px 12px;
+    border-radius: 20px;
+    font-weight: 500;
+}
+
+.status-badge.active {
+    background-color: #f0fff4;
+    color: #38a169;
+}
+
+.header-subtitle {
+    color: #718096;
+    font-size: 0.95rem;
+}
+
+.header-actions {
+    display: flex;
+    gap: 12px;
+}
+
+.edit-btn,
+.renew-btn {
+    padding: 8px 20px;
+    border-radius: 6px;
+    font-weight: 500;
+    cursor: pointer;
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.edit-btn {
+    background: white;
+    border: 1px solid #e2e8f0;
+    color: #4a5568;
+}
+
+.renew-btn {
+    background: #4299e1;
+    border: 1px solid #4299e1;
+    color: white;
+}
+
+/* Info Grid */
+.info-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 24px;
+    margin-bottom: 24px;
+}
+
+.info-card {
+    background: white;
+    padding: 20px;
+    border-radius: 12px;
+    border: 1px solid #edf2f7;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.02);
+}
+
+.info-card h3 {
+    font-size: 0.9rem;
+    color: #718096;
+    margin: 0 0 16px 0;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.tenant-info,
+.unit-info {
+    display: flex;
+    gap: 16px;
+    align-items: center;
+    margin-bottom: 16px;
+}
+
+.avatar-placeholder,
+.unit-img-placeholder {
+    width: 48px;
+    height: 48px;
+    background: #edf2f7;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 600;
+    color: #718096;
+}
+
+.unit-img-placeholder {
+    border-radius: 8px;
+    width: 60px;
+}
+
+.info-text h4 {
+    margin: 0 0 4px 0;
+    font-size: 1.1rem;
+    color: #2d3748;
+}
+
+.info-text p {
+    margin: 0;
+    color: #718096;
+    font-size: 0.9rem;
+}
+
+.detail-row {
+    display: flex;
+    justify-content: space-between;
+    margin-top: 12px;
+    padding-top: 12px;
+    border-top: 1px solid #edf2f7;
+}
+
+.detail-item label {
+    display: block;
+    font-size: 0.75rem;
+    color: #718096;
+    margin-bottom: 2px;
+}
+
+.detail-item span {
+    font-size: 0.9rem;
+    font-weight: 500;
+    color: #2d3748;
+}
+
+/* Expiry Card */
+.expiry-stat {
+    margin-bottom: 24px;
+}
+
+.expiry-days {
+    font-size: 2rem;
+    font-weight: 700;
+    color: #2d3748;
+    line-height: 1;
+}
+
+.expiry-label {
+    color: #718096;
+    font-size: 0.9rem;
+}
+
+.progress-bar {
+    height: 8px;
+    background: #edf2f7;
+    border-radius: 4px;
+    overflow: hidden;
+    margin-bottom: 12px;
+}
+
+.progress-fill {
+    height: 100%;
+    background: #38a169;
+    border-radius: 4px;
+}
+
+/* Timeline */
+.timeline-section {
+    background: white;
+    padding: 24px;
+    border-radius: 12px;
+    margin-bottom: 24px;
+    border: 1px solid #edf2f7;
+}
+
+.timeline-track {
+    position: relative;
+    height: 4px;
+    background: #edf2f7;
+    margin: 40px 20px;
+    border-radius: 2px;
+}
+
+.timeline-point {
+    position: absolute;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    width: 12px;
+    height: 12px;
+    background: #4299e1;
+    border-radius: 50%;
+    border: 2px solid white;
+    box-shadow: 0 0 0 2px #4299e1;
+}
+
+.timeline-point.start {
+    left: 0%;
+}
+
+.timeline-point.current {
+    left: 42%;
+    /* Mock progress */
+    width: 16px;
+    height: 16px;
+    background: white;
+    border: 4px solid #2b6cb0;
+}
+
+.timeline-point.end {
+    left: 100%;
+}
+
+.timeline-label {
+    position: absolute;
+    top: 20px;
+    transform: translateX(-50%);
+    text-align: center;
+    width: 100px;
+}
+
+.timeline-point.start .timeline-label {
+    text-align: left;
+    transform: translateX(0);
+}
+
+.timeline-point.end .timeline-label {
+    text-align: right;
+    transform: translateX(-100%);
+}
+
+.date-text {
+    display: block;
+    font-weight: 600;
+    font-size: 0.9rem;
+}
+
+.desc-text {
+    font-size: 0.75rem;
+    color: #718096;
+}
+
+.current-label-badge {
+    position: absolute;
+    top: -35px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: #2b6cb0;
+    color: white;
+    padding: 4px 12px;
+    border-radius: 12px;
+    font-size: 0.8rem;
+    font-weight: 600;
+}
+
+/* Financials Row */
+.financials-row {
+    display: grid;
+    grid-template-columns: 2fr 1fr;
+    gap: 24px;
+}
+
+.rent-card,
+.deposit-card {
+    background: white;
+    padding: 24px;
+    border-radius: 12px;
+    border: 1px solid #edf2f7;
+}
+
+.rent-breakdown {
+    display: flex;
+    gap: 16px;
+    margin-top: 20px;
+}
+
+.rent-item {
+    background: #f7fafc;
+    padding: 16px;
+    border-radius: 8px;
+    flex: 1;
+    text-align: center;
+}
+
+.rent-item label {
+    display: block;
+    font-size: 0.8rem;
+    color: #718096;
+    margin-bottom: 8px;
+}
+
+.amount {
+    display: block;
+    font-size: 1.2rem;
+    font-weight: 600;
+    color: #2d3748;
+}
+
+.total-row {
+    margin-top: 20px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding-top: 20px;
+    border-top: 1px solid #edf2f7;
+}
+
+.total-amount {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: #2d3748;
+}
+
+.deposit-highlight {
+    background: #ebf8ff;
+    padding: 16px;
+    border-radius: 8px;
+    margin-top: 16px;
+}
+
+.deposit-amount {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: #2b6cb0;
+    display: block;
+    margin-bottom: 4px;
+}
+
+.deposit-details {
+    margin-top: 16px;
+    font-size: 0.85rem;
+    line-height: 1.6;
+}
+
+.deposit-row {
+    display: flex;
+    justify-content: space-between;
+    color: #718096;
+}
+
+.deposit-row span:last-child {
+    color: #2d3748;
+    font-weight: 500;
+}
+
+@media (max-width: 1024px) {
+    .financials-row {
+        grid-template-columns: 1fr;
+    }
+    
+    .info-grid {
+        grid-template-columns: 1fr;
+    }
+    
+    .lease-details-container {
+        padding: 16px;
+    }
+    
+    .details-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 16px;
+        padding: 16px;
+    }
+    
+    .header-actions {
+        width: 100%;
+        flex-direction: column;
+    }
+    
+    .edit-btn, .renew-btn {
+        width: 100%;
+        justify-content: center;
+    }
+}
+
+@media (max-width: 768px) {
+    .lease-details-container {
+        padding: 12px;
+    }
+    
+    .details-header {
+        padding: 12px;
+        border-radius: 8px;
+    }
+    
+    .header-title-section h1 {
+        font-size: 1.25rem;
+        flex-wrap: wrap;
+    }
+    
+    .header-subtitle {
+        font-size: 0.85rem;
+    }
+    
+    .info-card {
+        padding: 16px;
+        border-radius: 8px;
+    }
+    
+    .info-card h3 {
+        font-size: 0.8rem;
+    }
+    
+    .tenant-info, .unit-info {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 12px;
+    }
+    
+    .avatar-placeholder, .unit-img-placeholder {
+        width: 40px;
+        height: 40px;
+    }
+    
+    .info-text h4 {
+        font-size: 1rem;
+    }
+    
+    .detail-row {
+        flex-direction: column;
+        gap: 12px;
+    }
+    
+    .detail-item {
+        width: 100%;
+    }
+    
+    .timeline-section {
+        padding: 16px;
+        border-radius: 8px;
+        overflow-x: auto;
+    }
+    
+    .timeline-track {
+        margin: 40px 10px;
+    }
+    
+    .timeline-label {
+        width: 80px;
+    }
+    
+    .date-text {
+        font-size: 0.8rem;
+    }
+    
+    .desc-text {
+        font-size: 0.7rem;
+    }
+    
+    .rent-card, .deposit-card {
+        padding: 16px;
+        border-radius: 8px;
+    }
+    
+    .rent-breakdown {
+        flex-direction: column;
+    }
+    
+    .rent-item {
+        padding: 12px;
+    }
+    
+    .amount {
+        font-size: 1rem;
+    }
+    
+    .total-amount {
+        font-size: 1.25rem;
+    }
+    
+    .deposit-amount {
+        font-size: 1.25rem;
+    }
+    
+    .expiry-days {
+        font-size: 1.5rem;
+    }
+}
+
+@media (max-width: 480px) {
+    .lease-details-container {
+        padding: 8px;
+    }
+    
+    .details-header {
+        padding: 12px;
+    }
+    
+    .header-title-section h1 {
+        font-size: 1.1rem;
+    }
+    
+    .status-badge {
+        font-size: 0.7rem;
+        padding: 3px 8px;
+    }
+    
+    .info-card {
+        padding: 12px;
+    }
+    
+    .info-card h3 {
+        font-size: 0.75rem;
+        margin-bottom: 12px;
+    }
+    
+    .avatar-placeholder, .unit-img-placeholder {
+        width: 36px;
+        height: 36px;
+        font-size: 0.8rem;
+    }
+    
+    .info-text h4 {
+        font-size: 0.95rem;
+    }
+    
+    .info-text p {
+        font-size: 0.8rem;
+    }
+    
+    .detail-item label {
+        font-size: 0.7rem;
+    }
+    
+    .detail-item span {
+        font-size: 0.85rem;
+    }
+    
+    .timeline-section {
+        padding: 12px;
+    }
+    
+    .current-label-badge {
+        font-size: 0.7rem;
+        padding: 3px 8px;
+        top: -30px;
+    }
+    
+    .rent-card, .deposit-card {
+        padding: 12px;
+    }
+    
+    .rent-item label {
+        font-size: 0.75rem;
+    }
+    
+    .amount {
+        font-size: 0.95rem;
+    }
+    
+    .total-amount, .deposit-amount {
+        font-size: 1.1rem;
+    }
+    
+    .deposit-details {
+        font-size: 0.8rem;
+    }
+    
+    .expiry-days {
+        font-size: 1.25rem;
+    }
+    
+    .expiry-label {
+        font-size: 0.8rem;
+    }
+    
+    .progress-bar {
+        height: 6px;
+    }
+}

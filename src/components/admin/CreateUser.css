@@ -1,0 +1,190 @@
+/* CreateUser.css */
+.create-user-container {
+    padding: 20px;
+    display: flex;
+    justify-content: center;
+}
+
+.user-form-card {
+    background: #ffffff;
+    border-radius: 16px;
+    box-shadow: 0 4px 25px rgba(0, 0, 0, 0.03);
+    width: 100%;
+    max-width: 800px;
+    padding: 30px;
+    border: 1px solid #f0f0f0;
+}
+
+.form-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 30px;
+}
+
+.header-titles h2 {
+    font-size: 1.5rem;
+    font-weight: 700;
+    margin: 0 0 5px 0;
+    color: #1e293b;
+}
+
+.header-titles p {
+    color: #64748b;
+    font-size: 0.9rem;
+    margin: 0;
+}
+
+.close-btn {
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: #64748b;
+    padding: 5px;
+    transition: color 0.2s;
+}
+
+.close-btn:hover {
+    color: #1e293b;
+}
+
+/* Form Layout */
+.user-form {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+.form-row {
+    display: flex;
+    gap: 20px;
+}
+
+.form-group {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.form-group label {
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: #334155;
+}
+
+.form-group input,
+.form-group select {
+    padding: 10px 12px;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    font-size: 0.9rem;
+    color: #1e293b;
+    background: #f8fafc;
+    width: 100%;
+    box-sizing: border-box;
+    transition: all 0.2s;
+}
+
+.form-group input:focus,
+.form-group select:focus {
+    background: white;
+    border-color: #3b82f6;
+    /* Primary Blue */
+    outline: none;
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+/* Custom Select Wrapper */
+.select-wrapper {
+    position: relative;
+    width: 100%;
+}
+
+.chevron-down {
+    position: absolute;
+    right: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: #64748b;
+    pointer-events: none;
+}
+
+.form-group select {
+    appearance: none;
+    cursor: pointer;
+}
+
+/* Footer */
+.form-footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: 15px;
+    margin-top: 20px;
+    padding-top: 20px;
+    border-top: 1px solid #f1f5f9;
+}
+
+.cancel-btn {
+    padding: 10px 20px;
+    background: white;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    color: #64748b;
+    font-weight: 500;
+    cursor: pointer;
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s;
+}
+
+.cancel-btn:hover {
+    background: #f8fafc;
+    color: #334155;
+}
+
+.create-btn {
+    padding: 10px 24px;
+    background: #155eef;
+    /* Primary Blue */
+    color: white;
+    border: none;
+    border-radius: 8px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+
+.create-btn:hover {
+    background: #1d4ed8;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+    .form-row {
+        flex-direction: column;
+    }
+
+    .form-footer {
+        flex-direction: column-reverse;
+    }
+
+    .create-btn,
+    .cancel-btn {
+        width: 100%;
+    }
+}
+/* ===== FIX ROLE DROPDOWN VISIBILITY ===== */
+
+/* FIX OPTION TEXT VISIBILITY */
+select {
+  color: #000 !important;
+  background-color: #fff !important;
+}
+
+select option {
+  color: #000 !important;
+  background-color: #fff !important;
+}

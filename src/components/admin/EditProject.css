@@ -1,0 +1,276 @@
+/* EditProject.css */
+.edit-project-container {
+    padding: 0 10px;
+    max-width: 1200px;
+    margin: 0 auto;
+}
+
+/* Header */
+.edit-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 30px;
+}
+
+.breadcrumb {
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+    margin-bottom: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.breadcrumb .active {
+    color: var(--text-primary);
+    font-weight: 600;
+}
+
+.title-row {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    margin-bottom: 8px;
+}
+
+.title-row h1 {
+    font-size: 1.8rem;
+    font-weight: 700;
+    color: var(--text-primary);
+    margin: 0;
+}
+
+.status-badge {
+    padding: 4px 12px;
+    border-radius: 20px;
+    font-size: 0.8rem;
+    font-weight: 600;
+}
+
+.status-badge.active {
+    background-color: #ecfdf5;
+    color: #10b981;
+}
+
+.subtitle {
+    color: var(--text-secondary);
+    font-size: 0.9rem;
+    margin: 0;
+    max-width: 600px;
+}
+
+.last-edited {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    background: #f3f4f6;
+    padding: 6px 12px;
+    border-radius: 20px;
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+}
+
+/* Grid Layout */
+.edit-grid {
+    display: grid;
+    grid-template-columns: 2fr 1fr;
+    gap: 24px;
+}
+
+.edit-col-main,
+.edit-col-side {
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+}
+
+.edit-card {
+    background: white;
+    padding: 24px;
+    /* Default padding for cleaner look */
+    /* If you want the 'card' look, these next lines apply. 
+       However, the image shows clean blocks, maybe no visible border/shadow for inputs themselves, 
+       but containerized. I'll stick to a subtle card style. */
+    /* border: 1px solid #f1f5f9; */
+    /* border-radius: 12px; */
+}
+
+/* Form Styling within Edit Page */
+.edit-card h3 {
+    font-size: 1.1rem;
+    font-weight: 700;
+    margin: 0 0 20px 0;
+    color: var(--text-primary);
+}
+
+.form-group.vertical {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-bottom: 15px;
+}
+
+.form-group.vertical label {
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.form-group.vertical input,
+.form-group.vertical textarea {
+    padding: 10px 12px;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    font-size: 0.9rem;
+    width: 100%;
+    box-sizing: border-box;
+    transition: all 0.2s;
+    background: #f8fafc;
+}
+
+.form-group.vertical input:focus,
+.form-group.vertical textarea:focus {
+    background: white;
+    border-color: var(--primary-blue);
+    outline: none;
+}
+
+/* Rent Projection Card Special Styling */
+.rent-card {
+    background: #ffffff;
+    /* OR #fcfcfc if needed to distinguish */
+    border-radius: 12px;
+    /* Optional shadow if desired */
+    /* box-shadow: 0 4px 15px rgba(0,0,0,0.02); */
+}
+
+/* Toggle Switch */
+.toggle-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: #f8fafc;
+    padding: 12px 16px;
+    border-radius: 8px;
+    border: 1px solid #e2e8f0;
+}
+
+.toggle-row span {
+    font-weight: 500;
+    color: var(--text-primary);
+    font-size: 0.9rem;
+}
+
+.switch {
+    position: relative;
+    display: inline-block;
+    width: 44px;
+    height: 24px;
+}
+
+.switch input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+}
+
+.slider {
+    position: absolute;
+    cursor: pointer;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: #ccc;
+    transition: .4s;
+}
+
+.slider:before {
+    position: absolute;
+    content: "";
+    height: 18px;
+    width: 18px;
+    left: 3px;
+    bottom: 3px;
+    background-color: white;
+    transition: .4s;
+}
+
+input:checked+.slider {
+    background-color: var(--primary-blue);
+}
+
+input:focus+.slider {
+    box-shadow: 0 0 1px var(--primary-blue);
+}
+
+input:checked+.slider:before {
+    transform: translateX(20px);
+}
+
+.slider.round {
+    border-radius: 34px;
+}
+
+.slider.round:before {
+    border-radius: 50%;
+}
+
+/* Save Status */
+.save-status {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+    margin-top: 10px;
+}
+
+/* Footer */
+.edit-footer {
+    display: flex;
+    justify-content: flex-end;
+    align-items: center;
+    gap: 15px;
+    margin-top: 40px;
+    padding-top: 20px;
+    border-top: 1px solid #f1f5f9;
+}
+
+.cancel-btn {
+    padding: 10px 20px;
+    color: var(--text-secondary);
+    text-decoration: none;
+    font-weight: 500;
+    border-radius: 6px;
+}
+
+.cancel-btn:hover {
+    background: #f1f5f9;
+}
+
+.update-btn {
+    padding: 10px 20px;
+    background: var(--primary-blue);
+    /* #0984e3 */
+    color: white;
+    border: none;
+    border-radius: 8px;
+    font-weight: 600;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    transition: background 0.2s;
+}
+
+.update-btn:hover {
+    background: #0069d9;
+}
+
+/* Responsive */
+@media (max-width: 900px) {
+    .edit-grid {
+        grid-template-columns: 1fr;
+    }
+}

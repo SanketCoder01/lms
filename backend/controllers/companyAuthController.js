@@ -1,0 +1,494 @@
+/**
+ * controllers/companyAuthController.js
+ * Handles company user login, registration, session heartbeat, and logout.
+ * Company users are stored in company_users table (NOT Supabase Auth).
+ */
+
+const bcrypt   = require('bcryptjs');
+const jwt      = require('jsonwebtoken');
+const supabase = require('../config/db');
+
+const COMPANY_JWT_SECRET = process.env.COMPANY_JWT_SECRET || 'COMPANY_USER_JWT_SECRET_2024';
+
+// ─── COMPANY LOGIN ───────────────────────────────────────────────────────────
+const companyLogin = async (req, res) => {
+  try {
+    const { email, password } = req.body;
+    if (!email || !password)
+      return res.status(400).json({ success: false, message: 'Email and password required' });
+
+    // 1. Check if email is in company_users (full company admin)
+    const { data: user, error } = await supabase
+      .from('company_users')
+      .select('*')
+      .eq('email', email)
+      .single();
+
+    if (error || !user) {
+      // ── 1a. Try module_users (sub-user assigned by super admin / admin) ───────
+      // Fetch ALL rows for this email so users with multiple modules get full access
+      const { data: moduleRows, error: muErr } = await supabase
+        .from('module_users')
+        .select('*, company_users!module_users_company_id_fkey(company_name)')
+        .eq('email', email)
+        .order('module_name');
+
+      if (!muErr && moduleRows && moduleRows.length > 0) {
+        const firstRow = moduleRows[0];
+
+        // Check status on first row (all rows share same account)
+        if (firstRow.status === 'suspended')
+          return res.status(403).json({ success: false, message: 'Your module account has been suspended.', code: 'SUSPENDED' });
+
+        const isValid = await bcrypt.compare(password, firstRow.password_hash);
+        if (!isValid)
+          return res.status(401).json({ success: false, message: 'Invalid email or password.', code: 'INVALID_CREDENTIALS' });
+
+        const companyName = firstRow.company_users?.company_name || '';
+
+        // ── Build modules_access — handles BOTH storage strategies ──────────
+        // Strategy A: multiple rows (composite unique constraint) → map each row
+        // Strategy B: single row with permissions._modules (old UNIQUE(email) constraint)
+        //             → expand the _modules array
+        let modules_access = [];
+        for (const r of moduleRows) {
+          if (Array.isArray(r.permissions?._modules) && r.permissions._modules.length > 0) {
+            // Strategy B: expand merged multi-module row
+            for (const m of r.permissions._modules) {
+              modules_access.push({
+                module_name: m.module_name,
+                permissions: m.permissions || { view: true, edit: false, delete: false },
+              });
+            }
+          } else {
+            // Strategy A: normal single-module row
+            const { _modules, ...cleanPerms } = r.permissions || {};
+            modules_access.push({
+              module_name: r.module_name,
+              permissions: cleanPerms || { view: true, edit: false, delete: false },
+            });
+          }
+        }
+        // Deduplicate in case of both formats in the same account
+        const seen = new Set();
+        modules_access = modules_access.filter(m => {
+          if (seen.has(m.module_name)) return false;
+          seen.add(m.module_name);
+          return true;
+        });
+
+        // ── Also check project_users for this email+company ──────────────────────
+        // (same user may have been assigned specific project access in addition to module access)
+        let projects_access = [];
+        try {
+          const { data: projectRows, error: prErr } = await supabase
+            .from('project_users')
+            .select('id, project_id, email, permissions, status, company_id')
+            .eq('email', email)
+            .eq('company_id', firstRow.company_id)
+            .neq('status', 'suspended');
+
+          if (!prErr && projectRows && projectRows.length > 0) {
+            // Fetch project names in a separate query (avoids FK join name issues)
+            const projectIds = projectRows.map(p => p.project_id);
+            const { data: projectData } = await supabase
+              .from('projects')
+              .select('id, project_name')
+              .in('id', projectIds);
+
+            const nameMap = {};
+            (projectData || []).forEach(p => { nameMap[p.id] = p.project_name; });
+
+            projects_access = projectRows.map(p => ({
+              project_id:   p.project_id,
+              project_name: nameMap[p.project_id] || '',
+              permissions:  p.permissions || { view: true, edit: false, delete: false },
+              status:       p.status,
+            }));
+            console.log('[login] module_user also has project access:',
+              projects_access.map(p => `${p.project_name}(${p.project_id})`).join(', '));
+          }
+        } catch (projErr) {
+          console.warn('[login] Could not fetch project_users for module_user:', projErr.message);
+        }
+
+
+        // Primary module = first alphabetically (or the only one)
+        const primaryModule     = firstRow.module_name;
+        const primaryPermissions = firstRow.permissions;
+
+        const token = jwt.sign(
+          {
+            id:             firstRow.id,
+            email:          firstRow.email,
+            company_id:     firstRow.company_id,
+            company_name:   companyName,
+            type:           'module_user',
+            module_name:    primaryModule,
+            modules_access,
+            projects_access,
+            permissions:    primaryPermissions,
+          },
+          COMPANY_JWT_SECRET,
+          { expiresIn: '8h' }
+        );
+
+        return res.json({
+          success: true,
+          token,
+          session_id: null,
+          user: {
+            id:             firstRow.id,
+            email:          firstRow.email,
+            company_id:     firstRow.company_id,
+            company_name:   companyName,
+            type:           'module_user',
+            module_name:    primaryModule,
+            modules_access,
+            projects_access,  // ← new: list of { project_id, project_name, permissions }
+            permissions:    primaryPermissions,
+            status:         firstRow.status,
+          },
+          message: 'Login successful',
+        });
+      }
+
+      // -- 1b. Try project_users (project-specific user) --
+      // Fetch ALL project rows for this email (user could have access to multiple projects)
+      const { data: projectUserRows, error: puErr } = await supabase
+        .from('project_users')
+        .select('id, project_id, email, permissions, status, company_id, password_hash')
+        .eq('email', email)
+        .neq('status', 'suspended');
+
+      if (!puErr && projectUserRows && projectUserRows.length > 0) {
+        // Use the first row to validate password
+        const firstPU = projectUserRows[0];
+
+        if (firstPU.status === 'suspended')
+          return res.status(403).json({ success: false, message: 'Your project account has been suspended.', code: 'SUSPENDED' });
+
+        const isValid = await bcrypt.compare(password, firstPU.password_hash);
+        if (!isValid)
+          return res.status(401).json({ success: false, message: 'Invalid email or password.', code: 'INVALID_CREDENTIALS' });
+
+        // Fetch project names separately for all assigned projects
+        const projectIds = projectUserRows.map(p => p.project_id);
+        const { data: projectData } = await supabase
+          .from('projects')
+          .select('id, project_name')
+          .in('id', projectIds);
+        const nameMap = {};
+        (projectData || []).forEach(p => { nameMap[p.id] = p.project_name; });
+
+        const projects_access = projectUserRows.map(p => ({
+          project_id:   p.project_id,
+          project_name: nameMap[p.project_id] || '',
+          permissions:  p.permissions || { view: true, edit: false, delete: false },
+          status:       p.status,
+        }));
+
+        // Fetch the company name for this project user (so sidebar shows it)
+        let companyNamePU = '';
+        try {
+          const { data: companyRow } = await supabase
+            .from('company_users')
+            .select('company_name')
+            .eq('id', firstPU.company_id)
+            .single();
+          companyNamePU = companyRow?.company_name || '';
+        } catch (cnErr) { console.warn('[login] Could not fetch company_name for project_user:', cnErr.message); }
+
+        // Also check module_users for the same email+company (same user may have module assignments too)
+        let modules_access = [];
+        try {
+          const { data: moduleRows } = await supabase
+            .from('module_users')
+            .select('id, module_name, permissions')
+            .eq('email', email)
+            .eq('company_id', firstPU.company_id);
+
+          if (moduleRows && moduleRows.length > 0) {
+            for (const r of moduleRows) {
+              if (Array.isArray(r.permissions?._modules) && r.permissions._modules.length > 0) {
+                for (const m of r.permissions._modules) {
+                  modules_access.push({ module_name: m.module_name, permissions: m.permissions || { view: true, edit: false, delete: false } });
+                }
+              } else {
+                const { _modules, ...cleanPerms } = r.permissions || {};
+                modules_access.push({ module_name: r.module_name, permissions: cleanPerms });
+              }
+            }
+            // Deduplicate
+            const seen = new Set();
+            modules_access = modules_access.filter(m => { if (seen.has(m.module_name)) return false; seen.add(m.module_name); return true; });
+          }
+        } catch (modErr) {
+          console.warn('[login] Could not fetch module_users for project_user:', modErr.message);
+        }
+
+        // If user also has module assignments, log them in as module_user type so they see both
+        const hasModuleAssignments = modules_access.length > 0;
+        const userType = hasModuleAssignments ? 'module_user' : 'project_user';
+
+        // Primary project (first one, for backwards compat)
+        const primaryProjectId   = firstPU.project_id;
+        const primaryProjectName = nameMap[primaryProjectId] || '';
+
+        const token = jwt.sign(
+          {
+            id:             firstPU.id,
+            email:          firstPU.email,
+            company_id:     firstPU.company_id,
+            type:           userType,
+            project_id:     primaryProjectId,
+            project_name:   primaryProjectName,
+            permissions:    firstPU.permissions,
+            projects_access,
+            modules_access,
+          },
+          COMPANY_JWT_SECRET,
+          { expiresIn: '8h' }
+        );
+
+        return res.json({
+          success: true,
+          token,
+          session_id: null,
+          user: {
+            id:             firstPU.id,
+            email:          firstPU.email,
+            company_id:     firstPU.company_id,
+            company_name:   companyNamePU,
+            type:           userType,
+            project_id:     primaryProjectId,
+            project_name:   primaryProjectName,
+            permissions:    firstPU.permissions,
+            projects_access,
+            modules_access,
+            status:         firstPU.status,
+          },
+          message: 'Login successful',
+        });
+      }
+
+
+      // ── 1c. Check pending/rejected registrations ──────────────────────────
+      const { data: pending } = await supabase
+        .from('company_registrations')
+        .select('status')
+        .eq('email', email)
+        .single();
+
+      if (pending && pending.status === 'pending')
+        return res.status(403).json({ success: false, message: 'Your account is pending admin approval. Please wait.', code: 'PENDING_APPROVAL' });
+
+      if (pending && pending.status === 'rejected')
+        return res.status(403).json({ success: false, message: 'Your registration has been rejected. Contact administrator.', code: 'REJECTED' });
+
+      return res.status(401).json({ success: false, message: 'Invalid email or password. Contact your administrator.', code: 'INVALID_CREDENTIALS' });
+    }
+
+    // 2. Check status
+    if (user.status === 'suspended')
+      return res.status(403).json({ success: false, message: 'Your account has been suspended. Contact administrator.', code: 'SUSPENDED' });
+
+    // 3. Verify password
+    const isValid = await bcrypt.compare(password, user.password_hash);
+    if (!isValid)
+      return res.status(401).json({ success: false, message: 'Invalid email or password. Contact your administrator.', code: 'INVALID_CREDENTIALS' });
+
+    // 4. Update last_login
+    await supabase.from('company_users').update({ last_login: new Date().toISOString() }).eq('id', user.id);
+
+    // 5. Create session record for live activity
+    const ip = req.ip || req.headers['x-forwarded-for'] || 'unknown';
+    const userAgent = req.headers['user-agent'] || '';
+    const { data: session } = await supabase
+      .from('user_sessions')
+      .insert({
+        company_user_id: user.id,
+        email: user.email,
+        company_name: user.company_name,
+        ip_address: ip,
+        user_agent: userAgent,
+        is_active: true,
+      })
+      .select()
+      .single();
+
+    // 6. Issue JWT
+    const token = jwt.sign(
+      {
+        id: user.id,
+        email: user.email,
+        company_id: user.id,        // company_id = the user's own id (isolation key)
+        company_name: user.company_name,
+        role: user.role,
+        session_id: session?.id,
+        modules_access: user.modules_access,
+        type: 'company_user',
+      },
+      COMPANY_JWT_SECRET,
+      { expiresIn: '8h' }
+    );
+
+    const { password_hash: _, ...safeUser } = user;
+    return res.json({
+      success: true,
+      token,
+      session_id: session?.id,
+      user: { ...safeUser, company_id: user.id },
+      message: 'Login successful',
+    });
+  } catch (err) {
+    console.error('COMPANY LOGIN ERROR:', err);
+    return res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+// ─── COMPANY REGISTRATION (self-register) ────────────────────────────────────
+const companyRegister = async (req, res) => {
+  try {
+    const { company_name, email, phone, address, role, password } = req.body;
+
+    if (!company_name || !email || !password)
+      return res.status(400).json({ success: false, message: 'Company name, email and password are required' });
+
+    // Password match validation is done on frontend - no need to check here
+
+    // Check if already registered or already a user
+    const { data: existingReg } = await supabase.from('company_registrations').select('id, status').eq('email', email).single();
+    if (existingReg)
+      return res.status(409).json({ success: false, message: `Email already submitted for registration (status: ${existingReg.status})` });
+
+    const { data: existingUser } = await supabase.from('company_users').select('id').eq('email', email).single();
+    if (existingUser)
+      return res.status(409).json({ success: false, message: 'This email is already registered. Please login.' });
+
+    const password_hash = await bcrypt.hash(password, 12);
+
+    // Get proof document path if uploaded
+    const proof_document = req.file ? `/uploads/${req.file.filename}` : null;
+
+    const { data, error } = await supabase
+      .from('company_registrations')
+      .insert({
+        company_name, email, phone, address,
+        role: role || 'user',
+        password_hash,
+        proof_document,
+        status: 'pending',
+      })
+      .select()
+      .single();
+
+    if (error) throw error;
+
+    return res.status(201).json({
+      success: true,
+      message: 'Registration submitted successfully! An administrator will review and approve your account.',
+      registration_id: data.id,
+    });
+  } catch (err) {
+    console.error('COMPANY REGISTER ERROR:', err);
+    return res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+// ─── SESSION HEARTBEAT (called every 30s from frontend) ──────────────────────
+const sessionHeartbeat = async (req, res) => {
+  try {
+    const { session_id, current_page } = req.body;
+    if (!session_id) return res.status(400).json({ success: false, message: 'session_id required' });
+
+    // Check if session was killed by admin
+    const { data: session } = await supabase
+      .from('user_sessions')
+      .select('is_active')
+      .eq('id', session_id)
+      .single();
+
+    if (!session || !session.is_active)
+      return res.status(401).json({ success: false, message: 'Session terminated by administrator', code: 'SESSION_KILLED' });
+
+    // Update last_seen
+    await supabase.from('user_sessions').update({
+      last_seen: new Date().toISOString(),
+      current_page: current_page || '/',
+    }).eq('id', session_id);
+
+    return res.json({ success: true, active: true });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+// ─── COMPANY LOGOUT ──────────────────────────────────────────────────────────
+const companyLogout = async (req, res) => {
+  try {
+    const { session_id } = req.body;
+    if (session_id)
+      await supabase.from('user_sessions').update({ is_active: false }).eq('id', session_id);
+    return res.json({ success: true, message: 'Logged out successfully' });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+// __ GET ACTIVE ANNOUNCEMENTS (for company users) _______________
+const getActiveAnnouncements = async (req, res) => {
+  try {
+    const { data, error } = await supabase
+      .from('announcements')
+      .select('id, title, message, type, created_at, expires_at')
+      .eq('is_active', true)
+      .or(`expires_at.is.null,expires_at.gt.${new Date().toISOString()}`)
+      .order('created_at', { ascending: false });
+
+    // Handle missing table or other errors gracefully
+    if (error) {
+      // If table doesn't exist, return empty array instead of error
+      if (error.code === '42P01' || error.message?.includes('does not exist')) {
+        return res.json({ success: true, announcements: [] });
+      }
+      console.error('[getActiveAnnouncements]', error);
+      return res.json({ success: true, announcements: [] });
+    }
+    
+    return res.json({ success: true, announcements: data || [] });
+  } catch (err) {
+    console.error('[getActiveAnnouncements] catch:', err);
+    return res.json({ success: true, announcements: [] });
+  }
+};
+
+// ─── GET ME (Live profile) ───────────────────────────────────────────────────────────
+const getMe = async (req, res) => {
+  try {
+    const authHeader = req.headers.authorization;
+    if (!authHeader) return res.status(401).json({ success: false, message: 'No token' });
+
+    const token = authHeader.split(' ')[1];
+    const decoded = jwt.verify(token, COMPANY_JWT_SECRET);
+    const userId = decoded.id;
+
+    const { data: user, error } = await supabase
+      .from('company_users')
+      .select('id, first_name, last_name, company_name, email, phone, role, status, profile_image, modules_access, created_at, last_login')
+      .eq('id', userId)
+      .single();
+
+    if (error || !user) return res.status(404).json({ success: false, message: 'User not found' });
+    
+    res.json({ success: true, user });
+  } catch (error) {
+    if (error.name === 'TokenExpiredError') {
+      return res.status(401).json({ success: false, message: 'Token expired', code: 'TOKEN_EXPIRED' });
+    }
+    console.error("getMe error:", error);
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+};
+
+module.exports = { companyLogin, companyRegister, sessionHeartbeat, companyLogout, getActiveAnnouncements, getMe };

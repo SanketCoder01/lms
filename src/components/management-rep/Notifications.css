@@ -1,0 +1,237 @@
+/* Notifications.css - Premium Design */
+.notifications-container {
+    display: flex;
+    min-height: 100vh;
+    background-color: var(--bg-light);
+}
+
+.content-card {
+    padding: 0;
+    /* Tabs sit flush */
+    overflow: hidden;
+}
+
+.notifications-tabs {
+    display: flex;
+    gap: 32px;
+    border-bottom: 1px solid var(--border-color);
+    padding: 0 32px;
+    background: #fff;
+}
+
+.tab {
+    padding: 20px 0;
+    font-size: 0.95rem;
+    color: var(--text-secondary);
+    cursor: pointer;
+    font-weight: 500;
+    position: relative;
+    border-bottom: 2px solid transparent;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.tab:hover {
+    color: var(--primary-blue);
+}
+
+.tab.active {
+    font-weight: 600;
+    color: var(--primary-blue);
+    border-bottom-color: var(--primary-blue);
+}
+
+.unread-badge-count {
+    background: #ef4444;
+    color: white;
+    font-size: 0.7rem;
+    padding: 2px 6px;
+    border-radius: 99px;
+    font-weight: 700;
+}
+
+.notifications-list {
+    background: white;
+}
+
+.notification-item {
+    display: flex;
+    padding: 24px 32px;
+    border-bottom: 1px solid var(--border-color);
+    transition: background-color 0.1s;
+    gap: 16px;
+    position: relative;
+}
+
+.notification-item:hover {
+    background-color: #f8fafc;
+}
+
+.notification-item.unread {
+    background-color: #f0f7ff;
+}
+
+.notification-status-indicator {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background-color: #cbd5e1;
+    margin-top: 6px;
+    flex-shrink: 0;
+}
+
+.notification-item.unread .notification-status-indicator {
+    background-color: var(--primary-blue);
+}
+
+.notification-content {
+    flex: 1;
+}
+
+.notification-header {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 4px;
+}
+
+.notification-text {
+    font-size: 0.95rem;
+    color: var(--text-primary);
+    font-weight: 600;
+}
+
+.notification-time {
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+}
+
+.notification-body {
+    font-size: 0.9rem;
+    color: var(--text-secondary);
+    line-height: 1.5;
+}
+
+.notification-actions {
+    display: flex;
+    align-items: center;
+}
+
+.action-link {
+    background: none;
+    border: none;
+    color: var(--primary-blue);
+    font-size: 0.85rem;
+    font-weight: 500;
+    cursor: pointer;
+    padding: 0;
+}
+
+.action-link:hover {
+    text-decoration: underline;
+}
+
+.white-btn {
+    background: white;
+    border: 1px solid var(--border-color);
+    padding: 8px 16px;
+    border-radius: 8px;
+    color: var(--text-secondary);
+    font-size: 0.9rem;
+    font-weight: 500;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    transition: all 0.2s;
+}
+
+.white-btn:hover {
+    border-color: var(--text-secondary);
+    color: var(--text-primary);
+}
+
+.empty-state {
+    padding: 80px 20px;
+    text-align: center;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+
+.empty-state svg {
+    margin-bottom: 16px;
+    color: #cbd5e0;
+}
+
+/* Responsive Design */
+@media (max-width: 1024px) {
+    .notifications-container {
+        margin-left: 0;
+    }
+
+    .main-content {
+        margin-left: 0;
+        padding: 70px 20px 20px;
+    }
+}
+
+@media (max-width: 768px) {
+    .page-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 16px;
+    }
+
+    .notifications-tabs {
+        gap: 20px;
+        padding: 0 16px;
+        overflow-x: auto;
+    }
+
+    .notification-item {
+        flex-direction: column;
+        gap: 12px;
+        padding: 20px;
+    }
+
+    .notification-actions {
+        width: 100%;
+        justify-content: flex-start;
+    }
+
+    .btn-mark-read {
+        flex: 1;
+    }
+}
+
+@media (max-width: 480px) {
+    .main-content {
+        padding: 70px 15px 15px;
+    }
+
+    .header-left h1 {
+        font-size: 1.5rem;
+    }
+
+    .notification-item {
+        padding: 16px;
+    }
+
+    .notification-text {
+        font-size: 0.9rem;
+    }
+
+    .notification-meta {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 8px;
+    }
+}
+
+.empty-state h3 {
+    margin: 0 0 8px 0;
+    color: var(--text-primary);
+    font-size: 1.1rem;
+}

@@ -1,0 +1,347 @@
+/* Modal Overlay */
+.kyc-modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background-color: rgba(0, 0, 0, 0.5);
+    backdrop-filter: blur(4px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+    padding: 20px;
+    box-sizing: border-box;
+}
+
+/* Modal Container */
+.kyc-modal-container {
+    background: #ffffff;
+    width: 100%;
+    max-width: 800px;
+    max-height: 90vh;
+    border-radius: 16px;
+    box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    animation: modalFadeIn 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes modalFadeIn {
+    from {
+        opacity: 0;
+        transform: scale(0.96) translateY(20px);
+    }
+
+    to {
+        opacity: 1;
+        transform: scale(1) translateY(0);
+    }
+}
+
+/* Header */
+.kyc-modal-header {
+    padding: 20px 24px;
+    border-bottom: 1px solid #e2e8f0;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background-color: #fff;
+}
+
+.kyc-modal-header h3 {
+    margin: 0;
+    font-size: 1.25rem;
+    font-weight: 600;
+    color: #1e293b;
+}
+
+.close-btn {
+    background: transparent;
+    border: none;
+    color: #64748b;
+    cursor: pointer;
+    padding: 4px;
+    border-radius: 4px;
+    transition: all 0.2s;
+    display: flex;
+}
+
+.close-btn:hover {
+    background-color: #f1f5f9;
+    color: #334155;
+}
+
+/* Content Area */
+.kyc-modal-content {
+    padding: 24px;
+    overflow-y: auto;
+    flex: 1;
+}
+
+.kyc-section {
+    margin-bottom: 8px;
+}
+
+.section-title {
+    font-size: 0.95rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: #94a3b8;
+    font-weight: 700;
+    margin: 0 0 16px 0;
+    text-align: left;
+    /* Ensure headers are left aligned */
+}
+
+.divider {
+    height: 1px;
+    background-color: #f1f5f9;
+    margin: 24px 0;
+}
+
+/* Information Grid */
+.info-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 20px;
+}
+
+.info-item {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    align-items: flex-start;
+    /* FORCE LEFT ALIGNMENT */
+    text-align: left;
+    /* FORCE LEFT ALIGNMENT */
+}
+
+.info-item.right-align {
+    align-items: flex-end;
+    /* Right align specific items */
+    text-align: right;
+}
+
+.info-item.full-width {
+    grid-column: span 2;
+}
+
+.info-item label {
+    font-size: 0.85rem;
+    color: #64748b;
+    font-weight: 500;
+}
+
+.info-item p {
+    margin: 0;
+    font-size: 1rem;
+    color: #0f172a;
+    font-weight: 500;
+}
+
+.doc-badge {
+    display: inline-block;
+    background-color: #f0f9ff;
+    color: #0369a1;
+    border: 1px solid #bae6fd;
+    padding: 4px 12px;
+    border-radius: 6px;
+    font-size: 0.9rem;
+    font-weight: 600;
+    width: fit-content;
+}
+
+.mono-text {
+    font-family: 'Courier New', Courier, monospace;
+    letter-spacing: 1px;
+    background-color: #f8fafc;
+    padding: 4px 8px;
+    border-radius: 4px;
+    border: 1px solid #e2e8f0;
+    width: fit-content;
+}
+
+/* Document Previews */
+.document-preview-container {
+    display: flex;
+    gap: 24px;
+    margin-top: 8px;
+}
+
+.doc-preview-card {
+    flex: 1;
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 12px;
+    padding: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.doc-preview-card:hover {
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+    background: #fff;
+    border-color: #cbd5e1;
+}
+
+.image-label {
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: #475569;
+    text-align: center;
+}
+
+.image-wrapper {
+    width: 100%;
+    /* Standard ID Card aspect ratio approx 1.586 */
+    aspect-ratio: 1.58;
+    background-color: #cbd5e1;
+    border-radius: 8px;
+    overflow: hidden;
+    position: relative;
+    border: 1px solid #e2e8f0;
+}
+
+.image-wrapper img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    transition: transform 0.3s ease;
+}
+
+.image-wrapper:hover img {
+    transform: scale(1.05);
+}
+
+/* Footer & Actions */
+.kyc-modal-footer {
+    padding: 16px 24px;
+    background-color: #f8fafc;
+    border-top: 1px solid #e2e8f0;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.admin-actions {
+    display: flex;
+    gap: 12px;
+}
+
+.action-btn {
+    padding: 10px 20px;
+    border-radius: 8px;
+    font-weight: 600;
+    font-size: 0.95rem;
+    cursor: pointer;
+    border: none;
+    transition: all 0.2s;
+    white-space: nowrap;
+}
+
+.action-btn.secondary {
+    background-color: white;
+    color: #475569;
+    border: 1px solid #cbd5e1;
+    min-width: 80px;
+}
+
+.action-btn.secondary:hover {
+    background-color: #f1f5f9;
+    border-color: #94a3b8;
+}
+
+.action-btn.reject {
+    background-color: #fee2e2;
+    color: #dc2626;
+    border: 1px solid #fecaca;
+}
+
+.action-btn.reject:hover {
+    background-color: #fecaca;
+    color: #b91c1c;
+}
+
+.action-btn.approve {
+    background-color: #16a34a;
+    color: white;
+    border: 1px solid #15803d;
+}
+
+.action-btn.approve:hover {
+    background-color: #15803d;
+    box-shadow: 0 2px 4px rgba(22, 163, 74, 0.2);
+}
+
+/* Responsive Handling */
+@media (max-width: 768px) {
+    .document-preview-container {
+        flex-direction: column;
+    }
+
+    .kyc-modal-container {
+        height: 100%;
+        max-height: 100%;
+        border-radius: 0;
+    }
+
+    .kyc-modal-header {
+        position: sticky;
+        top: 0;
+        z-index: 10;
+        padding: 16px 20px;
+    }
+
+    /* Footer adjustments for mobile */
+    .kyc-modal-footer {
+        flex-direction: column-reverse;
+        /* Close button at bottom, Actions at top */
+        gap: 12px;
+        padding: 16px 20px;
+    }
+
+    .admin-actions {
+        width: 100%;
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        /* Reject and Verify side-by-side */
+        gap: 12px;
+    }
+
+    .action-btn {
+        width: 100%;
+        padding: 12px;
+        /* Larger touch target */
+        display: flex;
+        justify-content: center;
+        align-items: center;
+    }
+
+    .action-btn.secondary {
+        width: 100%;
+    }
+}
+
+@media (max-width: 480px) {
+    .info-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .info-item.full-width {
+        grid-column: span 1;
+    }
+
+    /* Ensure right aligned items stay right aligned or switch to left depending on preference. 
+       Usually on mobile (single column), left align is better. But keeping right-align for doc number as per potential request.
+       If user wants strict right align: */
+    /* .info-item.right-align { text-align: right; align-items: flex-end; } */
+
+    /* If we want to reset to left on small screens: */
+    /* .info-item.right-align { text-align: left; align-items: flex-start; } */
+    /* I will leave it as right-aligned since normally "numbers" or "status" align right. */
+}

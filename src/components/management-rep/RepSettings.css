@@ -1,0 +1,147 @@
+/* RepSettings.css - Premium Design */
+.settings-card-layout {
+    max-width: 800px;
+    padding: 0;
+    overflow: hidden;
+}
+
+.settings-section {
+    padding: 32px;
+}
+
+.section-title {
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin: 0 0 24px 0;
+}
+
+.form-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 24px;
+}
+
+.form-group {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.form-group label {
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--text-secondary);
+}
+
+.form-input {
+    padding: 10px 14px;
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    font-size: 0.95rem;
+    color: var(--text-primary);
+    outline: none;
+    transition: all 0.2s;
+}
+
+.form-input:focus {
+    border-color: var(--primary-blue);
+    box-shadow: 0 0 0 3px rgba(46, 102, 255, 0.1);
+}
+
+.separator {
+    height: 1px;
+    background-color: var(--border-color);
+    width: 100%;
+}
+
+.form-actions-footer {
+    padding: 24px 32px;
+    background-color: #f8fafc;
+    border-top: 1px solid var(--border-color);
+    display: flex;
+    justify-content: flex-end;
+    gap: 16px;
+}
+
+
+.btn-save {
+    background-color: var(--primary-blue);
+    color: white;
+    padding: 10px 24px;
+    border: none;
+    border-radius: 6px;
+    font-weight: 500;
+    cursor: pointer;
+    font-size: 0.95rem;
+    transition: background-color 0.2s;
+}
+
+.btn-save:hover {
+    background-color: #3182ce;
+}
+
+.btn-cancel {
+    background-color: white;
+    color: #4a5568;
+    padding: 10px 24px;
+    border: 1px solid #e2e8f0;
+    border-radius: 6px;
+    font-weight: 500;
+    cursor: pointer;
+    font-size: 0.95rem;
+}
+
+.btn-cancel:hover {
+    background-color: #f7fafc;
+}
+
+/* Responsive Design */
+@media (max-width: 1024px) {
+    .rep-settings-container {
+        margin-left: 0;
+        padding: 70px 20px 20px;
+    }
+}
+
+@media (max-width: 768px) {
+    .rep-settings-container {
+        padding: 70px 20px 20px;
+    }
+
+    .settings-card {
+        padding: 24px;
+        max-width: 100%;
+    }
+
+    .actions-row {
+        flex-direction: column-reverse;
+    }
+
+    .btn-save,
+    .btn-cancel {
+        width: 100%;
+    }
+}
+
+@media (max-width: 480px) {
+    .rep-settings-container {
+        padding: 70px 15px 15px;
+    }
+
+    .rep-header h1 {
+        font-size: 1.5rem;
+    }
+
+    .settings-card {
+        padding: 20px;
+    }
+
+    .settings-section-title {
+        font-size: 1rem;
+    }
+
+    .form-grid {
+        grid-template-columns: 1fr;
+    }
+}

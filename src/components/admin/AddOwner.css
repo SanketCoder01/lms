@@ -1,0 +1,240 @@
+.add-owner-container {
+    display: flex;
+    min-height: 100vh;
+    background-color: #f8f9fa;
+}
+
+.add-owner-content {
+    flex: 1;
+    padding: 30px 40px;
+    margin-left: 250px;
+    transition: margin-left 0.3s ease;
+}
+
+/* Responsive Design */
+@media (max-width: 1024px) {
+    .add-owner-content {
+        margin-left: 0;
+        padding: 70px 20px 20px;
+    }
+}
+
+@media (max-width: 768px) {
+    .add-owner-content {
+        padding: 70px 20px 20px;
+    }
+
+    .add-owner-header h2 {
+        font-size: 24px;
+    }
+
+    .form-section {
+        padding: 24px;
+    }
+
+    .section-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 12px;
+    }
+
+    .form-actions {
+        flex-direction: column-reverse;
+    }
+
+    .btn-cancel,
+    .btn-submit {
+        width: 100%;
+    }
+}
+
+.breadcrumb {
+    font-size: 12px;
+    color: #666;
+    margin-bottom: 20px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.add-owner-header {
+    margin-bottom: 30px;
+}
+
+.add-owner-header h2 {
+    font-size: 28px;
+    color: #1a1a1a;
+    margin: 0 0 10px 0;
+    font-weight: 700;
+}
+
+.add-owner-header p {
+    color: #555;
+    font-size: 15px;
+    margin: 0;
+    max-width: 800px;
+    line-height: 1.5;
+}
+
+/* Card Styles */
+.form-section {
+    background: white;
+    border-radius: 16px;
+    padding: 30px;
+    margin-bottom: 25px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.03);
+}
+
+.section-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 25px;
+}
+
+.section-header h3 {
+    margin: 0;
+    font-size: 18px;
+    color: #1a1a1a;
+    font-weight: 600;
+}
+
+.total-area-badge {
+    background-color: #f0f7ff;
+    color: #0066cc;
+    padding: 6px 16px;
+    border-radius: 20px;
+    font-size: 13px;
+    font-weight: 500;
+    display: flex;
+    align-items: center;
+    border: 1px solid #dceeff;
+}
+
+/* Form Layouts */
+.form-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 30px;
+    margin-bottom: 20px;
+}
+
+
+.form-group {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.form-group label {
+    font-size: 14px;
+    color: #333;
+    font-weight: 500;
+}
+
+.required {
+    color: #e53935;
+    margin-left: 2px;
+}
+
+.form-input {
+    background-color: #f8fbff;
+    /* Very light blue background */
+    border: 1px solid #e1e8ed;
+    border-radius: 8px;
+    padding: 12px 16px;
+    font-size: 15px;
+    color: #333;
+    transition: all 0.2s ease;
+}
+
+.form-input::placeholder {
+    color: #aab8c2;
+}
+
+.form-input:focus {
+    outline: none;
+    background-color: white;
+    border-color: #2196f3;
+    box-shadow: 0 0 0 3px rgba(33, 150, 243, 0.1);
+}
+
+.helper-text {
+    font-size: 12px;
+    color: #666;
+    margin-top: 4px;
+}
+
+/* Unit Selection */
+.unit-selection-box {
+    background-color: #f8fbff;
+    border: 1px solid #e1e8ed;
+    border-radius: 8px;
+    padding: 12px 16px;
+    color: #0066cc;
+    /* Keep if you want text blue, usually black/dark grey is better for content */
+    font-size: 14px;
+    cursor: default;
+    /* Changed from pointer since individual labels are clickable */
+    display: block;
+    /* Changed from flex */
+    /* align-items: center; removed */
+}
+
+/* Form Actions */
+.form-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 15px;
+    margin-top: 40px;
+}
+
+.btn-cancel {
+    padding: 12px 30px;
+    background: white;
+    border: 1px solid #e0e0e0;
+    border-radius: 8px;
+    color: #666;
+    font-weight: 500;
+    cursor: pointer;
+    font-size: 14px;
+}
+
+.btn-submit {
+    padding: 12px 30px;
+    background: #0d47a1;
+    border: none;
+    border-radius: 8px;
+    color: white;
+    font-weight: 500;
+    cursor: pointer;
+    font-size: 14px;
+}
+
+.btn-submit:hover {
+    background-color: #002171;
+}
+
+@media (max-width: 768px) {
+    .form-row {
+        grid-template-columns: 1fr;
+        gap: 20px;
+    }
+}
+
+@media (max-width: 480px) {
+    .add-owner-content {
+        padding: 70px 15px 15px;
+    }
+
+    .add-owner-header h2 {
+        font-size: 20px;
+    }
+
+    .form-section {
+        padding: 20px;
+    }
+
+    .section-header h3 {
+        font-size: 16px;
+    }
+}
