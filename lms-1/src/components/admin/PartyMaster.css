@@ -1,0 +1,208 @@
+/* Inherit most variables from global or previously defined styles */
+
+.filters-bar {
+    display: flex;
+    gap: 16px;
+    padding: 16px;
+    border-bottom: 1px solid #e2e8f0;
+    align-items: center;
+    background-color: white;
+    border-radius: 8px 8px 0 0;
+}
+
+.search-wrapper {
+    flex: 1;
+    max-width: 400px;
+    position: relative;
+    display: flex;
+    align-items: center;
+}
+
+.search-icon {
+    position: absolute;
+    left: 12px;
+    color: #64748b;
+}
+
+.search-wrapper input {
+    width: 100%;
+    padding: 10px 12px 10px 36px;
+    border: 1px solid #e2e8f0;
+    border-radius: 6px;
+    font-size: 0.9rem;
+    outline: none;
+    background: #f8fafc;
+    transition: all 0.2s;
+}
+
+.search-wrapper input:focus {
+    background: white;
+    border-color: #3b82f6;
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.filter-select {
+    padding: 8px 32px 8px 12px;
+    border-radius: 6px;
+    border: 1px solid #e2e8f0;
+    outline: none;
+    cursor: pointer;
+    background-color: white;
+    color: #475569;
+    font-size: 0.88rem;
+    /* Hide native OS dropdown arrow and big lines */
+    appearance: none;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    /* Custom small chevron arrow */
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 10px center;
+    background-size: 14px;
+    min-width: 130px;
+    transition: border-color 0.2s;
+}
+
+.filter-select:focus {
+    border-color: #3b82f6;
+    box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.1);
+}
+
+.filter-select:hover {
+    border-color: #94a3b8;
+}
+
+.table-container {
+    overflow-x: auto;
+}
+
+.data-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.data-table th {
+    padding: 12px 16px;
+    text-align: left;
+    background-color: #f8fafc;
+    color: #64748b;
+    font-weight: 600;
+    font-size: 0.85rem;
+    border-bottom: 1px solid #e2e8f0;
+}
+
+.data-table td {
+    padding: 16px;
+    border-bottom: 1px solid #e2e8f0;
+    color: #334155;
+    font-size: 0.9rem;
+    vertical-align: middle;
+}
+
+.data-table tr:hover {
+    background-color: #f8fafc;
+}
+
+/* Party Info Column */
+.party-info {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.party-avatar {
+    width: 40px;
+    height: 40px;
+    background: linear-gradient(135deg, #3b82f6, #2563eb);
+    color: white;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 600;
+    font-size: 1.1rem;
+}
+
+.party-details {
+    display: flex;
+    flex-direction: column;
+}
+
+.party-name {
+    font-weight: 600;
+    color: #1e293b;
+}
+
+.sub-text {
+    font-size: 0.75rem;
+    color: #64748b;
+}
+
+/* Status Badges */
+.status-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 4px 10px;
+    border-radius: 20px;
+    font-size: 0.75rem;
+    font-weight: 500;
+    text-transform: capitalize;
+}
+
+.status-badge.company {
+    background-color: #e0f2fe;
+    color: #0369a1;
+}
+
+.status-badge.individual {
+    background-color: #f0fdf4;
+    color: #15803d;
+}
+
+/* Contact Info */
+.contact-info {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.contact-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    color: #64748b;
+    font-size: 0.85rem;
+}
+
+/* Actions */
+.action-buttons {
+    display: flex;
+    gap: 8px;
+    justify-content: flex-end;
+}
+
+.action-btn {
+    padding: 6px;
+    border-radius: 6px;
+    color: #64748b;
+    transition: all 0.2s;
+    background: none;
+    border: none;
+    cursor: pointer;
+}
+
+.action-btn:hover {
+    background-color: #f1f5f9;
+    color: #334155;
+}
+
+.action-btn.edit:hover {
+    color: #2563eb;
+    background-color: #eff6ff;
+}
+
+.empty-state {
+    text-align: center;
+    padding: 40px;
+    color: #64748b;
+}

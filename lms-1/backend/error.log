@@ -1,0 +1,15 @@
+2026-01-15T10:55:57.081Z - Cannot add or update a child row: a foreign key constraint fails (`lease_management_system`.`tenant_units`, CONSTRAINT `tenant_units_ibfk_2` FOREIGN KEY (`unit_id`) REFERENCES `units` (`id`))
+Error: Cannot add or update a child row: a foreign key constraint fails (`lease_management_system`.`tenant_units`, CONSTRAINT `tenant_units_ibfk_2` FOREIGN KEY (`unit_id`) REFERENCES `units` (`id`))
+    at PromisePoolConnection.query (C:\Users\Admin\Documents\lms-1\backend\node_modules\mysql2\lib\promise\connection.js:29:22)
+    at exports.createTenant (C:\Users\Admin\Documents\lms-1\backend\controllers\tenantController.js:78:38)
+    at process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+2026-01-15T10:56:24.341Z - Column 'unit_id' cannot be null
+Error: Column 'unit_id' cannot be null
+    at PromisePoolConnection.query (C:\Users\Admin\Documents\lms-1\backend\node_modules\mysql2\lib\promise\connection.js:29:22)
+    at exports.createTenant (C:\Users\Admin\Documents\lms-1\backend\controllers\tenantController.js:78:38)
+    at process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+2026-01-15T10:57:13.162Z - Column 'unit_id' cannot be null
+Error: Column 'unit_id' cannot be null
+    at PromisePoolConnection.query (C:\Users\Admin\Documents\lms-1\backend\node_modules\mysql2\lib\promise\connection.js:29:22)
+    at exports.createTenant (C:\Users\Admin\Documents\lms-1\backend\controllers\tenantController.js:78:38)
+    at process.processTicksAndRejections (node:internal/process/task_queues:103:5)

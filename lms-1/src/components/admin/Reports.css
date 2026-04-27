@@ -1,0 +1,273 @@
+/* Reports.css */
+@import '../admin/dashboard.css';
+
+.reports-container {
+    display: flex;
+    min-height: 100vh;
+    background-color: #f8f9fa;
+}
+
+/* Reusing page-header, filters-bar, table-container from dashboard/leases conventions 
+   Redefining here or ensuring they are available. 
+   Ideally, we should have a shared css, but copying for isolation as per previous pattern.
+*/
+
+.page-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 24px;
+}
+
+.header-left h1 {
+    font-size: 1.8rem;
+    font-weight: 700;
+    margin: 5px 0;
+    color: var(--text-primary);
+}
+
+.header-left p {
+    color: var(--text-secondary);
+    font-size: 0.95rem;
+    margin: 0;
+}
+
+.breadcrumb {
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+    margin-bottom: 10px;
+    text-transform: uppercase;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+}
+
+.breadcrumb .active {
+    color: var(--text-primary);
+}
+
+/* Filters Bar */
+.filters-bar {
+    padding: 20px 24px;
+    border-bottom: 1px solid #f0f0f0;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 20px;
+    background: #ffffff;
+    flex-wrap: wrap;
+    border-radius: 12px 12px 0 0;
+}
+
+.filter-group {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+}
+
+.search-wrapper {
+    position: relative;
+    width: 300px;
+}
+
+.search-wrapper input {
+    width: 100%;
+    padding: 10px 12px 10px 36px;
+    border: 1px solid #e2e8f0;
+    border-radius: 6px;
+    font-size: 0.9rem;
+    transition: all 0.2s;
+}
+
+.search-wrapper input:focus {
+    border-color: var(--primary-blue);
+    outline: none;
+    box-shadow: 0 0 0 3px rgba(66, 153, 225, 0.1);
+}
+
+.search-icon {
+    position: absolute;
+    left: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: #a0aec0;
+}
+
+/* Table */
+.content-card {
+    background: white;
+    border-radius: 12px;
+    border: 1px solid #f0f0f0;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.02);
+    overflow: hidden;
+}
+
+.table-container {
+    overflow-x: auto;
+    width: 100%;
+}
+
+.data-table {
+    width: 100%;
+    border-collapse: collapse;
+    min-width: 800px;
+}
+
+.data-table th,
+.data-table td {
+    padding: 16px 24px;
+    text-align: left;
+    border-bottom: 1px solid #f0f0f0;
+}
+
+.data-table th {
+    font-weight: 600;
+    color: var(--text-secondary);
+    font-size: 0.85rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    background-color: #fafbfd;
+}
+
+.data-table tbody tr:hover {
+    background-color: #f8fafc;
+}
+
+.status-badge {
+    padding: 4px 12px;
+    border-radius: 20px;
+    font-size: 0.8rem;
+    font-weight: 500;
+    text-transform: capitalize;
+}
+
+.status-badge.completed {
+    background-color: #def7ec;
+    color: #03543f;
+}
+
+.status-badge.pending {
+    background-color: #fefcbf;
+    color: #744210;
+}
+
+.status-badge.processing {
+    background-color: #ebf8ff;
+    color: #2b6cb0;
+}
+
+.action-btn {
+    background: none;
+    border: none;
+    color: #718096;
+    cursor: pointer;
+    padding: 6px;
+    border-radius: 4px;
+    transition: color 0.2s;
+}
+
+.action-btn:hover {
+    color: var(--primary-blue);
+    background-color: #ebf8ff;
+}
+
+/* Pagination */
+.pagination {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 16px 24px;
+    border-top: 1px solid #f0f0f0;
+    color: var(--text-secondary);
+    font-size: 0.85rem;
+}
+
+.page-nav {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.page-nav button {
+    min-width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 6px;
+    cursor: pointer;
+    border: 1px solid #e2e8f0;
+    background: white;
+    color: var(--text-secondary);
+}
+
+.page-nav button:hover:not(:disabled) {
+    background-color: #f8fafc;
+    border-color: #cbd5e1;
+    color: var(--primary-blue);
+}
+
+/* Responsive Design */
+@media (max-width: 1024px) {
+    .reports-container {
+        margin-left: 0;
+    }
+
+    .main-content {
+        margin-left: 0;
+        padding: 70px 20px 20px;
+    }
+}
+
+@media (max-width: 768px) {
+    .page-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 16px;
+    }
+
+    .filters-bar {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 16px;
+        padding: 16px;
+    }
+
+    .filter-group {
+        flex-wrap: wrap;
+        width: 100%;
+    }
+
+    .search-wrapper {
+        width: 100%;
+    }
+
+    .data-table {
+        min-width: 600px;
+    }
+
+    .pagination {
+        flex-direction: column;
+        gap: 12px;
+        align-items: stretch;
+    }
+
+    .page-nav {
+        justify-content: center;
+    }
+}
+
+@media (max-width: 480px) {
+    .main-content {
+        padding: 70px 15px 15px;
+    }
+
+    .header-left h1 {
+        font-size: 1.5rem;
+    }
+
+    .data-table th,
+    .data-table td {
+        padding: 12px 10px;
+        font-size: 12px;
+    }
+}

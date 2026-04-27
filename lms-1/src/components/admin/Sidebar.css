@@ -1,0 +1,241 @@
+/* Sidebar.css - Premium Design Update */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
+:root {
+    --primary-blue: #2e66ff;
+    --sidebar-bg: #FFFFFF;
+    --text-dark: #0f172a;
+    --text-muted: #64748b;
+    --nav-active-bg: #eff6ff;
+    --nav-active-text: #2563eb;
+    --sidebar-width: 250px;
+    --border-color: #e2e8f0;
+}
+
+.sidebar {
+    width: var(--sidebar-width);
+    height: 100vh;
+    background-color: var(--sidebar-bg);
+    display: flex;
+    flex-direction: column;
+    padding: 24px 16px;
+    padding-top: 20px; /* Reduced - content starts below banner */
+    position: fixed;
+    left: 0;
+    top: 44px; /* Start below the TopBanner */
+    z-index: 1000;
+    border-right: 1px solid var(--border-color);
+    font-family: 'Inter', sans-serif;
+    box-sizing: border-box;
+    transition: transform 0.3s ease;
+    overflow-y: auto; /* Allow scrolling if needed */
+}
+
+.sidebar-header {
+    margin-bottom: 32px;
+    padding: 0 8px;
+}
+
+.logo-area {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.logo-icon-container {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.logo-text {
+    font-weight: 700;
+    color: var(--text-dark);
+    font-size: 1rem;
+    letter-spacing: -0.01em;
+}
+
+.sidebar-nav {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    flex: 1;
+    overflow-y: auto;
+    /* Enable scrolling for nav items */
+    padding-right: 5px;
+    /* Avoid scrollbar overlapping content */
+}
+
+/* Custom Scrollbar for sidebar */
+.sidebar-nav::-webkit-scrollbar {
+    width: 4px;
+}
+
+.sidebar-nav::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.sidebar-nav::-webkit-scrollbar-thumb {
+    background: #e2e8f0;
+    border-radius: 4px;
+}
+
+.sidebar-nav::-webkit-scrollbar-thumb:hover {
+    background: #cbd5e1;
+}
+
+/* Reset Links */
+.sidebar a {
+    text-decoration: none;
+}
+
+.nav-item {
+    display: flex;
+    align-items: center;
+    padding: 10px 12px;
+    color: var(--text-muted);
+    border-radius: 8px;
+    transition: all 0.2s ease;
+    font-size: 0.875rem;
+    font-weight: 500;
+    cursor: pointer;
+    user-select: none;
+}
+
+.nav-item:hover {
+    background-color: #f8fafc;
+    color: var(--text-dark);
+}
+
+.nav-item.active {
+    background-color: var(--nav-active-bg);
+    color: var(--nav-active-text);
+    font-weight: 600;
+}
+
+.nav-item .icon {
+    margin-right: 12px;
+    width: 20px;
+    height: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0.8;
+}
+
+.nav-item.active .icon {
+    opacity: 1;
+}
+
+/* Locked nav item styles */
+.nav-item.locked {
+    opacity: 0.5;
+    cursor: not-allowed;
+    background-color: #f8fafc;
+}
+
+.nav-item.locked:hover {
+    background-color: #f8fafc;
+    color: var(--text-muted);
+}
+
+.nav-item.locked .icon {
+    opacity: 0.4;
+}
+
+.nav-item.locked .label {
+    flex: 1;
+}
+
+.sidebar-footer {
+    margin-top: auto;
+    padding-top: 24px;
+    border-top: 1px solid var(--border-color);
+}
+
+.nav-item.logout {
+    color: #ef4444;
+}
+
+.nav-item.logout:hover {
+    background-color: #fef2f2;
+    color: #dc2626;
+}
+
+.nav-item.logout .icon {
+    color: inherit;
+}
+
+/* Mobile Toggles */
+.mobile-toggle {
+    display: none;
+    position: fixed;
+    top: 16px;
+    left: 16px;
+    z-index: 1100;
+    flex-direction: column;
+    gap: 5px;
+    cursor: pointer;
+    background: white;
+    padding: 10px;
+    border-radius: 8px;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+}
+
+.mobile-toggle span {
+    display: block;
+    width: 20px;
+    height: 2px;
+    background-color: var(--text-dark);
+}
+
+.sidebar-overlay {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background: rgba(0, 0, 0, 0.4);
+    z-index: 999;
+    backdrop-filter: blur(2px);
+}
+
+@media (max-width: 1024px) {
+    .sidebar {
+        transform: translateX(-100%);
+        width: 80%;
+        /* Wider on mobile */
+        max-width: 300px;
+    }
+
+    /* Since we cannot touch JS to toggle classes, we use a hover/focus hack or assume user might tap near edge 
+       OR mostly likely the user accepts that without JS changes, the sidebar might be stuck hidden or shown. 
+       HOWEVER, I see '.mobile-toggle' in the CSS. This implies there MIGHT be some JS already hooking into it? 
+       The user said "dont touch frontend" (meaning JS/Logic). 
+       If no JS exists for this, I will add a pure CSS checkbox hack if possible, but that requires HTML changes.
+       
+       Wait, if I cannot change HTML or JS, I cannot add a click handler.
+       I will default the sidebar to HIDDEN on mobile, but allow it to slide in if it receives the '.open' class.
+       I'll also make the hamburger visible so if there IS logic, it works.
+    */
+    .sidebar.open {
+        transform: translateX(0);
+        box-shadow: 4px 0 12px rgba(0, 0, 0, 0.15);
+    }
+
+    .mobile-toggle {
+        display: flex;
+        background: var(--primary-blue);
+        /* Visible color */
+        color: white;
+    }
+
+    .mobile-toggle span {
+        background-color: white;
+    }
+
+    .sidebar-overlay.active {
+        display: block;
+    }
+}

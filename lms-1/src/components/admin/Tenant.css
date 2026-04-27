@@ -1,0 +1,41 @@
+.tenant-company {
+    display: flex;
+    align-items: center;
+}
+
+/* Re-uses dashboard-container, main-content, page-header, content-card, filters-bar, table-container, data-table from units.css / dashboard.css */
+/* Ensure specific overrides are handled here if necessary */
+
+/* Responsive Design */
+@media (max-width: 1024px) {
+    .main-content {
+        margin-left: 0;
+        padding: 70px 20px 20px;
+    }
+}
+
+@media (max-width: 768px) {
+    .page-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 16px;
+    }
+
+    .filters-bar {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 16px;
+    }
+}
+
+@media (max-width: 480px) {
+    .main-content {
+        padding: 70px 15px 15px;
+    }
+
+    .tenant-company {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 8px;
+    }
+}

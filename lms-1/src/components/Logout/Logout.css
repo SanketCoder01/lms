@@ -1,0 +1,166 @@
+.logout-page {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+    background-color: #050505;
+    /* Very dark background */
+    font-family: 'Inter', sans-serif;
+}
+
+.logout-card {
+    background-color: #1a1f1a;
+    /* Dark greenish-grey card base */
+    border-radius: 16px;
+    padding: 40px;
+    width: 400px;
+    max-width: 90%;
+    text-align: center;
+    position: relative;
+    box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5);
+    border: 1px solid #2a332a;
+    /* Subtle border */
+}
+
+/* Close button (top right) */
+.close-button {
+    position: absolute;
+    top: 15px;
+    right: 15px;
+    background: none;
+    border: none;
+    color: #666;
+    cursor: pointer;
+    padding: 5px;
+    transition: color 0.2s;
+}
+
+.close-button:hover {
+    color: #fff;
+}
+
+/* Icon Container */
+.icon-container {
+    width: 64px;
+    height: 64px;
+    background-color: #1e2e1e;
+    /* Darker green circle bg */
+    border-radius: 50%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    margin: 0 auto 20px;
+}
+
+.logout-icon-svg {
+    color: #53D22D;
+    /* Bright green icon */
+    width: 32px;
+    height: 32px;
+}
+
+/* Typography */
+.logout-card h2 {
+    color: #ffffff;
+    font-size: 1.5rem;
+    font-weight: 700;
+    margin-bottom: 15px;
+}
+
+.logout-card p {
+    color: #9ca3af;
+    /* Light grew text */
+    font-size: 0.9rem;
+    line-height: 1.5;
+    margin-bottom: 30px;
+    padding: 0 10px;
+}
+
+/* Buttons */
+.logout-actions {
+    display: flex;
+    justify-content: center;
+    gap: 15px;
+}
+
+.btn-cancel {
+    background-color: #27272a;
+    /* Dark button bg */
+    color: #ffffff;
+    border: 1px solid #3f3f46;
+    padding: 10px 24px;
+    border-radius: 20px;
+    /* Pill shape */
+    font-size: 0.9rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.btn-cancel:hover {
+    background-color: #3f3f46;
+}
+
+.btn-logout {
+    background-color: #53D22D;
+    /* Green primary button */
+    color: #000000;
+    border: none;
+    padding: 10px 24px;
+    border-radius: 20px;
+    /* Pill shape */
+    font-size: 0.9rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition: background-color 0.2s;
+}
+
+.btn-logout:hover {
+    background-color: #41a823;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+    .logout-card {
+        width: 90%;
+        padding: 32px 24px;
+    }
+
+    .logout-card h2 {
+        font-size: 1.3rem;
+    }
+
+    .logout-actions {
+        flex-direction: column;
+    }
+
+    .btn-cancel,
+    .btn-logout {
+        width: 100%;
+    }
+}
+
+@media (max-width: 480px) {
+    .logout-card {
+        padding: 24px 20px;
+        border-radius: 12px;
+    }
+
+    .logout-card h2 {
+        font-size: 1.2rem;
+    }
+
+    .logout-card p {
+        font-size: 0.85rem;
+    }
+
+    .icon-container {
+        width: 56px;
+        height: 56px;
+    }
+
+    .logout-icon-svg {
+        width: 28px;
+        height: 28px;
+    }
+}

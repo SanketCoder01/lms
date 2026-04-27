@@ -1,0 +1,37 @@
+[
+    {
+        "name": "Admin User",
+        "email": "admin@example.com",
+        "password": "admin123",
+        "role": "admin",
+        "jwt": ""
+    },
+    {
+        "name": "Agent User",
+        "email": "agent@example.com",
+        "password": "agent123",
+        "role": "agent",
+        "jwt": ""
+    },
+    {
+        "name": "Driver User",
+        "email": "driver@gmail.com",
+        "password": "driver123",
+        "role": "driver",
+        "jwt": ""
+    },
+    {
+        "name": "Test Admin",
+        "email": "newadmin@example.com",
+        "password": "pass123",
+        "role": "admin",
+        "jwt": "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJsb2NhbGhvc3QiLCJpYXQiOjE3NjQ1ODI1NzYsImV4cCI6MTc2NDU4NjE3NiwiZGF0YSI6eyJpZCI6MywiZW1haWwiOiJuZXdhZG1pbkBleGFtcGxlLmNvbSIsIm5hbWUiOiJUZXN0IEFkbWluIiwicm9sZSI6ImFkbWluIn19.gc9l72QyEAEQUYCc5z_KstA6RDpKIlF8uzDHYX4QKbY"
+    },
+    {
+        "name": "Shifa",
+        "email": "shifa@example.com",
+        "password": "12345",
+        "role": "admin",
+        "jwt": "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJsb2NhbGhvc3QiLCJpYXQiOjE3NjQ1ODUxNTksImV4cCI6MTc2NDU4ODc1OSwiZGF0YSI6eyJpZCI6NCwiZW1haWwiOiJzaGlmYUBleGFtcGxlLmNvbSIsIm5hbWUiOiJTaGlmYSIsInJvbGUiOiJhZG1pbiJ9fQ.99B_k-aBLlg2EJW9sCTyYVvUGHWqNHU32D6cqgdH9zw"
+    }
+]
