@@ -239,10 +239,19 @@ export const leaseAPI = {
     API.get("/leases", { params }),
   getLeaseById: (id) =>
     API.get(`/leases/${id}`),
-  createLease: (data) =>
-    API.post("/leases", data),
-  updateLease: (id, data) =>
-    API.put(`/leases/${id}`, data),
+  createLease: (data) => {
+    // If data is FormData, let axios set the correct Content-Type automatically
+    const config = data instanceof FormData ? {
+      headers: { 'Content-Type': 'multipart/form-data' }
+    } : {};
+    return API.post("/leases", data, config);
+  },
+  updateLease: (id, data) => {
+    const config = data instanceof FormData ? {
+      headers: { 'Content-Type': 'multipart/form-data' }
+    } : {};
+    return API.put(`/leases/${id}`, data, config);
+  },
   deleteLease: (id) =>
     API.delete(`/leases/${id}`),
   // Dashboard & Stats

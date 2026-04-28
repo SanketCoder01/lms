@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Download, Plus, ChevronDown } from "lucide-react";
-import { Link, useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import jsPDF from 'jspdf';
 import 'jspdf-autotable';
 import KPICards from './KPICards';
@@ -17,10 +17,12 @@ import BrandPerformanceSection from './BrandPerformanceSection';
 import FloorOccupancySection from './FloorOccupancySection';
 import CriticalNotificationTicker from './CriticalNotificationTicker';
 import { getProjects, leaseAPI, unitAPI } from '../../../services/api';
+import usePermissions from '../../../hooks/usePermissions';
 import './echo.css';
 
 const EchoDashboard = () => {
   const navigate = useNavigate();
+  const { hasModuleAccess, getModulePermissions } = usePermissions();
   const [projects, setProjects] = useState([]);
   const [selectedProject, setSelectedProject] = useState('All');
   const [unitBreakdown, setUnitBreakdown] = useState([]);
@@ -659,9 +661,21 @@ const EchoDashboard = () => {
             <button className="echo-btn-secondary" onClick={exportToPDF}>
               <Download className="echo-btn-icon" /> Export
             </button>
-            <Link to="/admin/add-lease" className="echo-btn-primary">
+            <button 
+              className="echo-btn-primary"
+              onClick={() => {
+                // Check if user has leases module access with edit permission
+                const hasLeaseAccess = hasModuleAccess('leases');
+                const leasePerms = getModulePermissions('leases');
+                if (hasLeaseAccess && leasePerms?.edit) {
+                  navigate('/admin/add-lease');
+                } else {
+                  alert('You do not have permission to create leases. Please contact your administrator.');
+                }
+              }}
+            >
               <Plus className="echo-btn-icon" /> New Lease
-            </Link>
+            </button>
           </div>
         </div>
 

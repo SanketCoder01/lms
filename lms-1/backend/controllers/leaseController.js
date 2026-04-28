@@ -324,6 +324,10 @@ const uploadFileToSupabase = async (file, type) => {
 
 const createLease = async (req, res) => {
     try {
+        console.log("=== CREATE LEASE REQUEST ===");
+        console.log("Files received:", req.files ? Object.keys(req.files) : 'None');
+        console.log("Body keys:", Object.keys(req.body || {}));
+        
         let payload = req.body || {};
         if (req.body && req.body.leaseData) {
             try {
@@ -336,9 +340,17 @@ const createLease = async (req, res) => {
 
         if (!payload) payload = {}; // Failsafe
 
-        console.log("Parsed Payload project_id type:", typeof payload.project_id);
+        console.log("Parsed Payload:", JSON.stringify(payload, null, 2));
 
         if (!payload.project_id || !payload.unit_id || !payload.party_tenant_id || !payload.lease_start || !payload.lease_end || !payload.rent_commencement_date) {
+            console.error("Missing required fields:", {
+                project_id: payload.project_id,
+                unit_id: payload.unit_id,
+                party_tenant_id: payload.party_tenant_id,
+                lease_start: payload.lease_start,
+                lease_end: payload.lease_end,
+                rent_commencement_date: payload.rent_commencement_date
+            });
             return res.status(400).json({ message: 'Required fields missing.' });
         }
         if (payload.lease_type === 'Direct lease' && !payload.party_owner_id) {
@@ -351,7 +363,7 @@ const createLease = async (req, res) => {
                 .select('id, lease_start, lease_end')
                 .eq('unit_id', payload.unit_id)
                 .eq('status', 'active')
-                .not('lease_type', 'eq', 'Subtenant lease');
+                .neq('lease_type', 'Subtenant lease');
 
             if (ex && ex.length > 0) {
                 // Check for date overlap
@@ -588,47 +600,98 @@ const getAllLeases = async (req, res) => {
 
 const getLeaseById = async (req, res) => {
     try {
-        let query = applyScopes(supabase.from('leases').select(`
-            *,
-            company_id,
-            projects(project_name, location),
-            units(unit_number, floor_number, chargeable_area, carpet_area, unit_condition),
-            tenant:parties!leases_party_tenant_id_fkey(company_name, first_name, last_name, email, phone),
-            owner:parties!leases_party_owner_id_fkey(company_name, first_name, last_name),
-            sub_tenants(company_name)
-        `), req).eq('id', req.params.id).single();
+        console.log("=== GET LEASE BY ID ===", req.params.id);
         
-        const { data, error } = await query;
+        // First get the lease data
+        const { data: lease, error: leaseError } = await supabase
+            .from('leases')
+            .select('*')
+            .eq('id', req.params.id)
+            .single();
 
-        if (error || !data) return res.status(404).json({ message: 'Lease not found' });
+        if (leaseError || !lease) {
+            console.error("Lease not found:", leaseError);
+            return res.status(404).json({ message: 'Lease not found' });
+        }
+
+        console.log("Lease data:", lease);
+        console.log("party_tenant_id:", lease.party_tenant_id);
+        console.log("party_owner_id:", lease.party_owner_id);
+        console.log("unit_id:", lease.unit_id);
+        console.log("project_id:", lease.project_id);
+
+        // Fetch related data in parallel
+        const [projectRes, unitRes, tenantRes, ownerRes, subtenantRes, escalationsRes] = await Promise.all([
+            lease.project_id ? supabase.from('projects').select('project_name, location, address').eq('id', lease.project_id).single() : { data: null },
+            lease.unit_id ? supabase.from('units').select('unit_number, floor_number, chargeable_area, carpet_area, unit_condition, block_tower').eq('id', lease.unit_id).single() : { data: null },
+            lease.party_tenant_id ? supabase.from('parties').select('id, company_name, first_name, last_name, email, phone, brand_name').eq('id', lease.party_tenant_id).single() : { data: null },
+            lease.party_owner_id ? supabase.from('parties').select('id, company_name, first_name, last_name, email, phone').eq('id', lease.party_owner_id).single() : { data: null },
+            lease.sub_tenant_id ? supabase.from('parties').select('id, company_name, first_name, last_name, email, phone').eq('id', lease.sub_tenant_id).single() : { data: null },
+            supabase.from('lease_escalations').select('*').eq('lease_id', req.params.id).order('sequence_no', { ascending: true })
+        ]);
+
+        console.log("Project:", projectRes.data);
+        console.log("Unit:", unitRes.data);
+        console.log("Tenant:", tenantRes.data);
+        console.log("Owner:", ownerRes.data);
+
+        const project = projectRes.data;
+        const unit = unitRes.data;
+        const tenant = tenantRes.data;
+        const owner = ownerRes.data;
+        const subtenant = subtenantRes.data;
+        const escalations = escalationsRes.data || [];
+
+        // Build tenant name - prefer company_name, then brand_name, then first+last name
+        let tenantName = 'Unknown';
+        if (tenant) {
+            tenantName = tenant.company_name || tenant.brand_name || 
+                `${tenant.first_name || ''} ${tenant.last_name || ''}`.trim() || 'Unknown';
+        }
+
+        // Build owner name
+        let ownerName = 'Unknown';
+        if (owner) {
+            ownerName = owner.company_name || `${owner.first_name || ''} ${owner.last_name || ''}`.trim() || 'Unknown';
+        }
+
+        // Build subtenant name
+        let subtenantName = null;
+        if (subtenant) {
+            subtenantName = subtenant.company_name || `${subtenant.first_name || ''} ${subtenant.last_name || ''}`.trim();
+        }
 
         const mapped = {
-            ...data,
-            project_name: data.projects?.project_name,
-            project_location: data.projects?.location,
-            unit_number: data.units?.unit_number,
-            floor_number: data.units?.floor_number,
-            chargeable_area: data.units?.chargeable_area,
-            carpet_area: data.units?.carpet_area,
-            unit_condition: data.units?.unit_condition,
-            tenant_name: data.tenant?.company_name || `${data.tenant?.first_name || ''} ${data.tenant?.last_name || ''}`.trim(),
-            tenant_first_name: data.tenant?.first_name,
-            tenant_last_name: data.tenant?.last_name,
-            contact_person_email: data.tenant?.email,
-            contact_person_phone: data.tenant?.phone,
-            owner_name: data.owner?.company_name || `${data.owner?.first_name || ''} ${data.owner?.last_name || ''}`.trim(),
-            sub_tenant_name: data.sub_tenants?.company_name,
-            projects: undefined, units: undefined, tenant: undefined, owner: undefined, sub_tenants: undefined
+            ...lease,
+            project_name: project?.project_name || 'N/A',
+            project_location: project?.location || 'N/A',
+            project_address: project?.address || '',
+            unit_number: unit?.unit_number || 'N/A',
+            floor_number: unit?.floor_number || 'N/A',
+            block_tower: unit?.block_tower || '',
+            chargeable_area: unit?.chargeable_area || 0,
+            carpet_area: unit?.carpet_area || 0,
+            unit_condition: unit?.unit_condition || 'commercial',
+            tenant_name: tenantName,
+            tenant_first_name: tenant?.first_name || '',
+            tenant_last_name: tenant?.last_name || '',
+            tenant_email: tenant?.email || '',
+            tenant_phone: tenant?.phone || '',
+            contact_person_name: tenant ? `${tenant.first_name || ''} ${tenant.last_name || ''}`.trim() || tenant.company_name || 'N/A' : 'N/A',
+            contact_person_email: tenant?.email || 'N/A',
+            contact_person_phone: tenant?.phone || 'N/A',
+            owner_name: ownerName,
+            owner_email: owner?.email || '',
+            owner_phone: owner?.phone || '',
+            sub_tenant_name: subtenantName
         };
-
-        const { data: escalations } = await supabase.from('lease_escalations').select('*').eq('lease_id', req.params.id).order('sequence_no', { ascending: true });
 
         let daysRemaining = 0;
         if (mapped.lease_end) {
             daysRemaining = Math.ceil((new Date(mapped.lease_end) - new Date()) / 86400000);
         }
 
-        res.json({ ...mapped, escalations: escalations || [], days_remaining: daysRemaining });
+        res.json({ ...mapped, escalations, days_remaining: daysRemaining });
     } catch (err) {
         console.error('GET LEASE BY ID ERROR:', err);
         res.status(500).json({ message: 'Failed to fetch lease', error: err.message });

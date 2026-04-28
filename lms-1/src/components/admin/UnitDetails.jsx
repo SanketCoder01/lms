@@ -7,7 +7,7 @@ import './UnitDetails.css';
 
 const UnitDetails = () => {
     const { id } = useParams();
-    const { can } = usePermissions();
+    const { can, hasModuleAccess, getModulePermissions } = usePermissions();
     const [unit, setUnit] = useState(null);
     const [loading, setLoading] = useState(true);
     // const [error, setError] = useState(null);
@@ -148,7 +148,11 @@ const UnitDetails = () => {
                                             <Link to={`/admin/view-lease/${activeLease.id}`} className="details-link">Details →</Link>
                                         </>
                                     ) : (
-                                        <Link to="/admin/add-lease" className="details-link">Create Lease →</Link>
+                                        hasModuleAccess('leases') && getModulePermissions('leases')?.edit ? (
+                                            <Link to="/admin/add-lease" className="details-link">Create Lease →</Link>
+                                        ) : (
+                                            <span className="details-link" style={{ color: '#9ca3af', cursor: 'not-allowed' }}>No Lease Permission</span>
+                                        )
                                     )}
                                 </div>
                             </div>

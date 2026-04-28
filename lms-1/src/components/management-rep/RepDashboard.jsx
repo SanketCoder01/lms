@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Sidebar from './RepSidebar';
 import { managementAPI } from '../../services/api';
+import usePermissions from '../../hooks/usePermissions';
 // Using common dashboard css
 import '../admin/dashboard.css';
 
@@ -9,6 +10,7 @@ const RepDashboard = () => {
     const navigate = useNavigate();
     const [stats, setStats] = useState(null);
     const [loading, setLoading] = useState(true);
+    const { hasModuleAccess, getModulePermissions } = usePermissions();
 
     useEffect(() => {
         const fetchStats = async () => {
@@ -58,7 +60,19 @@ const RepDashboard = () => {
                             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.73 21a2 2 0 0 1-3.46 0"></path></svg>
                         </button>
 
-                        <button className="primary-btn" onClick={() => navigate('/admin/leases')}>
+                        <button 
+                            className="primary-btn" 
+                            onClick={() => {
+                                // Check if user has leases module access with edit permission
+                                const hasLeaseAccess = hasModuleAccess('leases');
+                                const leasePerms = getModulePermissions('leases');
+                                if (hasLeaseAccess && leasePerms?.edit) {
+                                    navigate('/admin/add-lease');
+                                } else {
+                                    alert('You do not have permission to create leases. Please contact your administrator.');
+                                }
+                            }}
+                        >
                             + New Lease
                         </button>
                     </div>
