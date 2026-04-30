@@ -27,9 +27,6 @@ const CustomTooltip = ({ active, payload, label }) => {
         <p style={{ color: '#f97316', margin: 0, fontSize: '12px' }}>
           <strong>Leased Area:</strong> {data.leasedArea.toLocaleString('en-IN')} sqft ({data.leased.toFixed(1)}%)
         </p>
-        <p style={{ color: '#64748b', margin: '6px 0 0', paddingTop: '6px', borderTop: '1px solid #f1f5f9', fontSize: '12px', fontWeight: 600 }}>
-          Total Capacity: {data.totalArea.toLocaleString('en-IN')} sqft
-        </p>
       </div>
     );
   }
@@ -117,49 +114,67 @@ const ZoningExecution = ({ zoningData, loading }) => {
             </div>
           </div>
 
-          {/* Stacked Bar Chart */}
-          <div style={{ height: '280px', position: 'relative', marginTop: '10px' }}>
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart
-                data={[
-                  ...categories.map(c => {
+          {/* Stacked Bar Chart — always scrollable horizontally */}
+          <div
+            style={{
+              overflowX: 'scroll',
+              overflowY: 'hidden',
+              marginTop: '10px',
+              WebkitOverflowScrolling: 'touch',
+              paddingBottom: '6px', // space for scrollbar
+            }}
+          >
+            {/* Scroll hint */}
+            <div style={{ fontSize: '10px', color: '#94a3b8', textAlign: 'right', paddingRight: '4px', marginBottom: '4px' }}>
+              ← scroll to see all →
+            </div>
+            <div
+              style={{
+                height: '260px',
+                minWidth: `${Math.max(500, categories.length * 140)}px`,
+                position: 'relative',
+              }}
+            >
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart
+                  data={categories.map(c => {
                     const leasedPct = c.planArea > 0 ? (c.actualArea / c.planArea) * 100 : 0;
                     return {
                       name: c.name,
-                      leased: leasedPct,
-                      planned: 100 - leasedPct,
+                      leased: parseFloat(leasedPct.toFixed(1)),
+                      planned: parseFloat((100 - leasedPct).toFixed(1)),
                       totalArea: c.planArea,
                       leasedArea: c.actualArea
                     };
-                  }),
-                  {
-                    name: 'Total',
-                    leased: totalPlanArea > 0 ? (totalActualArea / totalPlanArea) * 100 : 0,
-                    planned: totalPlanArea > 0 ? 100 - ((totalActualArea / totalPlanArea) * 100) : 0,
-                    totalArea: totalPlanArea,
-                    leasedArea: totalActualArea
-                  }
-                ]}
-                margin={{ top: 20, right: 10, left: -20, bottom: 60 }}
-              >
-                <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                <XAxis
-                  dataKey="name"
-                  interval={0}
-                  tick={{ fontSize: 10, fill: '#64748b' }}
-                />
-                <YAxis
-                  tickFormatter={(tick) => `${tick}%`}
-                  domain={[0, 100]}
-                  ticks={[0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100]}
-                  tick={{ fontSize: 10, fill: '#64748b' }}
-                />
-                <Tooltip content={<CustomTooltip />} />
-                <Legend wrapperStyle={{ fontSize: '11px', paddingTop: '10px' }} />
-                <Bar dataKey="planned" name="Planned Area" stackId="a" fill="#3b82f6" maxBarSize={40} />
-                <Bar dataKey="leased" name="Leased Area" stackId="a" fill="#f97316" maxBarSize={40} />
-              </BarChart>
-            </ResponsiveContainer>
+                  })}
+                  margin={{ top: 20, right: 10, left: -20, bottom: 55 }}
+                >
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                  <XAxis
+                    dataKey="name"
+                    interval={0}
+                    height={55}
+                    tick={({ x, y, payload }) => (
+                      <g transform={`translate(${x},${y})`}>
+                        <text x={0} y={0} dy={14} textAnchor="middle" fill="#64748b" fontSize={10}>
+                          {payload.value.length > 16 ? payload.value.slice(0, 15) + '…' : payload.value}
+                        </text>
+                      </g>
+                    )}
+                  />
+                  <YAxis
+                    tickFormatter={(tick) => `${tick}%`}
+                    domain={[0, 100]}
+                    ticks={[0, 25, 50, 75, 100]}
+                    tick={{ fontSize: 10, fill: '#64748b' }}
+                  />
+                  <Tooltip content={<CustomTooltip />} />
+                  <Legend wrapperStyle={{ fontSize: '11px', paddingTop: '10px' }} />
+                  <Bar dataKey="planned" name="Planned Area" stackId="a" fill="#3b82f6" maxBarSize={40} />
+                  <Bar dataKey="leased" name="Leased Area" stackId="a" fill="#f97316" maxBarSize={40} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
           </div>
 
 

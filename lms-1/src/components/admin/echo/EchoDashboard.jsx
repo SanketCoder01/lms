@@ -16,7 +16,7 @@ import FinancialValueMonthly from './FinancialValueMonthly';
 import BrandPerformanceSection from './BrandPerformanceSection';
 import FloorOccupancySection from './FloorOccupancySection';
 import CriticalNotificationTicker from './CriticalNotificationTicker';
-import { getProjects, leaseAPI, unitAPI } from '../../../services/api';
+import { getProjects, leaseAPI, unitAPI, partyAPI } from '../../../services/api';
 import usePermissions from '../../../hooks/usePermissions';
 import './echo.css';
 
@@ -34,6 +34,8 @@ const EchoDashboard = () => {
   const [zoningData, setZoningData] = useState([]);
   const [allLeases, setAllLeases] = useState([]);
   const [allUnits, setAllUnits] = useState([]);
+  const [allParties, setAllParties] = useState([]);     // Company-type only → Brand Performance
+  const [allPartiesMap, setAllPartiesMap] = useState({}); // All types → keyed by id → Expiry/LockIn/Escalations
 
   // Fetch projects for dropdown — filtered by assigned access for module_users
   useEffect(() => {
@@ -175,6 +177,21 @@ const EchoDashboard = () => {
           }
         });
 
+        // Fetch all company parties from Masters for Brand Performance
+        try {
+          // Company-type parties only → Brand Performance section
+          const partiesRes = await partyAPI.getAllParties({ type: 'Company' });
+          const partiesList = Array.isArray(partiesRes.data) ? partiesRes.data : (partiesRes.data?.data || []);
+          setAllParties(partiesList);
+
+          // ALL party types (Company + Individual) → lookup map for Expiry/LockIn/Escalations
+          const allPartiesRes = await partyAPI.getAllParties();
+          const allPartiesList = Array.isArray(allPartiesRes.data) ? allPartiesRes.data : (allPartiesRes.data?.data || []);
+          const pMap = {};
+          allPartiesList.forEach(p => { pMap[p.id] = p; });
+          setAllPartiesMap(pMap);
+        } catch (e) { console.error('Failed to fetch parties:', e); }
+
         // Fetch rent composition from leases
         try {
           const leaseParams = selectedProject !== 'All' ? { project_id: selectedProject } : {};
@@ -208,35 +225,45 @@ const EchoDashboard = () => {
           // Only count ACTIVE leases for actual rent calculation
           const activeLeases = leases.filter(lease => {
             const status = (lease.status || '').toLowerCase().trim();
-            return status === 'active' || status === 'approved' || status === 'leased' || status === 'executed' || status === 'registered';
+            return status === 'active' || status === 'approved' || status === 'executed' || status === 'registered';
           });
-          console.log('Active leases for rent calculation:', activeLeases.length, 'out of', leases.length);
 
           activeLeases.forEach(lease => {
-            console.log('Lease:', lease.id, 'rent_model:', lease.rent_model, 'monthly_rent:', lease.monthly_rent, 'mg_amount:', lease.mg_amount, 'revenue_share_amount:', lease.revenue_share_amount, 'revenue_share_percentage:', lease.revenue_share_percentage);
             const rent = parseFloat(lease.monthly_rent) || 0;
-            if (lease.rent_model === 'Fixed') {
+            const model = (lease.rent_model || 'Fixed').trim();
+
+            if (model === 'Fixed' || model === '') {
+              // Fixed rent: monthly_rent is the full fixed rent
               fixedTotal += rent;
               fixedUnits += 1;
-            } else if (lease.rent_model === 'RevenueShare' || lease.rent_model === 'Revenue Share' || lease.rent_model === 'Hybrid') {
-              const mgAmount = parseFloat(lease.mg_amount) || rent;
-              mgTotal += mgAmount;
-              // Calculate revenue share from percentage if amount not available
-              let revShareAmount = parseFloat(lease.revenue_share_amount) || 0;
-              if (!revShareAmount && lease.revenue_share_percentage) {
-                const netSales = parseFloat(lease.monthly_net_sales) || 0;
-                revShareAmount = (netSales * parseFloat(lease.revenue_share_percentage)) / 100;
+            } else if (model === 'RevenueShare' || model === 'Revenue Share' || model === 'Hybrid') {
+              const mgAmount = parseFloat(lease.mg_amount) || 0;
+              const netSales = parseFloat(lease.monthly_net_sales) || 0;
+              const revPct = parseFloat(lease.revenue_share_percentage) || 0;
+              const revShareAmount = (netSales > 0 && revPct > 0) ? (netSales * revPct) / 100 : 0;
+              const option = (lease.rent_amount_option || 'Option A');
+
+              if (option === 'Option B') {
+                // Option B: Higher of MG or Revenue Share — only add the winner
+                if (mgAmount >= revShareAmount) {
+                  // MG wins (or tie)
+                  if (mgAmount > 0) { mgTotal += mgAmount; mgUnits += 1; }
+                } else {
+                  // Revenue share wins
+                  revShareTotal += revShareAmount; revShareUnits += 1;
+                }
+              } else {
+                // Option A: MG + Revenue Share (both components)
+                if (mgAmount > 0) { mgTotal += mgAmount; mgUnits += 1; }
+                if (revShareAmount > 0) { revShareTotal += revShareAmount; revShareUnits += 1; }
               }
-              revShareTotal += revShareAmount;
-              mgUnits += 1;
-              revShareUnits += 1;
             } else {
-              // Default: if no rent_model specified, count as fixed rent
+              // Fallback for any other model
               fixedTotal += rent;
               fixedUnits += 1;
             }
           });
-          console.log('Rent composition totals:', { fixedTotal, mgTotal, revShareTotal, fixedUnits, mgUnits, revShareUnits });
+
           setRentComposition({
             fixed: fixedTotal,
             mg: mgTotal,
@@ -271,38 +298,31 @@ const EchoDashboard = () => {
             const key = leaseDate.toLocaleDateString('en-US', { month: 'short' });
             if (monthData[key]) {
               monthData[key].units += 1;
-              monthData[key].area += parseFloat(lease.area_leased) || 0;
+              // Use chargeable_area from units join, or area_leased, or sub_lease_area_sqft
+              const area = parseFloat(lease.chargeable_area || lease.units?.chargeable_area || lease.area_leased || lease.sub_lease_area_sqft || 0);
+              monthData[key].area += area;
             }
           });
 
-          const chartDataArr = Object.values(monthData).map(d => ({
-            ...d,
-            area: d.area // Keep actual area in sqft, no rounding
-          }));
 
-          // ── Leasing Activity Counts ─────────────────────────────────
-          // Executed  = total leases created (all active/approved leases)
-          // Registered = registration_date filled by admin
-          // LOI        = only loi_date filled (no agreement_date or registration_date)
+          // Shared helper — checks date + file both present for each level
+          const qualifiesForMilestone = (lease) => {
+            const hasReg = !!(lease.registration_date && String(lease.registration_date).trim() && lease.registration_document_url && String(lease.registration_document_url).trim());
+            const hasExe = !!(lease.agreement_date && String(lease.agreement_date).trim() && lease.agreement_document_url && String(lease.agreement_document_url).trim());
+            const hasLoi = !!(lease.loi_date && String(lease.loi_date).trim() && lease.loi_document_url && String(lease.loi_document_url).trim());
+            return hasReg || hasExe || hasLoi;
+          };
+
           const getLeasingStatusCounts = (leaseList) => {
             const counts = { registered: 0, executed: 0, loi: 0 };
-
-            // Count all active/approved leases as executed
-            const activeLeasesList = leaseList.filter(l => {
-              const status = (l.status || '').toLowerCase();
-              return status === 'active' || status === 'approved' || status === 'leased' || status === 'executed' || status === 'registered';
-            });
-            counts.executed = activeLeasesList.length;
-
-            activeLeasesList.forEach(lease => {
-              const hasReg = !!(lease.registration_date && String(lease.registration_date).trim());
-              const hasAgr = !!(lease.agreement_date && String(lease.agreement_date).trim());
-              const hasLoi = !!(lease.loi_date && String(lease.loi_date).trim());
-
+            leaseList.forEach(lease => {
+              const hasReg = !!(lease.registration_date && String(lease.registration_date).trim() && lease.registration_document_url && String(lease.registration_document_url).trim());
+              const hasExe = !!(lease.agreement_date && String(lease.agreement_date).trim() && lease.agreement_document_url && String(lease.agreement_document_url).trim());
+              const hasLoi = !!(lease.loi_date && String(lease.loi_date).trim() && lease.loi_document_url && String(lease.loi_document_url).trim());
               if (hasReg) counts.registered += 1;
-              if (hasLoi && !hasReg && !hasAgr) counts.loi += 1;
+              else if (hasExe) counts.executed += 1;
+              else if (hasLoi) counts.loi += 1;
             });
-
             return counts;
           };
 
@@ -311,10 +331,89 @@ const EchoDashboard = () => {
           const executedCount = statusCounts.executed;
           const registeredCount = statusCounts.registered;
 
+          // Dynamic Bar chart: gather all qualified leases
+          const qualifiedLeases = leases.filter(l => qualifiesForMilestone(l));
+          
+          let minDate = new Date();
+          minDate.setMonth(minDate.getMonth() - 5); // Default at least 6 months
+          minDate.setDate(1);
+          minDate.setHours(0,0,0,0);
+          
+          let maxDate = new Date();
+          maxDate.setDate(1);
+          maxDate.setHours(0,0,0,0);
+
+          // Find actual date bounds
+          qualifiedLeases.forEach(lease => {
+            const hasReg = !!(lease.registration_date && String(lease.registration_date).trim() && lease.registration_document_url && String(lease.registration_document_url).trim());
+            const hasExe = !!(lease.agreement_date && String(lease.agreement_date).trim() && lease.agreement_document_url && String(lease.agreement_document_url).trim());
+            const hasLoi = !!(lease.loi_date && String(lease.loi_date).trim() && lease.loi_document_url && String(lease.loi_document_url).trim());
+            
+            let dateToUse = lease.created_at || lease.lease_start;
+            if (hasReg) dateToUse = lease.registration_date;
+            else if (hasExe) dateToUse = lease.agreement_date;
+            else if (hasLoi) dateToUse = lease.loi_date;
+
+            const d = new Date(dateToUse);
+            if (!isNaN(d.getTime())) {
+              d.setDate(1);
+              d.setHours(0,0,0,0);
+              if (d < minDate) minDate = new Date(d);
+              if (d > maxDate) maxDate = new Date(d);
+            }
+          });
+
+          const milestoneMonthData = {};
+          let currentMonth = new Date(minDate);
+          while (currentMonth <= maxDate) {
+            const key = currentMonth.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+            milestoneMonthData[key] = { 
+              month: key, 
+              units: 0, area: 0,
+              loiUnits: 0, loiArea: 0,
+              executedUnits: 0, executedArea: 0,
+              registeredUnits: 0, registeredArea: 0
+            };
+            currentMonth.setMonth(currentMonth.getMonth() + 1);
+          }
+
+          qualifiedLeases.forEach(lease => {
+            const hasReg = !!(lease.registration_date && String(lease.registration_date).trim() && lease.registration_document_url && String(lease.registration_document_url).trim());
+            const hasExe = !!(lease.agreement_date && String(lease.agreement_date).trim() && lease.agreement_document_url && String(lease.agreement_document_url).trim());
+            const hasLoi = !!(lease.loi_date && String(lease.loi_date).trim() && lease.loi_document_url && String(lease.loi_document_url).trim());
+            
+            let dateToUse = lease.created_at || lease.lease_start;
+            if (hasReg) dateToUse = lease.registration_date;
+            else if (hasExe) dateToUse = lease.agreement_date;
+            else if (hasLoi) dateToUse = lease.loi_date;
+
+            const d = new Date(dateToUse);
+            if (!isNaN(d.getTime())) {
+              const key = d.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+              if (milestoneMonthData[key]) {
+                const area = parseFloat(lease.chargeable_area || lease.units?.chargeable_area || lease.area_leased || lease.sub_lease_area_sqft || 0);
+                
+                milestoneMonthData[key].units += 1;
+                milestoneMonthData[key].area += area;
+                
+                if (hasReg) {
+                  milestoneMonthData[key].registeredUnits += 1;
+                  milestoneMonthData[key].registeredArea += area;
+                } else if (hasExe) {
+                  milestoneMonthData[key].executedUnits += 1;
+                  milestoneMonthData[key].executedArea += area;
+                } else if (hasLoi) {
+                  milestoneMonthData[key].loiUnits += 1;
+                  milestoneMonthData[key].loiArea += area;
+                }
+              }
+            }
+          });
+
           setLeasingStats({
-            newLeases: recentLeases.length,
-            areaLeased: recentLeases.reduce((sum, l) => sum + (parseFloat(l.area_leased) || 0), 0),
-            chartData: chartDataArr,
+            newLeases: leases.length,
+            areaLeased: leases.reduce((sum, l) => sum + parseFloat(l.chargeable_area || l.units?.chargeable_area || l.area_leased || l.sub_lease_area_sqft || 0), 0),
+            chartData: Object.values(milestoneMonthData),
             loiCount,
             executedCount,
             registeredCount
@@ -332,78 +431,73 @@ const EchoDashboard = () => {
     fetchData();
   }, [selectedProject]);
 
-  // Refresh data when window gains focus (for real-time updates)
+  // Refresh data when window gains focus (real-time after creating leases)
   useEffect(() => {
     const handleFocus = () => {
-      console.log('Window focused - refreshing data');
-      // Trigger refetch by calling fetchData again
       const fetchData = async () => {
         try {
           const unitParams = selectedProject !== 'All' ? { projectId: selectedProject } : {};
           const unitsRes = await unitAPI.getUnits(unitParams);
-
           const units = unitsRes.data?.data || unitsRes.data || [];
           setAllUnits(units);
+          setProjectedRent(units.reduce((s, u) => s + (parseFloat(u.projected_rent) || 0), 0));
 
-          // Refetch leases
           const leaseParams = selectedProject !== 'All' ? { project_id: selectedProject } : {};
           const leasesRes = await leaseAPI.getAllLeases(leaseParams);
-          let leases = Array.isArray(leasesRes.data) ? leasesRes.data : (leasesRes.data?.data || []);
+          const leases = Array.isArray(leasesRes.data) ? leasesRes.data : (leasesRes.data?.data || []);
           setAllLeases(leases);
 
-          // Recalculate leasing counts on focus (real-time update)
-          const focusCounts = { registered: 0, executed: 0, loi: 0 };
-          const activeLeasesList = leases.filter(l => {
-            const status = (l.status || '').toLowerCase();
-            return status === 'active' || status === 'approved' || status === 'leased' || status === 'executed' || status === 'registered';
+          // Recalculate rent composition
+          let fixedTotal = 0, mgTotal = 0, revShareTotal = 0, fixedUnits = 0, mgUnits = 0, revShareUnits = 0;
+          const active = leases.filter(l => { const s = (l.status || '').toLowerCase().trim(); return s === 'active' || s === 'approved' || s === 'executed' || s === 'registered'; });
+          active.forEach(l => {
+            const rent = parseFloat(l.monthly_rent) || 0;
+            const model = (l.rent_model || 'Fixed').trim();
+            if (model === 'Fixed' || model === '') {
+              fixedTotal += rent; fixedUnits += 1;
+            } else if (model === 'RevenueShare' || model === 'Revenue Share' || model === 'Hybrid') {
+              const mgAmount = parseFloat(l.mg_amount) || 0;
+              const netSales = parseFloat(l.monthly_net_sales) || 0;
+              const revPct = parseFloat(l.revenue_share_percentage) || 0;
+              const revShareAmount = (netSales > 0 && revPct > 0) ? (netSales * revPct) / 100 : 0;
+              const option = (l.rent_amount_option || 'Option A');
+              if (option === 'Option B') {
+                // Option B: only the winner
+                if (mgAmount >= revShareAmount) { if (mgAmount > 0) { mgTotal += mgAmount; mgUnits += 1; } }
+                else { revShareTotal += revShareAmount; revShareUnits += 1; }
+              } else {
+                // Option A: both components
+                if (mgAmount > 0) { mgTotal += mgAmount; mgUnits += 1; }
+                if (revShareAmount > 0) { revShareTotal += revShareAmount; revShareUnits += 1; }
+              }
+            } else { fixedTotal += rent; fixedUnits += 1; }
           });
-          focusCounts.executed = activeLeasesList.length;
+          setRentComposition({ fixed: fixedTotal, mg: mgTotal, revenueShare: revShareTotal, fixedUnits, mgUnits, revShareUnits });
 
-          activeLeasesList.forEach(lease => {
-            const hasReg = !!(lease.registration_date && String(lease.registration_date).trim());
-            const hasAgr = !!(lease.agreement_date && String(lease.agreement_date).trim());
-            const hasLoi = !!(lease.loi_date && String(lease.loi_date).trim());
-
-            if (hasReg) focusCounts.registered += 1;
-            if (hasLoi && !hasReg && !hasAgr) focusCounts.loi += 1;
+          // Recalculate leasing counts
+          const cnt = { registered: 0, executed: active.length, loi: 0 };
+          active.forEach(l => {
+            if (l.registration_date && String(l.registration_date).trim()) cnt.registered += 1;
+            if (l.loi_date && !l.registration_date && !l.agreement_date) cnt.loi += 1;
           });
-          setLeasingStats(prev => ({
-            ...prev,
-            executedCount: focusCounts.executed,
-            registeredCount: focusCounts.registered,
-            loiCount: focusCounts.loi,
-          }));
+          setLeasingStats(prev => ({ ...prev, executedCount: cnt.executed, registeredCount: cnt.registered, loiCount: cnt.loi }));
 
-          // Calculate zoning from unit_zoning_type
+          // Recalculate zoning
           const zoningMap = {};
           units.forEach(unit => {
-            const zoningType = unit.unit_zoning_type || unit.zoning_type || unit.zoningType;
-            const area = parseFloat(unit.chargeable_area || unit.area || 0);
-
-            if (zoningType && area > 0) {
-              const zoningKey = zoningType.toLowerCase().trim().replace(/\s+/g, '_');
-
-              if (!zoningMap[zoningKey]) {
-                zoningMap[zoningKey] = { name: zoningType, plan: 0, actual: 0, planArea: 0, actualArea: 0 };
-              }
-              zoningMap[zoningKey].plan += 1;
-              zoningMap[zoningKey].planArea += area;
-
-              if (unit.status === 'leased' || unit.status === 'sold' || unit.status === 'occupied') {
-                zoningMap[zoningKey].actual += 1;
-                zoningMap[zoningKey].actualArea += area;
-              }
+            const zt = unit.unit_zoning_type; const area = parseFloat(unit.chargeable_area || 0);
+            if (zt && area > 0) {
+              const k = zt.toLowerCase().trim().replace(/\s+/g, '_');
+              if (!zoningMap[k]) zoningMap[k] = { name: zt, plan: 0, actual: 0, planArea: 0, actualArea: 0 };
+              zoningMap[k].plan += 1; zoningMap[k].planArea += area;
+              if (unit.status === 'leased' || unit.status === 'sold' || unit.status === 'occupied') { zoningMap[k].actual += 1; zoningMap[k].actualArea += area; }
             }
           });
-
           setZoningData(Object.values(zoningMap).filter(z => z.plan > 0));
-        } catch (err) {
-          console.error('Error refreshing data:', err);
-        }
+        } catch (err) { console.error('Focus refresh error:', err); }
       };
       fetchData();
     };
-
     window.addEventListener('focus', handleFocus);
     return () => window.removeEventListener('focus', handleFocus);
   }, [selectedProject]);
@@ -661,7 +755,7 @@ const EchoDashboard = () => {
             <button className="echo-btn-secondary" onClick={exportToPDF}>
               <Download className="echo-btn-icon" /> Export
             </button>
-            <button 
+            <button
               className="echo-btn-primary"
               onClick={() => {
                 // Check if user has leases module access with edit permission
@@ -702,7 +796,7 @@ const EchoDashboard = () => {
           }}
           onLeasedUnitsClick={() => {
             const proj = selectedProject !== 'All' ? `&projectId=${selectedProject}` : '';
-            navigate(`/admin/units?status=leased${proj}`);
+            navigate(`/admin/units?status=occupied${proj}`);
           }}
           onVacantUnitsClick={() => {
             const proj = selectedProject !== 'All' ? `&projectId=${selectedProject}` : '';
@@ -754,9 +848,9 @@ const EchoDashboard = () => {
 
         {/* Lease Expiry, Lock-in & Upcoming Escalations - 3 Column Grid */}
         <div className="echo-charts-grid" style={{ gridTemplateColumns: 'repeat(3, 1fr)' }}>
-          <LeaseExpirySection leases={allLeases} loading={loading} />
-          <LockInExpirySection leases={allLeases} loading={loading} />
-          <UpcomingEscalations leases={allLeases} loading={loading} />
+          <LeaseExpirySection leases={allLeases} partiesMap={allPartiesMap} loading={loading} />
+          <LockInExpirySection leases={allLeases} partiesMap={allPartiesMap} loading={loading} />
+          <UpcomingEscalations leases={allLeases} partiesMap={allPartiesMap} loading={loading} />
         </div>
 
         {/* Section Title - Rental Projection */}
@@ -779,8 +873,8 @@ const EchoDashboard = () => {
 
         {/* Brand Performance & Floor Occupancy - 2 Column Grid */}
         <div className="echo-charts-row">
-          <BrandPerformanceSection leases={allLeases} loading={loading} />
-          <FloorOccupancySection units={allUnits} loading={loading} />
+          <BrandPerformanceSection leases={allLeases} parties={allParties} loading={loading} />
+          <FloorOccupancySection units={allUnits} leases={allLeases} loading={loading} />
         </div>
 
         {/* Section Title - Unit Sales & Ownership + Zoning Plan */}

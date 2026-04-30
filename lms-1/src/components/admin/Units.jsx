@@ -35,38 +35,23 @@ const Units = () => {
         if (ownershipParam) setSelectedOwnership(ownershipParam);
     }, [location.search]);
 
-    // Report columns for Units - All sections
+    // Report columns for Units — only fields collected during Add Unit
     const unitReportColumns = [
-        // Basic Info
-        { key: 'id', label: 'Unit ID' },
         { key: 'unitNo', label: 'Unit Number' },
-        // Location
-        { key: 'building', label: 'Building/Project' },
-        { key: 'blockTower', label: 'Block/Tower' },
-        { key: 'floor', label: 'Floor' },
-        // Area Details
-        { key: 'area', label: 'Area (SQ FT)' },
-        { key: 'carpetArea', label: 'Carpet Area' },
-        { key: 'builtUpArea', label: 'Built-up Area' },
-        { key: 'superBuiltUpArea', label: 'Super Built-up' },
-        // Ownership
+        { key: 'building', label: 'Project' },
+        { key: 'blockTower', label: 'Block / Tower' },
+        { key: 'floorNumber', label: 'Floor' },
+        { key: 'area', label: 'Chargeable Area' },
+        { key: 'unit_category', label: 'Unit Category' },
+        { key: 'unit_zoning_type', label: 'Zoning Type' },
+        { key: 'unit_condition', label: 'Unit Condition' },
+        { key: 'plc', label: 'PLC' },
+        { key: 'projected_rent', label: 'Projected Rent' },
         { key: 'ownerName', label: 'Owner Name' },
-        { key: 'ownerShare', label: 'Owner Share %' },
-        { key: 'ownershipStatus', label: 'Ownership Status' },
-        // Tenant
+        { key: 'ownership_grouping', label: 'Ownership Group' },
         { key: 'tenantName', label: 'Tenant Name' },
-        { key: 'tenantSince', label: 'Tenant Since' },
-        // Status
         { key: 'status', label: 'Status' },
-        { key: 'statusDesc', label: 'Status Description' },
-        { key: 'unitType', label: 'Unit Type' },
-        { key: 'unitCategory', label: 'Unit Category' },
-        // Additional
-        { key: 'facing', label: 'Facing' },
-        { key: 'furnishedStatus', label: 'Furnished Status' },
-        { key: 'parkingSlots', label: 'Parking Slots' },
-        { key: 'remarks', label: 'Remarks' },
-        { key: 'created_at', label: 'Created Date' }
+        { key: 'created_at', label: 'Created Date' },
     ];
 
     /* ================= EXPORT CSV ================= */
@@ -116,16 +101,17 @@ const Units = () => {
             try {
                 setLoading(true);
 
-
                 const params = {};
                 if (searchTerm) params.search = searchTerm;
-                if (selectedBuilding !== 'All') params.projectId = selectedBuilding;
-                if (selectedUnitType !== 'All') params.status = selectedUnitType; // Mapping Unit Type to Status filter
-                if (selectedOwnership !== 'All') params.ownership = selectedOwnership; // Ownership filter
+                if (selectedBuilding && selectedBuilding !== 'All') params.projectId = selectedBuilding;
+                // status filter: 'All' or '' means no filter
+                if (selectedUnitType && selectedUnitType !== 'All' && selectedUnitType !== '') {
+                    params.status = selectedUnitType;
+                }
+                if (selectedOwnership && selectedOwnership !== 'All') params.ownership = selectedOwnership;
 
                 const response = await unitAPI.getUnits(params);
-                const data = response.data.data || response.data; // Handle wrapped/unwrapped
-
+                const data = response.data?.data || response.data; // Handle wrapped/unwrapped
 
                 if (!Array.isArray(data)) {
                     throw new Error('API response is not an array');
@@ -133,15 +119,24 @@ const Units = () => {
 
                 const mappedUnits = data.map(unit => ({
                     id: unit.id,
-                    unitNo: unit.unit_number || 'N/A',
-                    building: unit.building || unit.projects?.project_name || 'N/A',
+                    unitNo: unit.unit_number || '-',
+                    building: unit.building || unit.projects?.project_name || '-',
                     blockTower: unit.block_tower || '-',
-                    ownerName: unit.owner_name || 'N/A',
-                    tenantName: unit.tenant_name || unit.leases?.[0]?.party_name || (unit.status === 'occupied' ? 'Active Tenant' : '-'),
-                    area: unit.chargeable_area || 'N/A',
-                    status: unit.status || 'unknown',
+                    floorNumber: unit.floor_number || '-',
+                    ownerName: unit.owner_name || '-',
+                    tenantName: unit.tenant_name || unit.brand_name || (unit.status === 'occupied' || unit.status === 'leased' ? 'Active Tenant' : '-'),
+                    area: unit.chargeable_area ? `${Number(unit.chargeable_area).toLocaleString('en-IN')} sqft` : '-',
+                    status: unit.status || '-',
                     statusType: unit.status || 'unknown',
-                    statusDesc: unit.status === 'vacant' ? 'Available for leasing' : 'Leased'
+                    statusDesc: unit.status === 'vacant' ? 'Available for leasing' : unit.status === 'occupied' || unit.status === 'leased' ? 'Leased' : unit.status,
+                    // Extra fields for report
+                    unit_category: unit.unit_category || '-',
+                    unit_zoning_type: unit.unit_zoning_type || '-',
+                    unit_condition: unit.unit_condition || '-',
+                    plc: unit.plc || '-',
+                    projected_rent: unit.projected_rent ? `₹${Number(unit.projected_rent).toLocaleString('en-IN')}` : '-',
+                    ownership_grouping: unit.ownership_grouping || '-',
+                    created_at: unit.created_at || '',
                 }));
                 setUnits(mappedUnits);
                 setError(null);
@@ -157,7 +152,7 @@ const Units = () => {
         // Debounce search
         const timer = setTimeout(() => {
             fetchUnits();
-        }, 500);
+        }, 300);
 
         return () => clearTimeout(timer);
     }, [searchTerm, selectedBuilding, selectedUnitType, selectedOwnership]);
@@ -166,11 +161,13 @@ const Units = () => {
     const handleSearchChange = (e) => setSearchTerm(e.target.value);
     const handleBuildingChange = (e) => setSelectedBuilding(e.target.value);
     const handleUnitTypeChange = (e) => setSelectedUnitType(e.target.value);
+    const handleOwnershipChange = (e) => setSelectedOwnership(e.target.value);
 
     const handleClearFilters = () => {
         setSearchTerm('');
         setSelectedBuilding('All');
         setSelectedUnitType('All');
+        setSelectedOwnership('All');
     };
 
     const handleDelete = async (id) => {
@@ -272,9 +269,19 @@ const Units = () => {
                             </div>
                             <div className="dropdown-filter">
                                 <select value={selectedUnitType} onChange={handleUnitTypeChange}>
-                                    <option value="">All Status</option>
+                                    <option value="All">All Status</option>
                                     <option value="vacant">Vacant</option>
-                                    <option value="occupied">Leased</option>
+                                    <option value="leased">Leased</option>
+                                    <option value="occupied">Occupied</option>
+                                </select>
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                            </div>
+                            <div className="dropdown-filter">
+                                <select value={selectedOwnership} onChange={handleOwnershipChange}>
+                                    <option value="All">All Ownership</option>
+                                    <option value="Developer Units">Developer Units</option>
+                                    <option value="Close Group">Close Group</option>
+                                    <option value="External Investors">External Investors</option>
                                 </select>
                                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
                             </div>
@@ -320,7 +327,7 @@ const Units = () => {
                                             <td>{unit.area}</td>
                                             <td>
                                                 <span className={`status-badge ${unit.status}`}>
-                                                    {unit.status === 'occupied' ? 'Leased' : unit.status}
+                                                    {unit.status === 'occupied' || unit.status === 'leased' ? 'Leased' : unit.status}
                                                 </span>
                                             </td>
                                             <td>

@@ -252,6 +252,35 @@ const AddLease = () => {
     // Final Submit
     const handleSubmit = async () => {
         if (isSubmitting) return; // Prevent double clicking
+
+        // Validate Step 5
+        if (formData.loi_date && !files.loi_document) {
+            alert("Please upload the LOI document since LOI Date is provided.");
+            return;
+        }
+        if (files.loi_document && !formData.loi_date) {
+            alert("Please provide the LOI Date since LOI Document is uploaded.");
+            return;
+        }
+
+        if (formData.agreement_date && !files.agreement_document) {
+            alert("Please upload the Agreement document since Agreement Date is provided.");
+            return;
+        }
+        if (files.agreement_document && !formData.agreement_date) {
+            alert("Please provide the Agreement Date since Agreement Document is uploaded.");
+            return;
+        }
+
+        if (formData.registration_date && !files.registration_document) {
+            alert("Please upload the Registration document since Registration Date is provided.");
+            return;
+        }
+        if (files.registration_document && !formData.registration_date) {
+            alert("Please provide the Registration Date since Registration Document is uploaded.");
+            return;
+        }
+
         setIsSubmitting(true);
         try {
             // Transform Data
@@ -293,15 +322,16 @@ const AddLease = () => {
                 ...formData,
                 project_id: parseInt(formData.project_id),
                 unit_id: parseInt(formData.unit_id),
-                party_owner_id: isSubLease ? null : parseInt(formData.party_owner_id),
+                party_owner_id: isSubLease ? null : (parseInt(formData.party_owner_id) || null),
                 party_tenant_id: parseInt(formData.party_tenant_id),
                 sub_tenant_id: isSubLease ? parseInt(formData.sub_tenant_id) : null,
                 lease_type: isSubLease ? 'Subtenant lease' : 'Direct lease',
                 rent_model: rentModel,
                 sub_lease_area_sqft: isSubLease ? (parseFloat(formData.sub_lease_area_sqft) || 0) : null,
-                lease_start: formData.lease_start,
-                lease_end: formData.lease_end,
-                rent_commencement_date: formData.rent_commencement_date,
+                lease_start: formData.lease_start || null,
+                lease_end: formData.lease_end || null,
+                rent_commencement_date: formData.rent_commencement_date || null,
+                unit_handover_date: formData.unit_handover_date || null,
                 fitout_period_end: formData.fitout_period_end || null,
                 tenure_months: tenureMonths,
                 lockin_period_months: parseInt(formData.lockin_period_months) || 12,
@@ -333,10 +363,10 @@ const AddLease = () => {
                 escalations: escalations,
 
                 // Docs Data (Dates) - Backend might need schema update for these fields or store in metadata/JSON
-                loi_date: formData.loi_date,
-                agreement_date: formData.agreement_date,
-                deposit_payment_date: formData.deposit_payment_date,
-                registration_date: formData.registration_date,
+                loi_date: formData.loi_date || null,
+                agreement_date: formData.agreement_date || null,
+                deposit_payment_date: formData.deposit_payment_date || null,
+                registration_date: formData.registration_date || null,
 
                 // New Date Fields
                 fitout_period_start: formData.fitout_period_start || null,

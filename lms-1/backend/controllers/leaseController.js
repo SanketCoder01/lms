@@ -39,7 +39,7 @@ const getLeaseDashboardStats = async (req, res) => {
 
         const escQuery = applyScopes(supabase.from('lease_escalations').select('lease_id, leases!inner(company_id, project_id)'), req)
             .gte('effective_from', today).lte('effective_from', d30);
-            
+
         const { data: escData } = await escQuery;
         const escalations = new Set((escData || []).map(e => e.lease_id)).size;
 
@@ -327,7 +327,7 @@ const createLease = async (req, res) => {
         console.log("=== CREATE LEASE REQUEST ===");
         console.log("Files received:", req.files ? Object.keys(req.files) : 'None');
         console.log("Body keys:", Object.keys(req.body || {}));
-        
+
         let payload = req.body || {};
         if (req.body && req.body.leaseData) {
             try {
@@ -357,24 +357,29 @@ const createLease = async (req, res) => {
             return res.status(400).json({ message: 'party_owner_id is required for Direct lease' });
         }
 
-        // Issue 37: Proper date-range overlap check to prevent duplicate main leases
+        // Prevent duplicate main leases with overlapping date ranges for same unit
         if (payload.lease_type !== 'Subtenant lease') {
             const { data: ex } = await supabase.from('leases')
-                .select('id, lease_start, lease_end')
+                .select('id, lease_start, lease_end, status')
                 .eq('unit_id', payload.unit_id)
-                .eq('status', 'active')
                 .neq('lease_type', 'Subtenant lease');
 
             if (ex && ex.length > 0) {
-                // Check for date overlap
+                // Only check leases that are in an active/live state
+                const activeStatuses = ['active', 'approved', 'executed', 'registered', 'occupied', 'draft'];
+                const activeLeases = ex.filter(l =>
+                    activeStatuses.includes((l.status || '').toLowerCase().trim())
+                );
+
                 const newStart = new Date(payload.lease_start);
                 const newEnd = new Date(payload.lease_end);
-                const hasOverlap = ex.some(existing => {
+                const hasOverlap = activeLeases.some(existing => {
                     const existStart = new Date(existing.lease_start);
                     const existEnd = new Date(existing.lease_end);
+                    // True overlap: new lease starts before existing ends AND ends after existing starts
                     return newStart <= existEnd && newEnd >= existStart;
                 });
-                if (hasOverlap) return res.status(400).json({ message: "An active main lease with overlapping dates already exists for this unit." });
+                if (hasOverlap) return res.status(400).json({ message: "An active main lease with overlapping dates already exists for this unit. Please check the existing lease dates or use a different unit." });
             }
         }
 
@@ -484,10 +489,19 @@ const getAllLeases = async (req, res) => {
 
         let query = applyScopes(supabase.from('leases').select(`
             id, lease_type, rent_model, lease_start, lease_end, monthly_rent, security_deposit, status,
-            mg_amount, mg_amount_sqft, revenue_share_percentage,
+            mg_amount, mg_amount_sqft, revenue_share_percentage, rent_amount_option,
             monthly_net_sales, sub_lease_area_sqft, lockin_period_months, created_at,
             project_id, unit_id, party_tenant_id, party_owner_id,
             loi_date, agreement_date, registration_date,
+            loi_document_url, agreement_document_url, registration_document_url,
+            tenure_months, unit_handover_date, fitout_period_start, fitout_period_end,
+            opening_date, rent_commencement_date,
+            has_rent_free_period, rent_free_start_date, rent_free_end_date,
+            lessee_lockin_period_months, lessor_lockin_period_months,
+            lessee_notice_period_days, lessor_notice_period_days,
+            lessee_lockin_period_days, lessor_lockin_period_days,
+            escalation_type, escalation_rate, first_escalation_date,
+            remarks,
             projects(project_name, location, address),
             units(unit_number, chargeable_area),
             tenant:parties!leases_party_tenant_id_fkey(id, company_name, first_name, last_name, brand_name),
@@ -501,61 +515,159 @@ const getAllLeases = async (req, res) => {
         let { data, error } = await query;
         if (error) throw error;
 
-        console.log('Fetched leases:', data?.length);
-        console.log('Sample lease tenant:', data?.[0]?.tenant);
-        console.log('Sample lease owner:', data?.[0]?.owner);
+        // Fetch all escalations for these leases in one query
+        const leaseIds = (data || []).map(l => l.id);
+        let escalationsMap = {};
+        if (leaseIds.length > 0) {
+            const { data: escData } = await supabase
+                .from('lease_escalations')
+                .select('lease_id, sequence_no, effective_from, effective_to, increase_type, value, escalation_on, rate_per_sqft')
+                .in('lease_id', leaseIds)
+                .order('effective_from', { ascending: true });
+            (escData || []).forEach(e => {
+                if (!escalationsMap[e.lease_id]) escalationsMap[e.lease_id] = [];
+                escalationsMap[e.lease_id].push(e);
+            });
+        }
+
+        // Fetch unit data separately by unit_id to guarantee unit_number is always present
+        // (Supabase join may return null if FK is not auto-detected)
+        const unitIds = [...new Set((data || []).map(l => l.unit_id).filter(Boolean))];
+        let unitsMap = {};
+        if (unitIds.length > 0) {
+            const { data: unitData } = await supabase
+                .from('units')
+                .select('id, unit_number, chargeable_area')
+                .in('id', unitIds);
+            (unitData || []).forEach(u => { unitsMap[u.id] = u; });
+        }
+
+        // Similarly fetch project data by project_id
+        const projectIds = [...new Set((data || []).map(l => l.project_id).filter(Boolean))];
+        let projectsMap = {};
+        if (projectIds.length > 0) {
+            const { data: projData } = await supabase
+                .from('projects')
+                .select('id, project_name, location, address')
+                .in('id', projectIds);
+            (projData || []).forEach(p => { projectsMap[p.id] = p; });
+        }
+
+        // Fetch party data separately — guarantees brand_name is present even if Supabase FK join is null
+        const tenantIds = [...new Set((data || []).map(l => l.party_tenant_id).filter(Boolean))];
+        let partiesMap = {};
+        if (tenantIds.length > 0) {
+            const { data: partyData } = await supabase
+                .from('parties')
+                .select('id, company_name, first_name, last_name, brand_name, brand_category')
+                .in('id', tenantIds);
+            (partyData || []).forEach(p => { partiesMap[p.id] = p; });
+        }
 
         // JS Filtering for relations since advanced embedded string matching is tricky
-        let result = data.map(l => ({
-            id: l.id,
-            lease_type: l.lease_type,
-            rent_model: l.rent_model,
-            lease_start: l.lease_start,
-            lease_end: l.lease_end,
-            monthly_rent: l.monthly_rent,
-            monthly_net_sales: l.monthly_net_sales,
-            security_deposit: l.security_deposit,
-            status: l.status,
-            mg_amount: l.mg_amount,
-            mg_amount_sqft: l.mg_amount_sqft,
-            revenue_share_percentage: l.revenue_share_percentage,
-            sub_lease_area_sqft: l.sub_lease_area_sqft,
-            lock_in_period: l.lockin_period_months,
-            lockin_period_months: l.lockin_period_months,
-            area_leased: l.sub_lease_area_sqft || l.units?.chargeable_area || 0,
-            created_at: l.created_at,
-            loi_date: l.loi_date,
-            agreement_date: l.agreement_date,
-            registration_date: l.registration_date,
-            project_name: l.projects?.project_name,
-            project_location: l.projects?.location,
-            project_address: l.projects?.address,
-            unit_number: l.units?.unit_number,
-            tenant_name: l.tenant?.company_name ||
-                `${l.tenant?.first_name || ''} ${l.tenant?.last_name || ''}`.trim() ||
-                l.tenant?.brand_name ||
-                l.units?.unit_number || `Lease #${l.id}`,
-            owner_name: l.owner?.company_name ||
-                `${l.owner?.first_name || ''} ${l.owner?.last_name || ''}`.trim() ||
-                l.units?.unit_number || 'Owner',
-            brand_name: l.tenant?.brand_name ||
-                l.tenant?.company_name ||
-                `${l.tenant?.first_name || ''} ${l.tenant?.last_name || ''}`.trim() ||
-                l.units?.unit_number || `Lease #${l.id}`,
-            tenant: {
-                company_name: l.tenant?.company_name,
-                first_name: l.tenant?.first_name,
-                last_name: l.tenant?.last_name,
-                brand_name: l.tenant?.brand_name
-            },
-            units: {
-                unit_number: l.units?.unit_number,
-                chargeable_area: l.units?.chargeable_area
-            }
-        }));
+        let result = data.map(l => {
+            // Use separately-fetched maps as primary source — guarantees data even if Supabase join is null
+            const unitInfo = unitsMap[l.unit_id] || l.units || {};
+            const projectInfo = projectsMap[l.project_id] || l.projects || {};
+            // Use directly-fetched party data as primary source for brand_name
+            const partyInfo = partiesMap[l.party_tenant_id] || l.tenant || {};
 
-        console.log('Sample result brand_name:', result?.[0]?.brand_name);
-        console.log('Sample result tenant:', result?.[0]?.tenant);
+            const unitNumber = unitInfo.unit_number || null;
+            const chargeableArea = unitInfo.chargeable_area || 0;
+            const projectName = projectInfo.project_name || null;
+
+            const tenantName = (
+                partyInfo.company_name ||
+                `${partyInfo.first_name || ''} ${partyInfo.last_name || ''}`.trim() ||
+                null
+            );
+            const brandName = (
+                partyInfo.brand_name ||
+                partyInfo.company_name ||
+                `${partyInfo.first_name || ''} ${partyInfo.last_name || ''}`.trim() ||
+                null
+            );
+            // DEBUG — remove after confirming brand_name is fetched correctly
+            if (l.party_tenant_id) {
+                console.log(`[Brand Debug] tenant_id=${l.party_tenant_id} brand_name="${partyInfo.brand_name}" company_name="${partyInfo.company_name}" resolved="${brandName}"`);
+            }
+
+            return {
+                id: l.id,
+                unit_id: l.unit_id,
+                project_id: l.project_id,
+                lease_type: l.lease_type,
+                rent_model: l.rent_model,
+                lease_start: l.lease_start,
+                lease_end: l.lease_end,
+                monthly_rent: l.monthly_rent,
+                monthly_net_sales: l.monthly_net_sales,
+                security_deposit: l.security_deposit,
+                status: l.status,
+                mg_amount: l.mg_amount,
+                mg_amount_sqft: l.mg_amount_sqft,
+                revenue_share_percentage: l.revenue_share_percentage,
+                sub_lease_area_sqft: l.sub_lease_area_sqft,
+                lock_in_period: l.lockin_period_months,
+                lockin_period_months: l.lockin_period_months,
+                area_leased: l.sub_lease_area_sqft || chargeableArea || 0,
+                created_at: l.created_at,
+                loi_date: l.loi_date,
+                agreement_date: l.agreement_date,
+                registration_date: l.registration_date,
+                // Document upload URLs — used by frontend to verify file was uploaded
+                loi_document_url: l.loi_document_url || null,
+                agreement_document_url: l.agreement_document_url || null,
+                registration_document_url: l.registration_document_url || null,
+                // Missing fields for reports
+                tenure_months: l.tenure_months,
+                unit_handover_date: l.unit_handover_date,
+                fitout_period_start: l.fitout_period_start,
+                fitout_period_end: l.fitout_period_end,
+                opening_date: l.opening_date,
+                rent_commencement_date: l.rent_commencement_date,
+                has_rent_free_period: l.has_rent_free_period,
+                rent_free_start_date: l.rent_free_start_date,
+                rent_free_end_date: l.rent_free_end_date,
+                lessee_lockin_period_months: l.lessee_lockin_period_months,
+                lessor_lockin_period_months: l.lessor_lockin_period_months,
+                lessee_notice_period_days: l.lessee_notice_period_days,
+                lessor_notice_period_days: l.lessor_notice_period_days,
+                escalation_type: l.escalation_type,
+                escalation_rate: l.escalation_rate,
+                first_escalation_date: l.first_escalation_date,
+                remarks: l.remarks,
+                rent_amount_option: l.rent_amount_option,
+                // ── Project & Unit (guaranteed from direct lookup) ──
+                project_name: projectName,
+                project_location: projectInfo.location || null,
+                project_address: projectInfo.address || null,
+                unit_number: unitNumber,
+                chargeable_area: chargeableArea,
+                // ── Resolved name fields ──
+                tenant_name: tenantName,
+                owner_name: (
+                    l.owner?.company_name ||
+                    `${l.owner?.first_name || ''} ${l.owner?.last_name || ''}`.trim() ||
+                    null
+                ),
+                brand_name: brandName,  // strictly tenant's brand_name, else company_name, else full name
+                tenant: {
+                    company_name: partyInfo.company_name || null,
+                    first_name: partyInfo.first_name || null,
+                    last_name: partyInfo.last_name || null,
+                    brand_name: partyInfo.brand_name || null   // direct from partiesMap — guaranteed
+                },
+                units: {
+                    unit_number: unitNumber,
+                    chargeable_area: chargeableArea
+                },
+                escalations: escalationsMap[l.id] || []
+            };
+
+        });
+
+        console.log('Sample lease:', { unit_number: result?.[0]?.unit_number, project_name: result?.[0]?.project_name, brand_name: result?.[0]?.brand_name });
 
         if (location) {
             result = result.filter(r => r.project_location === location);
@@ -601,7 +713,7 @@ const getAllLeases = async (req, res) => {
 const getLeaseById = async (req, res) => {
     try {
         console.log("=== GET LEASE BY ID ===", req.params.id);
-        
+
         // First get the lease data
         const { data: lease, error: leaseError } = await supabase
             .from('leases')
@@ -645,7 +757,7 @@ const getLeaseById = async (req, res) => {
         // Build tenant name - prefer company_name, then brand_name, then first+last name
         let tenantName = 'Unknown';
         if (tenant) {
-            tenantName = tenant.company_name || tenant.brand_name || 
+            tenantName = tenant.company_name || tenant.brand_name ||
                 `${tenant.first_name || ''} ${tenant.last_name || ''}`.trim() || 'Unknown';
         }
 

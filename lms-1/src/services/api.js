@@ -118,8 +118,9 @@ export const unitAPI = {
   createUnit: (data) => API.post("/units", data),
   updateUnit: (id, data) => API.put(`/units/${id}`, data),
   deleteUnit: (id) => API.delete(`/units/${id}`),
-  getUnitsByProject: (projectId, excludeSold = false) =>
-    API.get(`/units?projectId=${projectId}${excludeSold ? '&excludeSold=true' : ''}`),
+  // Get units by project - uses /projects/:id/units endpoint
+  getUnitsByProject: (projectId, excludeAssigned = false) =>
+    API.get(`/projects/${projectId}/units${excludeAssigned ? '?excludeAssigned=true' : ''}`),
 };
 
 // ---------------- UNIT STRUCTURE (Blocks & Floors) ----------------

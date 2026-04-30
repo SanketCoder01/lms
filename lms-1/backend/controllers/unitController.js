@@ -6,14 +6,14 @@ const supabase = require('../config/db');
 const { handleDbError } = require('../utils/errorHandler');
 
 const applyScopes = (query, req) => {
-    let q = query;
-    if (req.companyId) q = q.eq('company_id', req.companyId);
-    if (req.isRestrictedToProjects) {
-        const allowedIds = (req.projectsAccess || []).map(p => p.project_id);
-        if (allowedIds.length > 0) q = q.in('project_id', allowedIds);
-        else q = q.eq('project_id', -1);
-    }
-    return q;
+  let q = query;
+  if (req.companyId) q = q.eq('company_id', req.companyId);
+  if (req.isRestrictedToProjects) {
+    const allowedIds = (req.projectsAccess || []).map(p => p.project_id);
+    if (allowedIds.length > 0) q = q.in('project_id', allowedIds);
+    else q = q.eq('project_id', -1);
+  }
+  return q;
 };
 
 /* ═══════════════════════════════════════════════════════════
@@ -21,18 +21,15 @@ const applyScopes = (query, req) => {
  * ══════════════════════════════════════════════════════════ */
 const getUnits = async (req, res) => {
   try {
-    const { projectId, search, status, excludeSold } = req.query;
+    const { projectId, search, status, excludeSold, ownership } = req.query;
 
+    // Step 1: Fetch units WITHOUT nested joins (nested joins can silently return empty in some Supabase setups)
     let query = applyScopes(supabase
       .from('units')
       .select(`
         id, unit_number, block_tower, floor_number, chargeable_area, status, project_id,
         projected_rent, unit_category, unit_zoning_type,
-        projects!inner ( project_name ),
-        unit_ownerships (
-          id, ownership_status, share_percentage,
-          parties ( id, first_name, last_name, company_name, party_type )
-        )
+        projects!inner ( project_name )
       `), req)
       .order('id', { ascending: false });
 
@@ -45,59 +42,137 @@ const getUnits = async (req, res) => {
     if (search) {
       query = query.or(`unit_number.ilike.%${search}%`);
     }
-    if (excludeSold === 'true') {
-      // Exclude units with active ownership — handled client-side
-    }
 
     const { data, error } = await query;
     if (error) throw error;
 
-    // Map data with owner name
+    const unitIds = (data || []).map(u => u.id);
+
+    // Step 2: Separately fetch ALL unit_ownerships for these unit IDs
+    const ownershipMap = {}; // unit_id → [ownership records]
+    if (unitIds.length > 0) {
+      const { data: ownershipData, error: ownershipErr } = await supabase
+        .from('unit_ownerships')
+        .select('id, unit_id, party_id, ownership_status, share_percentage')
+        .in('unit_id', unitIds);
+
+      if (ownershipErr) {
+        console.error('[units] Error fetching unit_ownerships:', ownershipErr);
+      } else {
+        (ownershipData || []).forEach(o => {
+          if (!ownershipMap[o.unit_id]) ownershipMap[o.unit_id] = [];
+          ownershipMap[o.unit_id].push(o);
+        });
+      }
+    }
+
+    // Step 3: Collect all active party_ids and fetch party details separately
+    const allPartyIds = new Set();
+    Object.values(ownershipMap).forEach(ownerships => {
+      ownerships.filter(o => o.ownership_status === 'Active').forEach(o => {
+        if (o.party_id) allPartyIds.add(o.party_id);
+      });
+    });
+
+    const partyMap = {}; // party_id → party record
+    if (allPartyIds.size > 0) {
+      const { data: partyData, error: partyErr } = await supabase
+        .from('parties')
+        .select('id, first_name, last_name, company_name, owner_group')
+        .in('id', Array.from(allPartyIds));
+
+      if (partyErr) {
+        console.error('[units] Error fetching parties:', partyErr);
+      } else {
+        (partyData || []).forEach(p => {
+          partyMap[p.id] = p;
+        });
+      }
+      console.log(`[units] Fetched ${Object.keys(partyMap).length} parties for ${unitIds.length} units`);
+    }
+
+    // Step 4: Fetch active leases for tenant info
+    let leasesMap = {};
+    if (unitIds.length > 0) {
+      const { data: leaseData } = await supabase
+        .from('leases')
+        .select(`id, unit_id, party_tenant_id, status,
+          tenant:parties!leases_party_tenant_id_fkey(id, company_name, brand_name, first_name, last_name)
+        `)
+        .in('unit_id', unitIds)
+        .in('status', ['active', 'approved', 'executed', 'registered', 'occupied']);
+      (leaseData || []).forEach(l => {
+        if (!leasesMap[l.unit_id]) leasesMap[l.unit_id] = l;
+      });
+    }
+
+    // Step 5: Map units with ownership and tenant info
     const mapped = (data || []).map(u => {
-      const activeOwnerships = (u.unit_ownerships || []).filter(o => o.ownership_status === 'Active');
-      const totalShare = activeOwnerships.reduce((sum, o) => sum + Number(o.share_percentage || 100), 0);
-      
-      const ownerParty = activeOwnerships[0]?.parties;
+      const allOwnerships = ownershipMap[u.id] || [];
+      const activeOwnerships = allOwnerships.filter(o => o.ownership_status === 'Active');
+      const totalShare = activeOwnerships.reduce((sum, o) => sum + Number(o.share_percentage || 0), 0);
+
+      const ownerParty = activeOwnerships.length > 0 ? partyMap[activeOwnerships[0].party_id] : null;
       const ownerName = ownerParty
         ? (ownerParty.company_name || `${ownerParty.first_name || ''} ${ownerParty.last_name || ''}`.trim() || 'N/A')
         : 'N/A';
-      
-      // Determine ownership grouping based on party_type
-      const partyType = ownerParty?.party_type || '';
-      let ownershipGrouping = 'Developer Units'; // Default for unsold
+
+      // Determine ownership grouping from owner_group
+      const ownerGroup = (ownerParty?.owner_group || '').trim();
+      const ownerGroupLower = ownerGroup.toLowerCase();
+      let ownershipGrouping = 'Unsold';
+
       if (activeOwnerships.length > 0) {
-        if (partyType === 'Group Company' || partyType === 'Group' || partyType === 'Related Party') {
-          ownershipGrouping = 'Group Companies';
-        } else if (partyType === 'Owner' || partyType === 'Investor' || partyType === 'External') {
-          ownershipGrouping = 'Other Investors';
-        } else {
-          // If has ownership but party_type doesn't match above, check if it's developer
-          ownershipGrouping = 'Other Investors';
+        if (ownerGroupLower.includes('developer')) {
+          ownershipGrouping = 'Developer Units';
+        } else if (ownerGroupLower.includes('close')) {
+          ownershipGrouping = 'Close Group';
+        } else if (ownerGroupLower.includes('external') || ownerGroupLower.includes('investor')) {
+          ownershipGrouping = 'External Investors';
         }
+        // else: has owner but no group → stays 'Unsold'
       }
 
-      const isFull = totalShare >= 100 || u.status === 'Sold';
+      // is_full: unit is fully assigned if total share >= 100 OR has any active owner (to cover partial assignments)
+      const isFull = totalShare >= 100 || (activeOwnerships.length > 0 && totalShare > 0) || u.status === 'Sold';
+
+      const activeLease = leasesMap[u.id];
+      const tenantParty = activeLease?.tenant;
+      const tenantName = tenantParty
+        ? (tenantParty.company_name || `${tenantParty.first_name || ''} ${tenantParty.last_name || ''}`.trim() || null)
+        : null;
+      const brandName = tenantParty?.brand_name || tenantParty?.company_name || null;
 
       return {
-        id:            u.id,
-        unit_number:   u.unit_number,
-        block_tower:   u.block_tower,
-        floor_number:  u.floor_number,
-        building:      u.projects?.project_name || 'N/A',
+        id: u.id,
+        unit_number: u.unit_number,
+        block_tower: u.block_tower,
+        floor_number: u.floor_number,
+        building: u.projects?.project_name || 'N/A',
         chargeable_area: u.chargeable_area,
-        status:        u.status,
-        project_id:    u.project_id,
-        owner_name:    ownerName,
-        total_share:   totalShare,
-        is_full:       isFull,
+        status: u.status,
+        project_id: u.project_id,
+        owner_name: ownerName,
+        tenant_name: tenantName,
+        brand_name: brandName,
+        total_share: totalShare,
+        is_full: isFull,
         projected_rent: u.projected_rent,
         unit_category: u.unit_category,
         unit_zoning_type: u.unit_zoning_type,
+        unit_condition: u.unit_condition,
+        plc: u.plc,
         ownership_grouping: ownershipGrouping
       };
     });
 
-    res.json({ data: mapped });
+    // Filter by ownership grouping if requested
+    let filteredMapped = mapped;
+    if (ownership && ownership !== 'All') {
+      filteredMapped = mapped.filter(u => u.ownership_grouping === ownership);
+    }
+
+    res.json({ data: filteredMapped });
   } catch (err) {
     console.error('Fetch units error:', err);
     res.status(500).json({ message: 'Failed to fetch units', error: err.message });
@@ -129,8 +204,8 @@ const getUnitById = async (req, res) => {
     res.json({
       ...data,
       project_name: data.projects?.project_name,
-      project_id:   data.projects?.id,
-      unit_image:   data.unit_images?.[0]?.image_path || null,
+      project_id: data.projects?.id,
+      unit_image: data.unit_images?.[0]?.image_path || null,
     });
   } catch (err) {
     console.error('Fetch unit by ID error:', err);
@@ -165,20 +240,20 @@ const createUnit = async (req, res) => {
     }
 
     const insertPayload = {
-      project_id:    parseInt(project_id),
+      project_id: parseInt(project_id),
       unit_number,
-      floor_number:  floor_number  || null,
-      block_tower:   block_tower   || null,
+      floor_number: floor_number || null,
+      block_tower: block_tower || null,
       chargeable_area: chargeable_area ? parseFloat(chargeable_area) : null,
-      carpet_area:   carpet_area   ? parseFloat(carpet_area) : null,
-      covered_area:  covered_area  ? parseFloat(covered_area) : null,
-      builtup_area:  builtup_area  ? parseFloat(builtup_area) : null,
+      carpet_area: carpet_area ? parseFloat(carpet_area) : null,
+      covered_area: covered_area ? parseFloat(covered_area) : null,
+      builtup_area: builtup_area ? parseFloat(builtup_area) : null,
       unit_condition: unit_condition || 'bare_shell',
-      plc:           plc           || null,
+      plc: plc || null,
       unit_category: unit_category || null,
       unit_zoning_type: unit_zoning_type || null,
       projected_rent: projected_rent ? parseFloat(projected_rent) : null,
-      status:        'vacant',
+      status: 'vacant',
     };
     // Multi-tenant: stamp company_id on new units
     if (req.companyId) insertPayload.company_id = req.companyId;
@@ -207,18 +282,18 @@ const createUnit = async (req, res) => {
         if (file.buffer) {
           const fileExt = file.originalname.split('.').pop();
           const fileName = `units/unit_${data.id}_${Date.now()}.${fileExt}`;
-          
+
           const { error: uploadError } = await supabase.storage
-              .from('lms-storage')
-              .upload(fileName, file.buffer, {
-                  contentType: file.mimetype,
-                  upsert: true
-              });
+            .from('lms-storage')
+            .upload(fileName, file.buffer, {
+              contentType: file.mimetype,
+              upsert: true
+            });
 
           if (!uploadError) {
             const { data: publicUrlData } = supabase.storage
-                .from('lms-storage')
-                .getPublicUrl(fileName);
+              .from('lms-storage')
+              .getPublicUrl(fileName);
             imageInserts.push({ unit_id: data.id, image_path: publicUrlData.publicUrl });
           }
         }
@@ -273,16 +348,16 @@ const updateUnit = async (req, res) => {
       .from('units')
       .update({
         unit_number,
-        floor_number:  floor_number || null,
-        block_tower:   block_tower  || null,
+        floor_number: floor_number || null,
+        block_tower: block_tower || null,
         chargeable_area: chargeable_area ? parseFloat(chargeable_area) : null,
-        carpet_area:   carpet_area  ? parseFloat(carpet_area) : null,
+        carpet_area: carpet_area ? parseFloat(carpet_area) : null,
         unit_condition: unit_condition || 'bare_shell',
-        plc:           plc || null,
+        plc: plc || null,
         unit_category: unit_category || null,
         unit_zoning_type: unit_zoning_type || null,
         projected_rent: projected_rent ? parseFloat(projected_rent) : null,
-        status:        status || 'vacant',
+        status: status || 'vacant',
       })
       .eq('id', id);
 
@@ -295,18 +370,18 @@ const updateUnit = async (req, res) => {
         if (file.buffer) {
           const fileExt = file.originalname.split('.').pop();
           const fileName = `units/unit_${id}_${Date.now()}.${fileExt}`;
-          
+
           const { error: uploadError } = await supabase.storage
-              .from('lms-storage')
-              .upload(fileName, file.buffer, {
-                  contentType: file.mimetype,
-                  upsert: true
-              });
+            .from('lms-storage')
+            .upload(fileName, file.buffer, {
+              contentType: file.mimetype,
+              upsert: true
+            });
 
           if (!uploadError) {
             const { data: publicUrlData } = supabase.storage
-                .from('lms-storage')
-                .getPublicUrl(fileName);
+              .from('lms-storage')
+              .getPublicUrl(fileName);
             imageInserts.push({ unit_id: id, image_path: publicUrlData.publicUrl });
           }
         }
@@ -437,7 +512,7 @@ const getProjectFloors = async (req, res) => {
     const { project_id, block_id } = req.query;
     let query = supabase.from('project_floors').select('*').order('sort_order');
     if (project_id) query = query.eq('project_id', project_id);
-    if (block_id)   query = query.eq('block_id', block_id);
+    if (block_id) query = query.eq('block_id', block_id);
     const { data, error } = await query;
     if (error) throw error;
     res.json({ data: data || [] });
@@ -456,10 +531,10 @@ const addProjectFloor = async (req, res) => {
       .from('project_floors')
       .insert({
         project_id: parseInt(project_id),
-        block_id:   block_id ? parseInt(block_id) : null,
+        block_id: block_id ? parseInt(block_id) : null,
         floor_name,
         units_count: units_count || 0,
-        sort_order:  sort_order || 0,
+        sort_order: sort_order || 0,
       })
       .select().single();
     if (error) throw error;

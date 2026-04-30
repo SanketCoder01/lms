@@ -340,19 +340,13 @@ const Step2TermsFinalization = ({
                         type="date"
                         className="form-control"
                         value={formData.rent_commencement_date || ''}
-                        min={rentFreeEnd || formData.opening_date || undefined}
+                        min={rentFreeEnd || undefined}
                         onChange={(e) => setFormData({ ...formData, rent_commencement_date: e.target.value })}
                         onBlur={(e) => {
                             const val = e.target.value;
                             // Rent commencement cannot be before rent free end (if rent free exists)
                             if (rentFreeEnd && val < rentFreeEnd) {
                                 alert('Rent Commencement Date cannot be before Rent Free End Date (' + fmtDate(rentFreeEnd) + ').');
-                                setFormData(prev => ({ ...prev, rent_commencement_date: '' }));
-                                return;
-                            }
-                            // Rent commencement should not be before store open date
-                            if (formData.opening_date && val < formData.opening_date) {
-                                alert('Rent Commencement Date cannot be before Store Open Date (' + fmtDate(formData.opening_date) + ').');
                                 setFormData(prev => ({ ...prev, rent_commencement_date: '' }));
                                 return;
                             }
@@ -370,7 +364,7 @@ const Step2TermsFinalization = ({
                     )}
                     {!rentFreeEnd && formData.opening_date && (
                         <small style={{ color: '#64748b', fontSize: '11px' }}>
-                            Must be ≥ Store Open ({fmtDate(formData.opening_date)})
+                            Note: Can be before or after Store Open ({fmtDate(formData.opening_date)})
                         </small>
                     )}
                 </div>

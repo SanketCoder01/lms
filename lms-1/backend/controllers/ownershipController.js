@@ -49,6 +49,8 @@ exports.getAllOwnerships = async (req, res) => {
 exports.assignOwner = async (req, res) => {
     const { unit_id, owners, start_date } = req.body; // owners: [{party_id, share_percentage}]
 
+    console.log(`[assignOwner] unit_id=${unit_id} owners=${JSON.stringify(owners)}`);
+
     if (!Array.isArray(owners) || owners.length === 0 || owners.length > 4) {
         return res.status(400).json({ message: 'Must provide 1 to 4 joint owners.' });
     }

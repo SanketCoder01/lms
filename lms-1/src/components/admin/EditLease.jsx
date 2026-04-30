@@ -13,7 +13,7 @@ import './dashboard.css';
 const EditLease = () => {
     const navigate = useNavigate();
     const { id } = useParams();
-    
+
     const [currentStep, setCurrentStep] = useState(1);
     const [rentModel, setRentModel] = useState('Fixed'); // 'Fixed' | 'RevenueShare' | 'Hybrid'
     const [isSubLease, setIsSubLease] = useState(false);
@@ -30,9 +30,9 @@ const EditLease = () => {
     const [formData, setFormData] = useState({
         project_id: '',
         unit_id: '',
-        party_owner_id: '',  
-        party_tenant_id: '', 
-        sub_tenant_id: '',   
+        party_owner_id: '',
+        party_tenant_id: '',
+        sub_tenant_id: '',
         lease_type: '',
         rent_model: 'Fixed',
         sub_lease_area_sqft: '',
@@ -57,7 +57,7 @@ const EditLease = () => {
         mg_amount_sqft: '',
         mg_amount: '',
         monthly_rent: '',
-        monthly_net_sales: '', 
+        monthly_net_sales: '',
         cam_charges: '',
         billing_frequency: 'Monthly',
         payment_due_day: '1st of Month',
@@ -67,7 +67,7 @@ const EditLease = () => {
         deposit_type: 'Cash',
         revenue_share_percentage: '',
         revenue_share_applicable_on: 'Net Sales',
-        
+
         fitout_period_start: '',
         notice_vacation_date: '',
         opening_date: '',
@@ -76,6 +76,9 @@ const EditLease = () => {
         loi_date: '',
         agreement_date: '',
         registration_date: '',
+        loi_document_url: '',
+        agreement_document_url: '',
+        registration_document_url: '',
         status: 'active',
     });
     // eslint-disable-next-line no-unused-vars
@@ -106,7 +109,7 @@ const EditLease = () => {
             try {
                 const res = await leaseAPI.getLeaseById(id);
                 const data = res.data;
-                
+
                 const isSub = data.lease_type === 'Subtenant lease';
                 setIsSubLease(isSub);
                 setRentModel(data.rent_model || 'Fixed');
@@ -152,7 +155,7 @@ const EditLease = () => {
                     deposit_type: data.deposit_type || 'Cash',
                     revenue_share_percentage: data.revenue_share_percentage || '',
                     revenue_share_applicable_on: data.revenue_share_applicable_on || 'Net Sales',
-                    
+
                     fitout_period_start: formatDate(data.fitout_period_start),
                     notice_vacation_date: formatDate(data.notice_vacation_date),
                     opening_date: formatDate(data.opening_date),
@@ -161,6 +164,9 @@ const EditLease = () => {
                     loi_date: formatDate(data.loi_date),
                     agreement_date: formatDate(data.agreement_date),
                     registration_date: formatDate(data.registration_date),
+                    loi_document_url: data.loi_document_url || '',
+                    agreement_document_url: data.agreement_document_url || '',
+                    registration_document_url: data.registration_document_url || '',
                     status: data.status || 'active',
                 }));
 
@@ -173,7 +179,7 @@ const EditLease = () => {
                         escalation_on: esc.escalation_on || 'mg'
                     }))
                 );
-                
+
                 // Fetch Units for this project to populate dropdown immediately
                 if (data.project_id) {
                     const uRes = await unitAPI.getUnitsByProject(data.project_id);
@@ -272,6 +278,35 @@ const EditLease = () => {
     // Final Submit
     const handleSubmit = async () => {
         if (isSubmitting) return; // Prevent double clicking
+
+        // Validate Step 5
+        if (formData.loi_date && !files.loi_document && !formData.loi_document_url) {
+            alert("Please upload the LOI document since LOI Date is provided.");
+            return;
+        }
+        if (files.loi_document && !formData.loi_date) {
+            alert("Please provide the LOI Date since LOI Document is uploaded.");
+            return;
+        }
+
+        if (formData.agreement_date && !files.agreement_document && !formData.agreement_document_url) {
+            alert("Please upload the Agreement document since Agreement Date is provided.");
+            return;
+        }
+        if (files.agreement_document && !formData.agreement_date) {
+            alert("Please provide the Agreement Date since Agreement Document is uploaded.");
+            return;
+        }
+
+        if (formData.registration_date && !files.registration_document && !formData.registration_document_url) {
+            alert("Please upload the Registration document since Registration Date is provided.");
+            return;
+        }
+        if (files.registration_document && !formData.registration_date) {
+            alert("Please provide the Registration Date since Registration Document is uploaded.");
+            return;
+        }
+
         setIsSubmitting(true);
         try {
             // Transform Data
@@ -306,7 +341,7 @@ const EditLease = () => {
                 ...formData,
                 project_id: parseInt(formData.project_id),
                 unit_id: parseInt(formData.unit_id),
-                party_owner_id: isSubLease ? null : parseInt(formData.party_owner_id),
+                party_owner_id: isSubLease ? null : (parseInt(formData.party_owner_id) || null),
                 party_tenant_id: parseInt(formData.party_tenant_id),
                 sub_tenant_id: isSubLease ? parseInt(formData.sub_tenant_id) : null,
                 lease_type: isSubLease ? 'Subtenant lease' : 'Direct lease',
@@ -326,6 +361,21 @@ const EditLease = () => {
                 revenue_share_percentage: (rentModel === 'RevenueShare' || rentModel === 'Hybrid') ? (parseFloat(formData.revenue_share_percentage) || 0) : null,
                 revenue_share_applicable_on: (rentModel === 'RevenueShare' || rentModel === 'Hybrid') ? formData.revenue_share_applicable_on : null,
                 escalations: escalations,
+
+                // Dates - Map empty strings to null
+                lease_start: formData.lease_start || null,
+                lease_end: formData.lease_end || null,
+                rent_commencement_date: formData.rent_commencement_date || null,
+                fitout_period_end: formData.fitout_period_end || null,
+                unit_handover_date: formData.unit_handover_date || null,
+                loi_date: formData.loi_date || null,
+                agreement_date: formData.agreement_date || null,
+                registration_date: formData.registration_date || null,
+                fitout_period_start: formData.fitout_period_start || null,
+                notice_vacation_date: formData.notice_vacation_date || null,
+                opening_date: formData.opening_date || null,
+                rent_free_start_date: formData.rent_free_start_date || null,
+                rent_free_end_date: formData.rent_free_end_date || null,
             };
 
             const formDataPayload = new FormData();
@@ -358,7 +408,7 @@ const EditLease = () => {
                     <p>Step {currentStep} of 5: {
                         currentStep === 1 ? 'Basic Details' :
                             currentStep === 2 ? 'Term Finalization' :
-                                currentStep === 3 ? 'Rent Config' : 
+                                currentStep === 3 ? 'Rent Config' :
                                     currentStep === 4 ? 'Escalations' : 'Docs Execution'
                     }</p>
                 </header>
@@ -431,6 +481,7 @@ const EditLease = () => {
                             formData={formData}
                             setFormData={setFormData}
                             handleFileChange={handleFileChange}
+                            files={files}
                         />
                     )}
 

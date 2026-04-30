@@ -13,6 +13,10 @@ exports.getAllParties = async (req, res) => {
         // All users with access to the Masters module should see all parties in the company pool.
         // Project-level filtering is intentionally removed here.
 
+        // Apply optional filters from query params
+        if (req.query.type) query = query.eq('type', req.query.type);
+        if (req.query.party_type) query = query.eq('party_type', req.query.party_type);
+
         const { data, error } = await query;
         if (error) throw error;
         res.json(data || []);
@@ -53,6 +57,8 @@ exports.createParty = async (req, res) => {
         representative_designation, owner_group
     } = req.body;
 
+    console.log(`[createParty] owner_group="${owner_group}" party_type="${party_type}" company_name="${company_name}"`);
+
     try {
         const insertPayload = {
             type: type || 'Individual', party_type: party_type || 'Tenant',
@@ -63,6 +69,8 @@ exports.createParty = async (req, res) => {
         };
         // Multi-tenant: stamp company_id on new parties
         if (req.companyId) insertPayload.company_id = req.companyId;
+
+        console.log(`[createParty] Inserting with owner_group="${owner_group}"`);
 
         const { data, error } = await supabase.from('parties').insert(insertPayload).select('id').single();
 

@@ -40,7 +40,7 @@ const ReportGenerator = ({
     const getSelectedColumnKeys = () => columns.filter(col => selectedColumns[col.key]);
 
     const formatDate = (dateStr) => {
-        if (!dateStr) return 'N/A';
+        if (!dateStr) return '-';
         try {
             return new Date(dateStr).toLocaleDateString('en-IN', {
                 day: '2-digit', month: '2-digit', year: 'numeric'
@@ -49,8 +49,18 @@ const ReportGenerator = ({
     };
 
     const formatValue = (value, key) => {
-        if (value === null || value === undefined) return 'N/A';
-        if (key.toLowerCase().includes('date')) return formatDate(value);
+        if (value === null || value === undefined || value === '') return '-';
+        if (typeof value === 'boolean') return value ? 'Yes' : 'No';
+        if (key.toLowerCase().includes('date') || key === 'created_at' || key === 'updated_at') return formatDate(value);
+        // Currency fields
+        const currencyKeys = ['monthly_rent', 'mg_amount', 'security_deposit', 'projected_rent', 'revenue_share'];
+        if (currencyKeys.some(k => key.includes(k)) && !isNaN(Number(value))) {
+            return `\u20B9${Number(value).toLocaleString('en-IN')}`;
+        }
+        // Percentage fields
+        if ((key.includes('rate') || key.includes('percentage') || key.includes('share')) && !isNaN(Number(value))) {
+            return `${Number(value)}%`;
+        }
         if (typeof value === 'number') return value.toLocaleString('en-IN');
         return String(value);
     };

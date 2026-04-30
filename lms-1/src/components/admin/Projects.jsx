@@ -25,39 +25,21 @@ const Projects = () => {
   const [types, setTypes] = useState(["All"]);
   const [showReportModal, setShowReportModal] = useState(false);
 
-  // Report columns for Projects - All sections
+  // Report columns for Projects — fields from AddProject form
   const projectReportColumns = [
-    // Basic Info
     { key: 'id', label: 'Project ID' },
     { key: 'project_name', label: 'Project Name' },
-    { key: 'project_code', label: 'Project Code' },
-    // Location
-    { key: 'location', label: 'Location/City' },
+    { key: 'project_type', label: 'Project Type' },
+    { key: 'location', label: 'City / Location' },
     { key: 'state', label: 'State' },
     { key: 'address', label: 'Address' },
-    { key: 'pincode', label: 'Pincode' },
-    // Property Details
-    { key: 'project_type', label: 'Project Type' },
-    { key: 'property_status', label: 'Property Status' },
-    { key: 'construction_status', label: 'Construction Status' },
-    // Area & Units
     { key: 'total_units', label: 'Total Units' },
     { key: 'total_floors', label: 'Total Floors' },
-    { key: 'actual_total_floors', label: 'Actual Floors' },
-    { key: 'total_project_area', label: 'Total Area' },
-    { key: 'total_built_up_area', label: 'Built-up Area' },
-    { key: 'total_carpet_area', label: 'Carpet Area' },
-    { key: 'calculation_type', label: 'Calculation Basis' },
-    // Occupancy
-    { key: 'occupied_units', label: 'Occupied Units' },
-    { key: 'leased_units', label: 'Leased Units' },
-    { key: 'vacant_units', label: 'Vacant Units' },
-    // Additional
+    { key: 'total_project_area', label: 'Total Project Area (sqft)' },
+    { key: 'calculation_type', label: 'Area Calculation Basis' },
     { key: 'status', label: 'Status' },
     { key: 'description', label: 'Description' },
-    { key: 'project_image', label: 'Project Image' },
     { key: 'created_at', label: 'Created Date' },
-    { key: 'updated_at', label: 'Updated Date' }
   ];
 
   const fetchQuota = useCallback(async () => {
@@ -207,16 +189,16 @@ const Projects = () => {
       `P-${p.id}`,
       p.project_name,
       p.location,
-      p.state || 'N/A',
-      p.address || 'N/A',
+      p.state || '-',
+      p.address || '-',
       p.project_type,
       p.total_units || 0,
       p.total_floors || 0,
-      p.total_project_area || 'N/A',
-      p.calculation_type || 'N/A',
+      p.total_project_area || '-',
+      p.calculation_type || '-',
       p.status || 'Active',
-      (p.description || 'N/A').substring(0, 100),
-      p.created_at ? new Date(p.created_at).toLocaleDateString() : 'N/A'
+      (p.description || '-').substring(0, 100),
+      p.created_at ? new Date(p.created_at).toLocaleDateString() : '-'
     ]);
 
     let csvContent = "data:text/csv;charset=utf-8,"
@@ -409,9 +391,13 @@ const Projects = () => {
 
                     <td>
                       <div className="action-icon-wrapper right">
-                        <Link to={`/admin/projects/${project.id}`} className="action-icon-btn view" title="View Details">
-                          <svg viewBox="0 0 24 24" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
-                        </Link>
+                        {can('view', 'projects') ? (
+                          <Link to={`/admin/projects/${project.id}`} className="action-icon-btn view" title="View Details">
+                            <svg viewBox="0 0 24 24" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+                          </Link>
+                        ) : (
+                          <button className="action-icon-btn" disabled title="No view permission" style={{ opacity: 0.4, cursor: 'not-allowed', fontSize: '14px' }}>🔒</button>
+                        )}
                         {can('edit', 'projects') ? (
                           <Link to={`/admin/add-unit?projectId=${project.id}`} className="action-icon-btn add-unit-btn" title="Add Unit" style={{ width: '32px', height: '32px', borderRadius: '50%', background: '#f0fdf4', border: '2px solid #10b981', color: '#10b981', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '20px', fontWeight: '700', lineHeight: '1', textDecoration: 'none', cursor: 'pointer', transition: 'all 0.2s', flexShrink: 0 }} onMouseEnter={e => { e.currentTarget.style.background = '#10b981'; e.currentTarget.style.color = '#fff'; }} onMouseLeave={e => { e.currentTarget.style.background = '#f0fdf4'; e.currentTarget.style.color = '#10b981'; }}>
                             +

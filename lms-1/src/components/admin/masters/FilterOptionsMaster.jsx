@@ -37,7 +37,25 @@ const FilterOptionsMaster = () => {
         try {
             setLoading(true);
             const res = await filterAPI.getFilterOptions(selectedCategory);
-            setOptions(res.data.data || []);
+            let existingOptions = res.data.data || [];
+
+            // Auto-seed the 3 required defaults for Owner Grouping if they don't exist
+            if (selectedCategory === 'Owner Grouping') {
+                const DEFAULTS = ['Developer Unit', 'Close Group', 'External Investors'];
+                const existingValues = existingOptions.map(o => o.option_value.toLowerCase());
+                for (const def of DEFAULTS) {
+                    if (!existingValues.includes(def.toLowerCase())) {
+                        try {
+                            await filterAPI.addFilterOption({ category: 'Owner Grouping', option_value: def });
+                        } catch (_) { /* already exists — ignore */ }
+                    }
+                }
+                // Re-fetch after seeding
+                const refreshed = await filterAPI.getFilterOptions(selectedCategory);
+                existingOptions = refreshed.data.data || [];
+            }
+
+            setOptions(existingOptions);
         } catch (error) {
             console.error("Failed to fetch filter options", error);
         } finally {

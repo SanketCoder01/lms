@@ -99,25 +99,59 @@ export const sanitizeBrandName = (str) => {
 
 /**
  * Resolve the best available display name from a lease object.
- * Priority: brand_name → tenant.brand_name → tenant.company_name → tenant.name → tenant_name → unit_number fallback
- * Never returns 'Unknown' or blank — falls back to the unit number as label.
+ * Priority (strict order):
+ *   1. lease.brand_name  (set by backend = tenant.brand_name || tenant.company_name || full name)
+ *   2. tenant.brand_name  (company nickname/brand)
+ *   3. tenant.company_name  (legal company name)
+ *   4. tenant first + last name  (individual person)
+ *   5. tenant.name / tenant_name / tenantName  (fallback name fields)
+ *   6. lease.company_name  (top-level company name if mapped)
+ *   7. Unit number  (last resort — never project_name which is a location, not a brand)
+ *
+ * NOTE: project_name is intentionally NOT used as a fallback — it is a physical
+ * property descriptor, not a brand identifier.
  */
 export const resolveBrandName = (lease) => {
+  // Build full individual name from tenant's first/last
+  const tenantFullName = (() => {
+    const fn = (lease?.tenant?.first_name || '').trim();
+    const ln = (lease?.tenant?.last_name || '').trim();
+    return fn && ln ? `${fn} ${ln}` : fn || ln || '';
+  })();
+
   const candidates = [
     lease?.brand_name,
     lease?.tenant?.brand_name,
     lease?.tenant?.company_name,
+    tenantFullName || null,
     lease?.tenant?.name,
     lease?.tenant_name,
     lease?.tenantName,
     lease?.company_name,
   ];
+
   for (const c of candidates) {
     const s = sanitizeBrandName(c);
     if (s) return s;
   }
-  // Fallback: use unit number so it's never empty
-  return lease?.unit_number || lease?.units?.unit_number || 'Lease #' + (lease?.id || '?');
+
+  // Fallback: unit number (without prefix — the unit badge already shows it)
+  const unitNum = lease?.unit_number || lease?.units?.unit_number;
+  if (unitNum) return String(unitNum);
+
+  // Last resort: lease ID
+  return 'Lease #' + (lease?.id || '?');
+};
+
+/**
+ * Resolve the best unit number display label from a lease.
+ * Shows actual unit_number, never #ID format.
+ */
+export const resolveUnitDisplay = (lease) => {
+  return lease?.unit_number ||
+    lease?.units?.unit_number ||
+    (Array.isArray(lease?.units) ? lease.units[0]?.unit_number : null) ||
+    null; // null = caller should show project_name or '-'
 };
 
 // ─── Rent composition tooltip data ──────────────────────────────────────────

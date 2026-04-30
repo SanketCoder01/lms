@@ -366,10 +366,43 @@ const getProjectDashboardStats = async (req, res) => {
 const getUnitsByProject = async (req, res) => {
   try {
     const { id } = req.params;
-    const { data, error } = await supabase.from('units').select('*').eq('project_id', id).order('unit_number', { ascending: true });
+    const excludeAssigned = req.query.excludeAssigned === 'true';
+
+    // Fetch units with ownership info
+    const { data, error } = await supabase
+      .from('units')
+      .select(`
+        *,
+        unit_ownerships (
+          id, ownership_status, share_percentage, party_id
+        )
+      `)
+      .eq('project_id', id)
+      .order('unit_number', { ascending: true });
 
     if (error) throw error;
-    res.json({ data: data || [] });
+
+    // Process units to add ownership summary
+    let processedData = (data || []).map(unit => {
+      const activeOwnerships = (unit.unit_ownerships || []).filter(o => o.ownership_status === 'Active');
+      const totalShare = activeOwnerships.reduce((sum, o) => sum + Number(o.share_percentage || 0), 0);
+      const hasActiveOwnership = activeOwnerships.length > 0;
+
+      return {
+        ...unit,
+        unit_ownerships: undefined, // Remove nested array from response
+        has_ownership: hasActiveOwnership,
+        total_share: totalShare,
+        is_full: totalShare >= 100 || unit.status === 'Sold'
+      };
+    });
+
+    // If excludeAssigned is true, filter out units with active ownership
+    if (excludeAssigned) {
+      processedData = processedData.filter(u => !u.has_ownership);
+    }
+
+    res.json({ data: processedData });
   } catch (error) {
     console.error("Get units by project error:", error);
     res.status(500).json({ error: error.message });

@@ -47,11 +47,14 @@ const AddParty = () => {
         const fetchFilters = async () => {
             try {
                 const [bcRes, ptRes, ogRes] = await Promise.all([
-                    filterAPI.getFilterOptions("unit_zoning_type").catch(() => ({ data: { data: [] } })),
-                    filterAPI.getFilterOptions("Party Type").catch(() => ({ data: { data: [] } })),
-                    filterAPI.getFilterOptions("Owner Grouping").catch(() => ({ data: { data: [] } })),
+                    filterAPI.getFilterOptions("unit_zoning_type").catch((e) => { console.error('unit_zoning_type error:', e); return { data: { data: [] } }; }),
+                    filterAPI.getFilterOptions("Party Type").catch((e) => { console.error('Party Type error:', e); return { data: { data: [] } }; }),
+                    filterAPI.getFilterOptions("Owner Grouping").catch((e) => { console.error('Owner Grouping error:', e); return { data: { data: [] } }; }),
                     axios.get('/api/locations/states').catch(() => ({ data: [] }))
                 ]);
+
+                console.log('Owner Grouping response:', ogRes);
+                console.log('Owner Grouping data:', ogRes.data?.data);
 
                 if (bcRes.data.data?.length > 0) setBrandCategories(bcRes.data.data);
                 if (ptRes.data.data?.length > 0) setPartyTypes(ptRes.data.data.map(d => d.option_value));
@@ -60,7 +63,7 @@ const AddParty = () => {
                 setStatesList(INDIA_STATES);
 
             } catch (e) {
-                console.error(e);
+                console.error('fetchFilters error:', e);
                 setStatesList(INDIA_STATES); // always have states
                 // Cities will be loaded when state is selected
             }
@@ -351,7 +354,7 @@ const AddParty = () => {
                                 <h3>Owner Grouping</h3>
                             </div>
                             <div className="form-row">
-                                <div className="form-group" style={{ maxWidth: '400px' }}>
+                                <div className="form-group" style={{ maxWidth: '480px' }}>
                                     <label>Grouping of Owners</label>
                                     <select
                                         className="form-select"
@@ -360,14 +363,17 @@ const AddParty = () => {
                                         onChange={handleChange}
                                     >
                                         <option value="">Select Grouping (Optional)</option>
-                                        {ownerGroupings.map((og) => (
+                                        {ownerGroupings.filter(og => og.option_value && og.option_value.toLowerCase() !== 'unsold').map((og) => (
                                             <option key={og.id} value={og.option_value}>{og.option_value}</option>
                                         ))}
                                     </select>
+
+
                                 </div>
                             </div>
                         </div>
                     )}
+
 
                     {/* IDENTIFICATION -> Party Details */}
                     <div className="form-section">

@@ -17,7 +17,7 @@ const OwnershipMapping = () => {
     const [refreshDocs, setRefreshDocs] = useState(0);
     const [isAssignModalOpen, setIsAssignModalOpen] = useState(false);
     const { can } = usePermissions();
-    
+
     // Search state
     const [globalSearch, setGlobalSearch] = useState('');
     const [searchResults, setSearchResults] = useState([]);
@@ -100,11 +100,19 @@ const OwnershipMapping = () => {
 
     const fetchUnits = async (projectId) => {
         try {
-            // Fetch units for project, send excludeSold=true to filter units already fully assigned / sold
+            // Pass excludeAssigned=true to only get units without ownership
             const res = await unitAPI.getUnitsByProject(projectId, true);
             const data = Array.isArray(res.data) ? res.data : (res.data?.data || []);
-            // Front-end final filter: only keep units that aren't fully assigned or if they are the currently selected one
-            const filteredUnits = data.filter(u => !u.is_full || (selectedUnit && Number(u.id) === Number(selectedUnit)));
+            
+            // Backend now handles filtering, but we still filter sold units as backup
+            // AND keep the currently selected unit so editing still works
+            const filteredUnits = data.filter(u => {
+                if (selectedUnit && Number(u.id) === Number(selectedUnit)) return true;
+                const isSold = u.status && String(u.status).toLowerCase() === 'sold';
+                // has_ownership is now returned by backend
+                const hasOwnership = u.has_ownership === true;
+                return !isSold && !hasOwnership;
+            });
             setUnits(filteredUnits);
         } catch (error) { console.error(error); }
     };
@@ -136,7 +144,7 @@ const OwnershipMapping = () => {
             } else {
                 setDocumentTypes(types);
             }
-        } catch (error) { 
+        } catch (error) {
             console.error("Failed to fetch types", error);
             // Use defaults on error
             setDocumentTypes([
@@ -155,8 +163,8 @@ const OwnershipMapping = () => {
             const res = await ownershipAPI.getDocuments(unitId, partyId);
             console.log('Fetched documents:', res.data);
             setDocuments(res.data || []);
-        } catch (error) { 
-            console.error("Failed to fetch docs", error); 
+        } catch (error) {
+            console.error("Failed to fetch docs", error);
         }
     };
 
@@ -210,7 +218,7 @@ const OwnershipMapping = () => {
         if (doc?.file_path) {
             // Supabase storage URLs are already complete URLs
             let url = doc.file_path;
-            
+
             // If it's already a full URL, use it directly
             if (url.startsWith('http://') || url.startsWith('https://')) {
                 window.open(url, '_blank');
@@ -236,7 +244,7 @@ const OwnershipMapping = () => {
                     <h1>Ownership Mapping</h1>
                     <p>Assign Owners to Units and Manage Documents.</p>
                 </header>
-                
+
                 <div className="header-actions" style={{ display: 'flex', justifyContent: 'flex-end', flexWrap: 'wrap', gap: '15px', marginBottom: '15px' }}>
                     <div style={{ position: 'relative', flex: '1 1 300px', maxWidth: '400px' }}>
                         <div className="search-wrapper" style={{ position: 'relative', display: 'flex', alignItems: 'center', width: '100%' }}>
@@ -274,7 +282,7 @@ const OwnershipMapping = () => {
                         )}
                     </div>
 
-                    {can('view') ? (
+                    {can('view', 'ownership') ? (
                         <button onClick={() => {
                             if (unitOwners.length === 0) {
                                 alert("No ownership history to export for this unit.");
@@ -290,7 +298,7 @@ const OwnershipMapping = () => {
                                 new Date(o.start_date).toLocaleDateString('en-IN', { day: '2-digit', month: '2-digit', year: 'numeric' }),
                                 o.end_date ? new Date(o.end_date).toLocaleDateString('en-IN', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '-'
                             ]);
-                            let csvContent = "data:text/csv;charset=utf-8," 
+                            let csvContent = "data:text/csv;charset=utf-8,"
                                 + headers.join(",") + "\n"
                                 + rows.map(r => r.map(c => `"${c}"`).join(",")).join("\n");
                             const encodedUri = encodeURI(csvContent);
@@ -358,7 +366,7 @@ const OwnershipMapping = () => {
                                                 </h4>
                                                 <p>Since: {new Date(owner.start_date).toLocaleDateString('en-IN', { day: '2-digit', month: '2-digit', year: 'numeric' })}</p>
                                             </div>
-                                            {can('delete') ? (
+                                            {can('delete', 'ownership') ? (
                                                 <button className="remove-btn" onClick={() => handleRemoveOwner(owner)}>Remove</button>
                                             ) : (
                                                 <button className="remove-btn" disabled title="No delete permission" style={{ opacity: 0.5, cursor: 'not-allowed' }}>🔒 Remove</button>
@@ -373,7 +381,7 @@ const OwnershipMapping = () => {
                                     </div>
                                 )}
                                 {/* Always show assign button so joint owners can be added */}
-                                {can('edit') ? (
+                                {can('edit', 'ownership') ? (
                                     <button
                                         className="assign-btn"
                                         onClick={() => setIsAssignModalOpen(true)}
@@ -410,7 +418,7 @@ const OwnershipMapping = () => {
                                             {/* Document Rows */}
                                             {documentTypes.map((type, index) => {
                                                 // Match document by document_type_id (handle both string and number comparison)
-                                                const doc = documents.find(d => 
+                                                const doc = documents.find(d =>
                                                     String(d.document_type_id) === String(type.id)
                                                 );
                                                 console.log(`Type: ${type.name} (id=${type.id}), Found doc:`, doc);
@@ -431,7 +439,7 @@ const OwnershipMapping = () => {
 
                                                         {/* Upload Column */}
                                                         <div style={{ textAlign: 'center' }}>
-                                                            {can('edit') ? (
+                                                            {can('edit', 'ownership') ? (
                                                                 <label className="upload-plus-btn" style={{
                                                                     display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
                                                                     width: '28px', height: '28px', background: doc ? '#22c55e' : '#3b82f6', color: 'white',
@@ -468,7 +476,7 @@ const OwnershipMapping = () => {
                                                         <div style={{ textAlign: 'center' }}>
                                                             {doc ? (
                                                                 <div className="action-icon-wrapper center" style={{ display: 'flex', gap: '8px', justifyContent: 'center' }}>
-                                                                    {can('view') ? (
+                                                                    {can('view', 'ownership') ? (
                                                                         <button className="action-icon-btn view" onClick={() => viewDocument(doc)} title="View Document" style={{
                                                                             background: '#f0f9ff', border: '1px solid #bae6fd', borderRadius: '4px',
                                                                             padding: '4px', cursor: 'pointer', display: 'flex', alignItems: 'center'
@@ -574,11 +582,11 @@ const AssignOwnerModal = ({ isOpen, onClose, unitId, onAssign }) => {
             alert('Owner already added.');
             return;
         }
-        
+
         let initialShare = 100;
         if (selectedOwners.length === 1) initialShare = 50;
         else if (selectedOwners.length > 0) initialShare = 0;
-        
+
         // Auto-balance existing slightly if just 2
         let newOwners = [...selectedOwners];
         if (newOwners.length === 1 && newOwners[0].share === 100) {
@@ -600,7 +608,7 @@ const AssignOwnerModal = ({ isOpen, onClose, unitId, onAssign }) => {
 
     const handleAssign = async () => {
         if (selectedOwners.length === 0) return;
-        
+
         const totalShare = selectedOwners.reduce((sum, o) => sum + Number(o.share || 0), 0);
         if (Math.abs(totalShare - 100) > 0.01) {
             alert(`Total share percentage is ${totalShare}%. It must be exactly 100%.`);
@@ -608,8 +616,8 @@ const AssignOwnerModal = ({ isOpen, onClose, unitId, onAssign }) => {
         }
 
         try {
-            await ownershipAPI.assignOwner({ 
-                unit_id: unitId, 
+            await ownershipAPI.assignOwner({
+                unit_id: unitId,
                 start_date: startDate,
                 owners: selectedOwners.map(o => ({ party_id: o.party.id, share_percentage: o.share }))
             });
@@ -636,21 +644,21 @@ const AssignOwnerModal = ({ isOpen, onClose, unitId, onAssign }) => {
                     title="Close"
                 >✕</button>
                 <h3 style={{ paddingRight: '40px' }}>Assign Owner(s)</h3>
-                
+
                 <div style={{ marginBottom: '20px' }}>
                     <p style={{ fontSize: '14px', color: '#64748b', marginBottom: '10px' }}>
                         Selected Joint Owners ({selectedOwners.length}/4)
                     </p>
-                    
+
                     {selectedOwners.map(owner => (
                         <div key={owner.party.id} style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '10px', background: '#f0fdf4', padding: '10px', borderRadius: '6px', border: '1px solid #bbf7d0' }}>
                             <div style={{ flex: 1 }}>
                                 <strong style={{ color: '#166534' }}>{owner.party.company_name || `${owner.party.first_name} ${owner.party.last_name}`}</strong>
                             </div>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
-                                <input 
-                                    type="number" 
-                                    value={owner.share} 
+                                <input
+                                    type="number"
+                                    value={owner.share}
                                     onChange={(e) => handleShareChange(owner.party.id, e.target.value)}
                                     style={{ width: '60px', padding: '5px', borderRadius: '4px', border: '1px solid #cbd5e1' }}
                                     min="0" max="100" step="0.01"
@@ -661,7 +669,7 @@ const AssignOwnerModal = ({ isOpen, onClose, unitId, onAssign }) => {
                     ))}
                     {selectedOwners.length === 0 && (
                         <div style={{ padding: '20px', background: '#fef3c7', color: '#92400e', textAlign: 'center', borderRadius: '6px', border: '1px solid #fde68a' }}>
-                            <strong>No owners selected yet.</strong><br/>
+                            <strong>No owners selected yet.</strong><br />
                             <span style={{ fontSize: '13px' }}>Search and click on a party below to add as owner.</span>
                         </div>
                     )}
@@ -728,21 +736,21 @@ const AssignOwnerModal = ({ isOpen, onClose, unitId, onAssign }) => {
                     <label>Assignment Date</label>
                     <input type="date" className="form-input" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
                 </div>
-                
+
                 {/* Always visible action buttons */}
                 <div className="form-actions" style={{ marginTop: '20px', display: 'flex', justifyContent: 'flex-end', gap: '12px', paddingTop: '16px', borderTop: '1px solid #e2e8f0' }}>
                     <button className="btn-cancel" onClick={onClose} style={{ padding: '10px 20px', borderRadius: '6px', border: '1px solid #e2e8f0', background: '#fff', color: '#374151', cursor: 'pointer', fontWeight: '500', fontSize: '14px' }}>Cancel</button>
-                    <button 
-                        className="btn-submit" 
-                        onClick={handleAssign} 
+                    <button
+                        className="btn-submit"
+                        onClick={handleAssign}
                         disabled={selectedOwners.length === 0}
-                        style={{ 
-                            padding: '10px 24px', 
-                            borderRadius: '6px', 
-                            border: 'none', 
-                            background: selectedOwners.length > 0 ? '#16a34a' : '#cbd5e1', 
-                            color: '#fff', 
-                            cursor: selectedOwners.length > 0 ? 'pointer' : 'not-allowed', 
+                        style={{
+                            padding: '10px 24px',
+                            borderRadius: '6px',
+                            border: 'none',
+                            background: selectedOwners.length > 0 ? '#16a34a' : '#cbd5e1',
+                            color: '#fff',
+                            cursor: selectedOwners.length > 0 ? 'pointer' : 'not-allowed',
                             fontWeight: '600',
                             fontSize: '14px'
                         }}

@@ -12,18 +12,24 @@ exports.getFilterOptions = async (req, res) => {
   try {
     const { category } = req.query;
 
+    // Build base query
     let query = supabase
       .from('filter_options')
       .select('*')
-      .eq('status', 'active')
-      .order('option_value', { ascending: true });
+      .eq('status', 'active');
 
-    // Multi-tenant: company users only see their own filter options
-    if (req.companyId) query = query.eq('company_id', req.companyId);
+    // Multi-tenant: company users see their own filter options PLUS global options (company_id = null)
+    // Use .or() properly with parentheses for correct grouping
+    if (req.companyId) {
+      query = query.or(`company_id.eq.${req.companyId},company_id.is.null`);
+    }
 
     if (category) {
       query = query.eq('category', category);
     }
+
+    // Apply ordering after filters
+    query = query.order('option_value', { ascending: true });
 
     const { data, error } = await query;
 
@@ -32,7 +38,38 @@ exports.getFilterOptions = async (req, res) => {
       return res.status(500).json(handleDbError(error));
     }
 
-    res.json({ success: true, data: data || [] });
+    let result = data || [];
+
+    // Auto-seed the 3 default Owner Grouping options if any are missing
+    if (category === 'Owner Grouping') {
+      console.log(`[FilterOptions] Owner Grouping requested, companyId=${req.companyId}, existing=${result.length}`);
+      const defaults = ['Developer Unit', 'Close Group', 'External Investors'];
+      const existingValues = result.map(r => r.option_value);
+      const missingDefaults = defaults.filter(d => !existingValues.includes(d));
+
+      if (missingDefaults.length > 0) {
+        console.log(`[FilterOptions] Seeding missing defaults: ${missingDefaults.join(', ')}`);
+        const inserts = missingDefaults.map(v => ({
+          category: 'Owner Grouping',
+          option_value: v,
+          status: 'active',
+          company_id: req.companyId || null
+        }));
+        const { data: seeded, error: seedErr } = await supabase
+          .from('filter_options')
+          .insert(inserts)
+          .select();
+        
+        if (seedErr) {
+          console.error('[FilterOptions] Seed error:', seedErr);
+        } else if (seeded) {
+          console.log(`[FilterOptions] Seeded ${seeded.length} options`);
+          result = [...result, ...seeded];
+        }
+      }
+    }
+
+    res.json({ success: true, data: result });
   } catch (err) {
     console.error('[FilterOptions GET catch]', err);
     res.status(500).json({ success: false, error: err.message });
@@ -48,9 +85,28 @@ exports.addFilterOption = async (req, res) => {
       return res.status(400).json({ success: false, error: 'Category and option_value are required' });
     }
 
+    const trimmedCategory = category.trim();
+    const trimmedValue = option_value.trim();
+
+    // Pre-check: does this option already exist for this category + company?
+    let checkQuery = supabase
+      .from('filter_options')
+      .select('id')
+      .eq('category', trimmedCategory)
+      .ilike('option_value', trimmedValue);
+    if (req.companyId) checkQuery = checkQuery.eq('company_id', req.companyId);
+
+    const { data: existing } = await checkQuery.limit(1);
+    if (existing && existing.length > 0) {
+      return res.status(400).json({
+        success: false,
+        error: `"${trimmedValue}" already exists in the "${trimmedCategory}" category.`
+      });
+    }
+
     const insertPayload = {
-      category: category.trim(),
-      option_value: option_value.trim(),
+      category: trimmedCategory,
+      option_value: trimmedValue,
       status: 'active'
     };
     // Multi-tenant: stamp company_id on new options
@@ -63,7 +119,10 @@ exports.addFilterOption = async (req, res) => {
 
     if (error) {
       console.error('[FilterOptions POST]', error);
-      return res.status(error.code === '23505' ? 400 : 500).json(handleDbError(error));
+      if (error.code === '23505') {
+        return res.status(400).json({ success: false, error: `"${trimmedValue}" already exists in the "${trimmedCategory}" category.` });
+      }
+      return res.status(500).json(handleDbError(error));
     }
 
     res.status(201).json({ success: true, id: data[0]?.id, message: 'Filter option added' });

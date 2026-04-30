@@ -1,5 +1,5 @@
 import React, { useState, useRef, useMemo } from 'react';
-import { resolveBrandName } from '../../../utils/formatters';
+import { resolveBrandName, resolveUnitDisplay } from '../../../utils/formatters';
 
 /**
  * CriticalNotificationTicker
@@ -23,15 +23,21 @@ const CriticalNotificationTicker = ({ leases = [] }) => {
     const now  = new Date();
     const list = [];
 
+    // Only process ACTIVE leases — inactive ones cause false Critical alerts
+    const activeStatuses = ['active', 'approved', 'executed', 'registered', 'occupied'];
+
     leases.forEach(lease => {
+      const status = (lease.status || '').toLowerCase().trim();
+      if (!activeStatuses.includes(status)) return; // skip inactive leases
+
       const brand = resolveBrandName(lease);
-      const unit  = lease.unit_number || lease.units?.unit_number || '';
+      const unit  = resolveUnitDisplay(lease) || '';
 
       // 1. Lease expiry
       if (lease.lease_end) {
         const end  = new Date(lease.lease_end);
         const days = Math.ceil((end - now) / 86400000);
-        if (days > 0 && days < 30) {
+        if (days > 0 && days <= 30) {
           list.push({ type: 'Lease Expiry', priority: 1, brand, unit, days, icon: '📅' });
         }
       }
@@ -46,31 +52,19 @@ const CriticalNotificationTicker = ({ leases = [] }) => {
           const start  = new Date(lease.lease_start);
           const lockEnd = new Date(start.getFullYear(), start.getMonth() + lockMonths, start.getDate());
           const days   = Math.ceil((lockEnd - now) / 86400000);
-          if (days > 0 && days < 30) {
+          if (days > 0 && days <= 30) {
             list.push({ type: 'Lock-in Expiry', priority: 2, brand, unit, days, icon: '🔒' });
           }
         }
       }
 
-      // 3. Upcoming escalation
-      let escDate = lease.next_escalation_date || lease.escalation_date;
-      
-      // Fallback: 3 year implicit calculation matching UpcomingEscalations.jsx
-      if (lease.lease_start && !escDate) {
-        const leaseStart = new Date(lease.lease_start);
-        const yearsActive = (now - leaseStart) / (1000 * 60 * 60 * 24 * 365);
-        const escalationInterval = 3; 
-        const nextEscalationYear = Math.ceil(yearsActive / escalationInterval) * escalationInterval;
-        const nextEscalationDate = new Date(leaseStart);
-        nextEscalationDate.setFullYear(nextEscalationDate.getFullYear() + nextEscalationYear);
-        if (nextEscalationDate > now) {
-          escDate = nextEscalationDate;
-        }
-      }
-
-      if (escDate) {
-        const esc  = new Date(escDate);
-        const days = Math.ceil((esc - now) / 86400000);
+      // 3. Upcoming escalation — use escalations[] array from backend
+      const leaseEscalations = Array.isArray(lease.escalations) ? lease.escalations : [];
+      const nextEsc = leaseEscalations
+        .filter(e => e.effective_from && new Date(e.effective_from) > now)
+        .sort((a, b) => new Date(a.effective_from) - new Date(b.effective_from))[0];
+      if (nextEsc) {
+        const days = Math.ceil((new Date(nextEsc.effective_from) - now) / 86400000);
         if (days > 0 && days <= 30) {
           list.push({ type: 'Escalation Due', priority: 3, brand, unit, days, icon: '📈' });
         }
@@ -78,13 +72,14 @@ const CriticalNotificationTicker = ({ leases = [] }) => {
     });
 
     return list.sort((a, b) => {
-      // 1st Leasing (1), 2nd Lock in (2), 3rd Escalations (3)
       if (a.priority !== b.priority) return a.priority - b.priority;
       return a.days - b.days;
     });
   }, [leases]);
 
+  // Show only top 3 critical items in ticker
   const count = alerts.length;
+  const topAlerts = alerts.slice(0, 3);
 
   // ── Pause ticker on hover ────────────────────────────────────────────────────
   const handleMouseEnter = () => setPaused(true);
@@ -288,7 +283,7 @@ const CriticalNotificationTicker = ({ leases = [] }) => {
 
           {/* Alert rows */}
           <div style={{ maxHeight: 320, overflowY: 'auto' }}>
-            {alerts.map((a, i) => (
+            {topAlerts.map((a, i) => (
               <div key={i} style={{
                 display:    'flex',
                 alignItems: 'center',

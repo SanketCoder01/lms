@@ -26,6 +26,7 @@ const OwnershipDataEntry = () => {
             setUnits([]);
             setSelectedUnit('');
         }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [selectedProject]);
 
     useEffect(() => {
@@ -48,8 +49,18 @@ const OwnershipDataEntry = () => {
 
     const fetchUnits = async (projectId) => {
         try {
+            // Pass true to exclude units that already have ownership assigned
             const res = await unitAPI.getUnitsByProject(projectId, true);
-            setUnits(Array.isArray(res.data) ? res.data : (res.data?.data || []));
+            const data = Array.isArray(res.data) ? res.data : (res.data?.data || []);
+            
+            // Filter sold units and units with ownership (backup filter)
+            const filteredUnits = data.filter(u => {
+                if (selectedUnit && Number(u.id) === Number(selectedUnit)) return true;
+                const isSold = u.status && String(u.status).toLowerCase() === 'sold';
+                const hasOwnership = u.has_ownership === true;
+                return !isSold && !hasOwnership;
+            });
+            setUnits(filteredUnits);
         } catch (error) {
             console.error(error);
         }

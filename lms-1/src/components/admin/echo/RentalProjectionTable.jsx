@@ -9,23 +9,31 @@ const RentalProjectionTable = ({ leases = [], loading }) => {
 
     const now = new Date();
     const grouped = {
-      fixedLockIn: { dot: "#1e3a5f", label: "Fixed rent - lock-in", units: 0, area: 0, type: "Fixed" },
-      fixedPostLockIn: { dot: "#4a8ab5", label: "Fixed rent - post lock-in", units: 0, area: 0, type: "Fixed" },
-      mgLockIn: { dot: "#1a8a5a", label: "MG rent - lock-in", units: 0, area: 0, type: "Fixed" },
-      mgPostLockIn: { dot: "#3cc48a", label: "MG rent - post lock-in", units: 0, area: 0, type: "Fixed" },
-      revShareLockIn: { dot: "#b8860b", label: "Rev. share - lock-in", units: 0, area: 0, type: "Variable" },
-      revSharePostLockIn: { dot: "#e8a830", label: "Rev. share - post lock-in", units: 0, area: 0, type: "Variable" },
+      fixedLockIn:       { dot: "#1e3a5f", label: "Fixed rent - lock-in",        units: 0, area: 0, type: "Fixed"    },
+      fixedPostLockIn:   { dot: "#4a8ab5", label: "Fixed rent - post lock-in",    units: 0, area: 0, type: "Fixed"    },
+      mgLockIn:          { dot: "#1a8a5a", label: "MG rent - lock-in",            units: 0, area: 0, type: "Fixed"    },
+      mgPostLockIn:      { dot: "#3cc48a", label: "MG rent - post lock-in",       units: 0, area: 0, type: "Fixed"    },
+      revShareLockIn:    { dot: "#b8860b", label: "Rev. share - lock-in",         units: 0, area: 0, type: "Variable" },
+      revSharePostLockIn:{ dot: "#e8a830", label: "Rev. share - post lock-in",    units: 0, area: 0, type: "Variable" },
     };
 
-    leases.forEach(lease => {
-      const rentModel = (lease.rent_model || 'Fixed').toLowerCase();
+    // Only process active leases
+    const activeLeases = leases.filter(lease => {
+      const status = (lease.status || '').toLowerCase().trim();
+      return ['active', 'approved', 'executed', 'registered', 'occupied'].includes(status);
+    });
+
+    activeLeases.forEach(lease => {
+      const rentModel = (lease.rent_model || 'Fixed').toLowerCase().trim();
       const leaseStart = new Date(lease.lease_start);
-      const lockInMonths = parseInt(lease.lock_in_period) || 36;
+      // Default to 0 if no lock-in — lease is immediately post-lock-in
+      const lockInMonths = parseInt(lease.lock_in_period ?? lease.lockin_period_months) || 0;
       const lockInExpiry = new Date(leaseStart);
       lockInExpiry.setMonth(lockInExpiry.getMonth() + lockInMonths);
-      const isLockInActive = lockInExpiry > now;
+      // isLockInActive: only true if lockInMonths > 0 AND we're still within the lock-in window
+      const isLockInActive = lockInMonths > 0 && lockInExpiry > now;
 
-      const area = parseFloat(lease.area_leased || lease.units?.chargeable_area || 0);
+      const area = parseFloat(lease.area_leased || lease.chargeable_area || lease.units?.chargeable_area || 0);
 
       if (rentModel === 'fixed') {
         if (isLockInActive) {
@@ -35,13 +43,23 @@ const RentalProjectionTable = ({ leases = [], loading }) => {
           grouped.fixedPostLockIn.units += 1;
           grouped.fixedPostLockIn.area += area;
         }
-      } else if (rentModel === 'revenueshare' || rentModel === 'revenue share' || rentModel === 'hybrid') {
+      } else if (rentModel === 'hybrid') {
+        // Hybrid = MG + Revenue Share — categorise under MG bucket
         if (isLockInActive) {
           grouped.mgLockIn.units += 1;
           grouped.mgLockIn.area += area;
         } else {
           grouped.mgPostLockIn.units += 1;
           grouped.mgPostLockIn.area += area;
+        }
+      } else if (rentModel === 'revenueshare' || rentModel === 'revenue share') {
+        // Pure Revenue Share — categorise under Rev Share bucket
+        if (isLockInActive) {
+          grouped.revShareLockIn.units += 1;
+          grouped.revShareLockIn.area += area;
+        } else {
+          grouped.revSharePostLockIn.units += 1;
+          grouped.revSharePostLockIn.area += area;
         }
       }
     });

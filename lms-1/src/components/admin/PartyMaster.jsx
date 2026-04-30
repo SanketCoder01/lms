@@ -14,47 +14,31 @@ const PartyMaster = () => {
     const [showReportModal, setShowReportModal] = useState(false);
     const { can } = usePermissions();
 
-    // Report columns for Parties - All sections
+    // Report columns for Parties — fields from AddParty form
     const partyReportColumns = [
-        // Basic Info
         { key: 'id', label: 'Party ID' },
-        { key: 'type', label: 'Structure Type' },
-        { key: 'party_type', label: 'Party Role' },
-        // Company/Individual Details
+        { key: 'party_type', label: 'Party Type' },
+        { key: 'type', label: 'Profile Structure' },
         { key: 'company_name', label: 'Company Name' },
         { key: 'brand_name', label: 'Brand Name' },
+        { key: 'brand_category', label: 'Brand / Investor Category' },
+        { key: 'legal_entity_type', label: 'Legal Entity Type' },
+        { key: 'representative_designation', label: 'Representative Designation' },
         { key: 'first_name', label: 'First Name' },
         { key: 'last_name', label: 'Last Name' },
-        { key: 'pan_number', label: 'PAN Number' },
-        { key: 'gst_number', label: 'GST Number' },
-        { key: 'cin_number', label: 'CIN Number' },
-        // Contact Info
         { key: 'email', label: 'Email' },
         { key: 'phone', label: 'Phone' },
         { key: 'alt_phone', label: 'Alternate Phone' },
-        // Address
-        { key: 'address_line1', label: 'Address Line 1' },
-        { key: 'address_line2', label: 'Address Line 2' },
-        { key: 'city', label: 'City' },
-        { key: 'state', label: 'State' },
-        { key: 'postal_code', label: 'Postal Code' },
-        { key: 'country', label: 'Country' },
-        // Identification
         { key: 'identification_type', label: 'ID Type' },
         { key: 'identification_number', label: 'ID Number' },
-        // Business Details
-        { key: 'brand_category', label: 'Brand Category' },
-        { key: 'owner_group', label: 'Owner Group' },
-        { key: 'representative_designation', label: 'Representative Designation' },
-        // Bank Details
-        { key: 'bank_name', label: 'Bank Name' },
-        { key: 'account_number', label: 'Account Number' },
-        { key: 'ifsc_code', label: 'IFSC Code' },
-        { key: 'branch_name', label: 'Branch Name' },
-        // Additional
-        { key: 'remarks', label: 'Remarks' },
+        { key: 'address_line1', label: 'Address Line 1' },
+        { key: 'address_line2', label: 'Address Line 2' },
+        { key: 'state', label: 'State' },
+        { key: 'city', label: 'City' },
+        { key: 'postal_code', label: 'Postal Code' },
+        { key: 'country', label: 'Country' },
+        { key: 'owner_group', label: 'Owner Grouping' },
         { key: 'created_at', label: 'Created Date' },
-        { key: 'updated_at', label: 'Updated Date' }
     ];
 
     useEffect(() => {
@@ -66,19 +50,19 @@ const PartyMaster = () => {
         const headers = ["Name/Company Name", "Brand Name/Nickname", "Structure Type", "Party Role", "Phone", "Email", "State", "City"];
         const rows = filteredParties.map(p => [
             p.type === 'Company' ? p.company_name : `${p.first_name} ${p.last_name}`,
-            p.brand_name || 'N/A',
+            p.brand_name || '-',
             p.type,
             p.party_type,
-            p.phone,
-            p.email,
-            p.state || 'N/A',
-            p.city || 'N/A'
+            p.phone || '-',
+            p.email || '-',
+            p.state || '-',
+            p.city || '-'
         ]);
-        
-        let csvContent = "data:text/csv;charset=utf-8," 
+
+        let csvContent = "data:text/csv;charset=utf-8,"
             + headers.join(",") + "\n"
             + rows.map(r => r.map(cell => `"${(cell || '').replace(/"/g, '""')}"`).join(",")).join("\n");
-            
+
         const encodedUri = encodeURI(csvContent);
         const link = document.createElement("a");
         link.setAttribute("href", encodedUri);

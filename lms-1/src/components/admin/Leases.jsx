@@ -30,49 +30,42 @@ const Leases = () => {
     const [locations, setLocations] = useState([]);
     const [showReportModal, setShowReportModal] = useState(false);
 
-    // Report columns for Leases - All sections (Step 1-5)
+    // Report columns for Leases — fields collected during lease creation (Steps 1–5)
     const leaseReportColumns = [
-        // Step 1: Basic Info
         { key: 'id', label: 'Lease ID' },
         { key: 'lease_type', label: 'Lease Type' },
+        { key: 'rent_model', label: 'Rent Model' },
         { key: 'status', label: 'Status' },
-        // Step 2: Parties
-        { key: 'tenant_name', label: 'Tenant Name' },
-        { key: 'sub_tenant_name', label: 'Sub-Tenant' },
-        { key: 'landlord_name', label: 'Landlord Name' },
-        // Step 3: Property
         { key: 'project_name', label: 'Project' },
         { key: 'unit_number', label: 'Unit Number' },
-        { key: 'floor', label: 'Floor' },
-        { key: 'block_tower', label: 'Block/Tower' },
-        { key: 'property_type', label: 'Property Type' },
-        { key: 'chargeable_area', label: 'Chargeable Area' },
-        { key: 'carpet_area', label: 'Carpet Area' },
-        // Step 4: Lease Terms
-        { key: 'lease_start', label: 'Start Date' },
-        { key: 'lease_end', label: 'End Date' },
+        { key: 'tenant_name', label: 'Tenant Name' },
+        { key: 'lease_start', label: 'Lease Start Date' },
+        { key: 'lease_end', label: 'Lease End Date' },
         { key: 'tenure_months', label: 'Tenure (Months)' },
+        { key: 'unit_handover_date', label: 'Handover Date' },
+        { key: 'fitout_period_start', label: 'Fitout Start' },
+        { key: 'fitout_period_end', label: 'Fitout End' },
+        { key: 'opening_date', label: 'Store Open Date' },
         { key: 'rent_commencement_date', label: 'Rent Commencement' },
-        { key: 'lockin_period', label: 'Lock-in Period' },
-        { key: 'lockin_end_date', label: 'Lock-in End Date' },
-        { key: 'rent_free_period', label: 'Rent Free Period' },
-        { key: 'rent_free_start', label: 'Rent Free Start' },
-        { key: 'rent_free_end', label: 'Rent Free End' },
-        // Step 5: Financial
-        { key: 'monthly_rent', label: 'Monthly Rent' },
-        { key: 'security_deposit', label: 'Security Deposit' },
-        { key: 'rent_per_sqft', label: 'Rent/Sq Ft' },
-        { key: 'escalation_rate', label: 'Escalation Rate' },
+        { key: 'has_rent_free_period', label: 'Rent Free?' },
+        { key: 'rent_free_start_date', label: 'Rent Free Start' },
+        { key: 'rent_free_end_date', label: 'Rent Free End' },
+        { key: 'lessee_lockin_period_months', label: 'Lessee Lock-in (Mo)' },
+        { key: 'lessor_lockin_period_months', label: 'Lessor Lock-in (Mo)' },
+        { key: 'lessee_notice_period_days', label: 'Lessee Notice (Days)' },
+        { key: 'lessor_notice_period_days', label: 'Lessor Notice (Days)' },
+        { key: 'monthly_rent', label: 'Monthly Rent (₹)' },
+        { key: 'mg_amount', label: 'MG Amount (₹)' },
+        { key: 'security_deposit', label: 'Security Deposit (₹)' },
         { key: 'escalation_type', label: 'Escalation Type' },
-        { key: 'next_escalation_date', label: 'Next Escalation' },
-        { key: 'next_escalation_rent', label: 'Next Escalation Rent' },
-        // Additional
-        { key: 'fit_out_period', label: 'Fit-out Period' },
-        { key: 'fit_out_start', label: 'Fit-out Start' },
-        { key: 'fit_out_end', label: 'Fit-out End' },
-        { key: 'termination_notice_months', label: 'Termination Notice' },
+        { key: 'escalation_rate', label: 'Escalation Rate (%)' },
+        { key: 'first_escalation_date', label: 'First Escalation Date' },
+        { key: 'revenue_share_percentage', label: 'Revenue Share (%)' },
+        { key: 'loi_date', label: 'LOI Date' },
+        { key: 'agreement_date', label: 'Agreement Date' },
+        { key: 'registration_date', label: 'Registration Date' },
         { key: 'remarks', label: 'Remarks' },
-        { key: 'created_at', label: 'Created Date' }
+        { key: 'created_at', label: 'Created Date' },
     ];
 
     // Effect for initial data fetching and URL param handling
@@ -165,7 +158,7 @@ const Leases = () => {
     };
 
     const formatDate = (dateString) => {
-        if (!dateString) return 'N/A';
+        if (!dateString) return '-';
         const date = new Date(dateString);
         return date.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: '2-digit' });
     };
@@ -194,13 +187,13 @@ const Leases = () => {
         const headers = ["Lease ID", "Tenant", "Project", "Unit", "Start Date", "End Date", "Monthly Rent", "Status"];
         const rows = leases.map(l => [
             l.id,
-            l.tenant_name || l.sub_tenant_name || 'N/A',
-            l.project_name || 'N/A',
-            l.unit_number || 'N/A',
+            l.tenant_name || l.sub_tenant_name || '-',
+            l.project_name || '-',
+            l.unit_number || '-',
             formatDate(l.lease_start),
             formatDate(l.lease_end),
             formatCurrency(l.monthly_rent),
-            l.status || 'N/A'
+            l.status || '-'
         ]);
 
         let csvContent = "data:text/csv;charset=utf-8,"
