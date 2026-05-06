@@ -9,9 +9,8 @@
  * - Project user tokens (type: 'project_user') -> req.isProjectUser = true, req.projectId
  * - All other tokens (legacy admin, no token) -> req.companyId = null
  * 
- * SAFE: Never blocks requests. Always calls next().
- * If company_id column doesn't exist in DB yet, the controller 
- * simply gets null and shows all data (no crash).
+ * PRIVACY: When no valid company token is present, req.isUnauthenticated = true.
+ * Controllers must return empty data in this case to prevent cross-company leakage.
  */
 const jwt = require('jsonwebtoken');
 
@@ -27,6 +26,7 @@ const companyAuth = (req, _res, next) => {
   req.permissions   = {};
   req.projectsAccess = [];
   req.isRestrictedToProjects = false;
+  req.isUnauthenticated = true; // Default to unauthenticated until proven otherwise
 
   try {
     const authHeader = req.headers['authorization'];
@@ -40,6 +40,7 @@ const companyAuth = (req, _res, next) => {
       if (decoded && decoded.company_id) {
         req.companyId   = decoded.company_id;
         req.companyUser = decoded;
+        req.isUnauthenticated = false; // Valid company token found
         
         // Extract project assignments directly from token payload
         req.projectsAccess = decoded.projects_access || [];
@@ -59,6 +60,7 @@ const companyAuth = (req, _res, next) => {
           req.permissions   = decoded.permissions || {};
         }
       }
+      // decoded but no company_id → stays unauthenticated
     } catch {
       req.companyId = null;
     }

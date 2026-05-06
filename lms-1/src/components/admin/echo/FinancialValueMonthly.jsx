@@ -24,17 +24,17 @@ import { formatRent, safeFloat } from '../../../utils/formatters';
 */
 
 const COLORS = {
-  mg:       '#2563eb',   // blue       — MG / Fixed Rent
+  mg: '#2563eb',   // blue       — MG / Fixed Rent
   revShare: '#f97316',   // orange     — Revenue Share
-  total:    '#16a34a',   // green      — Total Rent  (top z-order)
-  lease:    '#94a3b8',   // grey       — Lease Duration
-  lockIn:   '#eab308',   // yellow     — Lock-in Period
+  total: '#16a34a',   // green      — Total Rent  (top z-order)
+  lease: '#94a3b8',   // grey       — Lease Duration
+  lockIn: '#eab308',   // yellow     — Lock-in Period
 };
 
 const fmtY = (v) => {
   if (!v) return '0';
   if (v >= 100000) return `${(v / 100000).toFixed(1)}L`;
-  if (v >= 1000)   return `${(v / 1000).toFixed(0)}K`;
+  if (v >= 1000) return `${(v / 1000).toFixed(0)}K`;
   return v.toLocaleString('en-IN');
 };
 
@@ -60,11 +60,11 @@ const CustomTooltip = ({ active, payload, label }) => {
 
 const SERIES = [
   // Rendered bottom→top for correct SVG z-order
-  { key: 'leaseDuration', name: 'Lease Duration',   color: COLORS.lease,    width: 2,   dash: '6 4' },
-  { key: 'lockInLine',    name: 'Lock-in Period',   color: COLORS.lockIn,   width: 2,   dash: '6 4' },
-  { key: 'mg',            name: 'MG / Fixed Rent',  color: COLORS.mg,       width: 2.5, dash: '' },
-  { key: 'revShare',      name: 'Revenue Share',    color: COLORS.revShare, width: 2.5, dash: '4 3' },
-  { key: 'total',         name: 'Total Rent',       color: COLORS.total,    width: 3,   dash: '' },
+  { key: 'leaseDuration', name: 'Lease Duration', color: COLORS.lease, width: 2, dash: '6 4' },
+  { key: 'lockInLine', name: 'Lock-in Period', color: COLORS.lockIn, width: 2, dash: '6 4' },
+  { key: 'mg', name: 'MG / Fixed Rent', color: COLORS.mg, width: 2.5, dash: '' },
+  { key: 'revShare', name: 'Revenue Share', color: COLORS.revShare, width: 2.5, dash: '4 3' },
+  { key: 'total', name: 'Total Rent', color: COLORS.total, width: 3, dash: '' },
 ];
 
 const FinancialValueMonthly = ({ leases = [], loading }) => {
@@ -89,7 +89,7 @@ const FinancialValueMonthly = ({ leases = [], loading }) => {
     const endLimit = new Date(maxDate.getFullYear(), maxDate.getMonth(), 1);
     while (cur <= endLimit) {
       months.push({
-        key:   cur.toISOString().slice(0, 7),
+        key: cur.toISOString().slice(0, 7),
         label: cur.toLocaleDateString('en-US', { month: 'short', year: '2-digit' }),
         mg: 0, revShare: 0, total: 0, leaseDuration: null, lockInLine: null,
       });
@@ -100,10 +100,10 @@ const FinancialValueMonthly = ({ leases = [], loading }) => {
     leases.forEach(lease => {
       if (!lease.lease_start) return;
 
-      const leaseStart    = new Date(lease.lease_start);
+      const leaseStart = new Date(lease.lease_start);
       const leaseStartMon = new Date(leaseStart.getFullYear(), leaseStart.getMonth(), 1);
-      const leaseEnd      = lease.lease_end ? new Date(lease.lease_end) : new Date(leaseStart.getFullYear() + 3, leaseStart.getMonth(), 1);
-      const leaseEndMon   = new Date(leaseEnd.getFullYear(), leaseEnd.getMonth(), 1);
+      const leaseEnd = lease.lease_end ? new Date(lease.lease_end) : new Date(leaseStart.getFullYear() + 3, leaseStart.getMonth(), 1);
+      const leaseEndMon = new Date(leaseEnd.getFullYear(), leaseEnd.getMonth(), 1);
 
       // Lock-in: prefer lessee_lockin_period_months, fallback to lockin_period_months
       const lockInMonths = parseInt(
@@ -111,29 +111,29 @@ const FinancialValueMonthly = ({ leases = [], loading }) => {
       );
       const lockInEnd = new Date(leaseStart.getFullYear(), leaseStart.getMonth() + lockInMonths, 1);
 
-      const model     = (lease.rent_model || '').toLowerCase().replace(/\s+/g, '');
-      const isFixed   = model === 'fixed';
-      const isRS      = model === 'revenueshare';
-      const isHybrid  = model === 'hybrid';
+      const model = (lease.rent_model || '').toLowerCase().replace(/\s+/g, '');
+      const isFixed = model === 'fixed';
+      const isRS = model === 'revenueshare';
+      const isHybrid = model === 'hybrid';
 
-      const mgRent        = safeFloat(lease.mg_amount)  || safeFloat(lease.monthly_rent) || 0;
-      const fixedRent     = safeFloat(lease.monthly_rent) || mgRent;
-      const revSharePct   = safeFloat(lease.revenue_share_percentage) || 0;
-      const monthlySales  = safeFloat(lease.monthly_net_sales) || 0;
+      const mgRent = safeFloat(lease.mg_amount) || safeFloat(lease.monthly_rent) || 0;
+      const fixedRent = safeFloat(lease.monthly_rent) || mgRent;
+      const revSharePct = safeFloat(lease.revenue_share_percentage) || 0;
+      const monthlySales = safeFloat(lease.monthly_net_sales) || 0;
 
-      const mgVal       = isFixed ? fixedRent : mgRent;
-      const rsVal       = (isRS || isHybrid) ? (monthlySales * revSharePct / 100) : 0;
-      const totalVal    = isFixed ? fixedRent : Math.max(mgVal, rsVal);
+      const mgVal = isFixed ? fixedRent : mgRent;
+      const rsVal = (isRS || isHybrid) ? (monthlySales * revSharePct / 100) : 0;
+      const totalVal = isFixed ? fixedRent : Math.max(mgVal, rsVal);
 
       months.forEach(m => {
-        const mDate     = new Date(m.key + '-01');
-        const isActive  = mDate >= leaseStartMon && mDate <= leaseEndMon;
-        const inLockIn  = mDate >= leaseStartMon && mDate <  lockInEnd;
+        const mDate = new Date(m.key + '-01');
+        const isActive = mDate >= leaseStartMon && mDate <= leaseEndMon;
+        const inLockIn = mDate >= leaseStartMon && mDate < lockInEnd;
 
         if (isActive) {
-          m.mg           += mgVal;
-          m.revShare     += rsVal;
-          m.total        += totalVal;
+          m.mg += mgVal;
+          m.revShare += rsVal;
+          m.total += totalVal;
           m.leaseDuration = 1;  // will be scaled
         }
         if (inLockIn) m.lockInLine = 1;  // will be scaled
@@ -142,18 +142,18 @@ const FinancialValueMonthly = ({ leases = [], loading }) => {
 
     // ── Step 4: Map values directly without artificial offsets ────────
     const result = months.map(m => ({
-      month:         m.label,
-      mg:            m.mg       > 0 ? m.mg       : null,
-      revShare:      m.revShare > 0 ? m.revShare : null,
-      total:         m.total    > 0 ? m.total    : null,
+      month: m.label,
+      mg: m.mg > 0 ? m.mg : null,
+      revShare: m.revShare > 0 ? m.revShare : null,
+      total: m.total > 0 ? m.total : null,
       leaseDuration: m.leaseDuration != null ? m.total : null,
-      lockInLine:    m.lockInLine    != null ? m.total : null,
+      lockInLine: m.lockInLine != null ? m.total : null,
     }));
 
     const totalsAcc = months.reduce((acc, m) => ({
-      mg:       acc.mg       + m.mg,
+      mg: acc.mg + m.mg,
       revShare: acc.revShare + m.revShare,
-      total:    acc.total    + m.total,
+      total: acc.total + m.total,
     }), { mg: 0, revShare: 0, total: 0 });
 
     return { chartData: result, totals: totalsAcc };
@@ -176,13 +176,13 @@ const FinancialValueMonthly = ({ leases = [], loading }) => {
         <div style={{ textAlign: 'center', padding: 20, color: '#64748b' }}>No lease data available</div>
       ) : (
         <>
-          {/* Scrollable chart area */}
-          <div style={{ overflowX: 'auto', paddingBottom: 4, width: '100%' }}>
-            <div style={{ minWidth: Math.max(720, chartData.length * 30), height: 200 }}>
+          {/* Scrollable chart area — stays inside the card, scrolls horizontally when needed */}
+          <div style={{ overflowX: 'auto', overflowY: 'hidden', paddingBottom: 4, width: '100%', WebkitOverflowScrolling: 'touch' }}>
+            <div style={{ minWidth: Math.max(600, chartData.length * 52), height: 200 }}>
               <ResponsiveContainer width="100%" height="100%">
                 <LineChart data={chartData} margin={{ top: 10, right: 20, left: 0, bottom: 5 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
-                  <XAxis dataKey="month" tick={{ fontSize: 9, fill: '#64748b' }} axisLine={false} tickLine={false} />
+                  <XAxis dataKey="month" tick={{ fontSize: 9, fill: '#64748b' }} axisLine={false} tickLine={false} interval={0} />
                   <YAxis tick={{ fontSize: 9, fill: '#64748b' }} axisLine={false} tickLine={false} tickFormatter={fmtY} width={48} />
                   <Tooltip content={<CustomTooltip />} />
 
@@ -229,9 +229,9 @@ const FinancialValueMonthly = ({ leases = [], loading }) => {
           {/* Summary totals */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8, marginTop: 6, paddingTop: 8, borderTop: '1px solid #e2e8f0' }}>
             {[
-              { label: 'MG / Fixed Rent', val: totals.mg,       color: COLORS.mg },
-              { label: 'Revenue Share',   val: totals.revShare,  color: COLORS.revShare },
-              { label: 'Total Rent',      val: totals.total,     color: COLORS.total },
+              { label: 'MG / Fixed Rent', val: totals.mg, color: COLORS.mg },
+              { label: 'Revenue Share', val: totals.revShare, color: COLORS.revShare },
+              { label: 'Total Rent', val: totals.total, color: COLORS.total },
             ].map(item => (
               <div key={item.label} style={{ textAlign: 'center' }}>
                 <p style={{ fontSize: 13, fontWeight: 700, color: item.color, margin: 0 }}>

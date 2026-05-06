@@ -133,11 +133,16 @@ const AddUnit = () => {
     // State for the unit input suffix (e.g., "101")
     const [unitSuffix, setUnitSuffix] = useState('');
     const [rentPerSqft, setRentPerSqft] = useState('');
+    // When true, user has manually typed the projected_rent — stop auto-overriding it
+    const [isRentManual, setIsRentManual] = useState(false);
 
     // State for validation errors
     const [errors, setErrors] = useState({});
 
     useEffect(() => {
+        // Skip auto-calculation when user has manually overridden the rent value
+        if (isRentManual) return;
+
         // Find selected project to get calculation basis
         const selectedProject = projects.find(p => p.id === parseInt(formData.project_id));
         const calcType = selectedProject?.calculation_type || 'Chargeable Area';
@@ -152,13 +157,15 @@ const AddUnit = () => {
         }
 
         const rate = parseFloat(rentPerSqft) || 0;
-        const total = area * rate;
+        // Use Math.round to avoid floating-point display issues (e.g., 79.9999 showing as 79)
+        const total = Math.round(area * rate);
 
         setFormData(prev => ({
             ...prev,
             projected_rent: total > 0 ? total.toString() : ''
         }));
-    }, [formData.chargeable_area, formData.covered_area, formData.carpet_area, formData.project_id, rentPerSqft, projects]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [formData.chargeable_area, formData.covered_area, formData.carpet_area, formData.project_id, rentPerSqft, projects, isRentManual]);
 
     // Validation Effect
     useEffect(() => {
@@ -522,19 +529,39 @@ const AddUnit = () => {
                                     </div>
 
                                     <div className="form-group">
-                                        <label>Projected Rent (Total)</label>
+                                        <label style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                            <span>Projected Rent (Total)</span>
+                                            {isRentManual && (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => { setIsRentManual(false); }}
+                                                    style={{ fontSize: '0.75rem', color: '#2e66ff', background: 'none', border: 'none', cursor: 'pointer', padding: 0, textDecoration: 'underline' }}
+                                                >↺ Auto-calculate</button>
+                                            )}
+                                        </label>
                                         <div className="input-with-suffix">
                                             <input
-                                                type="text"
+                                                type="number"
                                                 name="projected_rent"
                                                 value={formData.projected_rent}
-                                                readOnly
+                                                onChange={(e) => {
+                                                    setIsRentManual(true);
+                                                    setFormData(prev => ({ ...prev, projected_rent: e.target.value }));
+                                                }}
                                                 placeholder="Calculated automatically"
-                                                style={{ backgroundColor: '#f9fafb' }}
-                                                title={`Calculated based on ${projects.find(p => p.id === parseInt(formData.project_id))?.calculation_type || 'Chargeable Area'}`}
+                                                style={{ backgroundColor: isRentManual ? '#ffffff' : '#f9fafb' }}
+                                                title={isRentManual
+                                                    ? 'Manually entered — click "Auto-calculate" to reset'
+                                                    : `Auto-calculated based on ${projects.find(p => p.id === parseInt(formData.project_id))?.calculation_type || 'Chargeable Area'}`
+                                                }
                                             />
                                             <span className="suffix">INR/mo</span>
                                         </div>
+                                        {!isRentManual && rentPerSqft && (
+                                            <small style={{ color: '#64748b', fontSize: '0.75rem', marginTop: '4px', display: 'block' }}>
+                                                = Area × ₹{rentPerSqft}/sqft (rounded to nearest ₹)
+                                            </small>
+                                        )}
                                     </div>
                                 </div>
 

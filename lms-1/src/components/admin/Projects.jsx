@@ -373,12 +373,17 @@ const Projects = () => {
                       <div className="units-cell">
                         <span className="unit-count">
                           {project.total_units || 0} Units<br />
-                          <small style={{ fontSize: '0.8rem', color: '#64748b' }}>{project.total_floors || 0} Floors</small>
+                          <small style={{ fontSize: '0.8rem', color: '#64748b' }}>
+                            {/* actual_floor_count = real floors from Unit Structure; fallback to manual entry */}
+                            {project.actual_floor_count !== undefined
+                              ? project.actual_floor_count
+                              : (project.total_floors || 0)} Floors
+                          </small>
                         </span>
                         <span className="occupancy-label">
-                          {project.occupied_units !== undefined || project.leased_units !== undefined
-                            ? `${project.occupied_units ?? project.leased_units ?? 0} / ${project.total_units || 0} Leased`
-                            : (project.total_units > 0 ? 'View Details' : 'New Construction')}
+                          {project.total_units > 0
+                            ? `${project.occupied_units || 0} / ${project.total_units} Leased`
+                            : 'New Construction'}
                         </span>
                       </div>
                     </td>

@@ -31,9 +31,9 @@ const Step3RentConfig = ({
             usableArea = parseFloat(formData.sub_lease_area_sqft) || 0;
         } else if (selectedUnit) {
             const calcType = selectedProject?.calculation_type || 'Chargeable Area';
-            if (calcType === 'Covered Area')    usableArea = parseFloat(selectedUnit.covered_area)     || 0;
-            else if (calcType === 'Carpet Area') usableArea = parseFloat(selectedUnit.carpet_area)      || 0;
-            else                                 usableArea = parseFloat(selectedUnit.chargeable_area)  || 0;
+            if (calcType === 'Covered Area') usableArea = parseFloat(selectedUnit.covered_area) || 0;
+            else if (calcType === 'Carpet Area') usableArea = parseFloat(selectedUnit.carpet_area) || 0;
+            else usableArea = parseFloat(selectedUnit.chargeable_area) || 0;
         }
 
         const totalMG = (parseFloat(rate) || 0) * usableArea;
@@ -43,10 +43,16 @@ const Step3RentConfig = ({
             const prevMG = parseFloat(prev.mg_amount) || 0;
             if (prevMG === newMGAmount) return prev;
             const amtStr = newMGAmount.toFixed(2);
+            // For RevenueShare/Hybrid: only update mg_amount.
+            // The revenue share useEffect below exclusively owns monthly_rent in those modes.
+            if (rentModel === 'RevenueShare' || rentModel === 'Hybrid') {
+                return { ...prev, mg_amount: amtStr };
+            }
+            // Fixed model: mg_amount IS the monthly_rent
             return { ...prev, mg_amount: amtStr, monthly_rent: amtStr };
         });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [formData.mg_amount_sqft, formData.sub_lease_area_sqft, isSubLease, selectedUnit, selectedProject]);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [formData.mg_amount_sqft, formData.sub_lease_area_sqft, isSubLease, selectedUnit, selectedProject, rentModel]);
 
     // Issue 36/42/67: Revenue Share Amount calculation
     React.useEffect(() => {

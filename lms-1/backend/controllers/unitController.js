@@ -21,17 +21,22 @@ const applyScopes = (query, req) => {
  * ══════════════════════════════════════════════════════════ */
 const getUnits = async (req, res) => {
   try {
+    // PRIVACY: Never serve data without a valid company session
+    if (req.isUnauthenticated) return res.json({ data: [] });
+
     const { projectId, search, status, excludeSold, ownership } = req.query;
 
-    // Step 1: Fetch units WITHOUT nested joins (nested joins can silently return empty in some Supabase setups)
+    // Step 1: Fetch units with LEFT join on projects (was !inner which silently dropped units
+    // whose project records were inaccessible due to RLS/company scoping — causing 102→41 bug)
     let query = applyScopes(supabase
       .from('units')
       .select(`
         id, unit_number, block_tower, floor_number, chargeable_area, status, project_id,
         projected_rent, unit_category, unit_zoning_type,
-        projects!inner ( project_name )
+        projects ( project_name )
       `), req)
-      .order('id', { ascending: false });
+      .order('id', { ascending: false })
+      .limit(2000);
 
     if (projectId && projectId !== 'All') {
       query = query.eq('project_id', parseInt(projectId));
@@ -49,12 +54,15 @@ const getUnits = async (req, res) => {
     const unitIds = (data || []).map(u => u.id);
 
     // Step 2: Separately fetch ALL unit_ownerships for these unit IDs
+    // NOTE: .limit(10000) is critical — Supabase/PostgREST defaults to 1000 rows max,
+    // silently dropping records when there are many units or joint ownerships.
     const ownershipMap = {}; // unit_id → [ownership records]
     if (unitIds.length > 0) {
       const { data: ownershipData, error: ownershipErr } = await supabase
         .from('unit_ownerships')
         .select('id, unit_id, party_id, ownership_status, share_percentage')
-        .in('unit_id', unitIds);
+        .in('unit_id', unitIds)
+        .limit(10000); // prevent PostgREST 1000-row cap from silently dropping records
 
       if (ownershipErr) {
         console.error('[units] Error fetching unit_ownerships:', ownershipErr);
@@ -76,16 +84,19 @@ const getUnits = async (req, res) => {
 
     const partyMap = {}; // party_id → party record
     if (allPartyIds.size > 0) {
+      console.log(`[units] Fetching ${allPartyIds.size} parties for ownership lookup`);
       const { data: partyData, error: partyErr } = await supabase
         .from('parties')
         .select('id, first_name, last_name, company_name, owner_group')
-        .in('id', Array.from(allPartyIds));
+        .in('id', Array.from(allPartyIds))
+        .limit(5000); // prevent PostgREST row cap from dropping parties
 
       if (partyErr) {
         console.error('[units] Error fetching parties:', partyErr);
       } else {
         (partyData || []).forEach(p => {
           partyMap[p.id] = p;
+          console.log(`[units] Party ${p.id}: company="${p.company_name}" owner_group="${p.owner_group}"`);
         });
       }
       console.log(`[units] Fetched ${Object.keys(partyMap).length} parties for ${unitIds.length} units`);
@@ -123,18 +134,28 @@ const getUnits = async (req, res) => {
       let ownershipGrouping = 'Unsold';
 
       if (activeOwnerships.length > 0) {
+        console.log(`[units] ${u.unit_number}: HAS OWNER, owner_group="${ownerGroup}"`);
         if (ownerGroupLower.includes('developer')) {
           ownershipGrouping = 'Developer Units';
+          console.log(`[units] ${u.unit_number} → Developer Units`);
         } else if (ownerGroupLower.includes('close')) {
           ownershipGrouping = 'Close Group';
+          console.log(`[units] ${u.unit_number} → Close Group`);
         } else if (ownerGroupLower.includes('external') || ownerGroupLower.includes('investor')) {
           ownershipGrouping = 'External Investors';
+          console.log(`[units] ${u.unit_number} → External Investors`);
+        } else {
+          // Unit HAS an active owner but owner_group is empty or not in the 3 known groups.
+          // Use 'Other Assigned' so it's never silently lost in 'Unsold'.
+          ownershipGrouping = ownerGroup || 'Other Assigned';
+          console.log(`[units] ${u.unit_number} → Other Assigned (owner_group not matched: "${ownerGroup}")`);
         }
-        // else: has owner but no group → stays 'Unsold'
+      } else {
+        console.log(`[units] ${u.unit_number}: NO OWNER → Unsold`);
       }
 
-      // is_full: unit is fully assigned if total share >= 100 OR has any active owner (to cover partial assignments)
       const isFull = totalShare >= 100 || (activeOwnerships.length > 0 && totalShare > 0) || u.status === 'Sold';
+      const hasOwnership = activeOwnerships.length > 0;
 
       const activeLease = leasesMap[u.id];
       const tenantParty = activeLease?.tenant;
@@ -157,6 +178,7 @@ const getUnits = async (req, res) => {
         brand_name: brandName,
         total_share: totalShare,
         is_full: isFull,
+        has_ownership: hasOwnership,
         projected_rent: u.projected_rent,
         unit_category: u.unit_category,
         unit_zoning_type: u.unit_zoning_type,
@@ -226,6 +248,21 @@ const createUnit = async (req, res) => {
 
     if (!project_id || !unit_number) {
       return res.status(400).json({ message: 'project_id and unit_number are required' });
+    }
+
+    // Enforce unit limit (max 1200 units per company)
+    if (req.companyId) {
+      const { count: unitCount } = await supabase
+        .from('units')
+        .select('id', { count: 'exact', head: true })
+        .eq('company_id', req.companyId);
+
+      if ((unitCount || 0) >= 1200) {
+        return res.status(409).json({
+          success: false,
+          message: `Unit limit reached. Your plan allows a maximum of 1200 units. You currently have ${unitCount}. Please contact your administrator to increase the limit.`,
+        });
+      }
     }
 
     // Project-specific users can only add units to their assigned project
@@ -450,7 +487,20 @@ const deleteUnit = async (req, res) => {
  * ══════════════════════════════════════════════════════════ */
 const getProjectBlocks = async (req, res) => {
   try {
+    // PRIVACY: Never serve data without a valid company session
+    if (req.isUnauthenticated) return res.json({ data: [] });
+
     const { project_id } = req.query;
+
+    // PRIVACY: Verify project belongs to this company
+    if (project_id && req.companyId) {
+      const { data: projCheck } = await supabase.from('projects')
+        .select('company_id').eq('id', project_id).single();
+      if (!projCheck || projCheck.company_id !== req.companyId) {
+        return res.json({ data: [] });
+      }
+    }
+
     let query = supabase.from('project_blocks').select('*, project_floors(*)').order('sort_order');
     if (project_id) query = query.eq('project_id', project_id);
     const { data, error } = await query;
@@ -466,6 +516,14 @@ const addProjectBlock = async (req, res) => {
     const { project_id, block_name, description, sort_order } = req.body;
     if (!project_id || !block_name) {
       return res.status(400).json({ message: 'project_id and block_name are required' });
+    }
+    // PRIVACY: Verify project belongs to this company before adding
+    if (req.companyId) {
+      const { data: projCheck } = await supabase.from('projects')
+        .select('company_id').eq('id', project_id).single();
+      if (!projCheck || projCheck.company_id !== req.companyId) {
+        return res.status(403).json({ message: 'Access denied' });
+      }
     }
     const { data, error } = await supabase
       .from('project_blocks')
@@ -485,6 +543,18 @@ const updateProjectBlock = async (req, res) => {
   try {
     const { id } = req.params;
     const { block_name, description, sort_order } = req.body;
+    // PRIVACY: Verify block belongs to this company via its project
+    if (req.companyId) {
+      const { data: blockCheck } = await supabase.from('project_blocks')
+        .select('project_id').eq('id', id).single();
+      if (blockCheck) {
+        const { data: projCheck } = await supabase.from('projects')
+          .select('company_id').eq('id', blockCheck.project_id).single();
+        if (!projCheck || projCheck.company_id !== req.companyId) {
+          return res.status(403).json({ message: 'Access denied' });
+        }
+      }
+    }
     const { error } = await supabase.from('project_blocks').update({ block_name, description, sort_order }).eq('id', id);
     if (error) throw error;
     res.json({ message: 'Block updated' });
@@ -496,6 +566,18 @@ const updateProjectBlock = async (req, res) => {
 const deleteProjectBlock = async (req, res) => {
   try {
     const { id } = req.params;
+    // PRIVACY: Verify block belongs to this company via its project
+    if (req.companyId) {
+      const { data: blockCheck } = await supabase.from('project_blocks')
+        .select('project_id').eq('id', id).single();
+      if (blockCheck) {
+        const { data: projCheck } = await supabase.from('projects')
+          .select('company_id').eq('id', blockCheck.project_id).single();
+        if (!projCheck || projCheck.company_id !== req.companyId) {
+          return res.status(403).json({ message: 'Access denied' });
+        }
+      }
+    }
     const { error } = await supabase.from('project_blocks').delete().eq('id', id);
     if (error) throw error;
     res.json({ message: 'Block deleted' });
@@ -509,7 +591,20 @@ const deleteProjectBlock = async (req, res) => {
  * ══════════════════════════════════════════════════════════ */
 const getProjectFloors = async (req, res) => {
   try {
+    // PRIVACY: Never serve data without a valid company session
+    if (req.isUnauthenticated) return res.json({ data: [] });
+
     const { project_id, block_id } = req.query;
+
+    // PRIVACY: Verify project belongs to this company
+    if (project_id && req.companyId) {
+      const { data: projCheck } = await supabase.from('projects')
+        .select('company_id').eq('id', project_id).single();
+      if (!projCheck || projCheck.company_id !== req.companyId) {
+        return res.json({ data: [] });
+      }
+    }
+
     let query = supabase.from('project_floors').select('*').order('sort_order');
     if (project_id) query = query.eq('project_id', project_id);
     if (block_id) query = query.eq('block_id', block_id);
@@ -526,6 +621,14 @@ const addProjectFloor = async (req, res) => {
     const { project_id, block_id, floor_name, units_count, sort_order } = req.body;
     if (!project_id || !floor_name) {
       return res.status(400).json({ message: 'project_id and floor_name are required' });
+    }
+    // PRIVACY: Verify project belongs to this company before adding
+    if (req.companyId) {
+      const { data: projCheck } = await supabase.from('projects')
+        .select('company_id').eq('id', project_id).single();
+      if (!projCheck || projCheck.company_id !== req.companyId) {
+        return res.status(403).json({ message: 'Access denied' });
+      }
     }
     const { data, error } = await supabase
       .from('project_floors')
@@ -548,6 +651,18 @@ const updateProjectFloor = async (req, res) => {
   try {
     const { id } = req.params;
     const { floor_name, units_count, sort_order } = req.body;
+    // PRIVACY: Verify floor belongs to this company via its project
+    if (req.companyId) {
+      const { data: floorCheck } = await supabase.from('project_floors')
+        .select('project_id').eq('id', id).single();
+      if (floorCheck) {
+        const { data: projCheck } = await supabase.from('projects')
+          .select('company_id').eq('id', floorCheck.project_id).single();
+        if (!projCheck || projCheck.company_id !== req.companyId) {
+          return res.status(403).json({ message: 'Access denied' });
+        }
+      }
+    }
     const { error } = await supabase.from('project_floors').update({ floor_name, units_count, sort_order }).eq('id', id);
     if (error) throw error;
     res.json({ message: 'Floor updated' });
@@ -559,6 +674,18 @@ const updateProjectFloor = async (req, res) => {
 const deleteProjectFloor = async (req, res) => {
   try {
     const { id } = req.params;
+    // PRIVACY: Verify floor belongs to this company via its project
+    if (req.companyId) {
+      const { data: floorCheck } = await supabase.from('project_floors')
+        .select('project_id').eq('id', id).single();
+      if (floorCheck) {
+        const { data: projCheck } = await supabase.from('projects')
+          .select('company_id').eq('id', floorCheck.project_id).single();
+        if (!projCheck || projCheck.company_id !== req.companyId) {
+          return res.status(403).json({ message: 'Access denied' });
+        }
+      }
+    }
     const { error } = await supabase.from('project_floors').delete().eq('id', id);
     if (error) throw error;
     res.json({ message: 'Floor deleted' });

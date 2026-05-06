@@ -5,13 +5,17 @@ import { formatRent, safeFloat } from '../../../utils/formatters';
 const BrandPerformanceSection = ({ leases = [], parties = [], loading }) => {
   const navigate = useNavigate();
 
-  // Build a map from party_id → lease for matching sales/rent data
+  // Build a map from party_id → most recent active lease
   const leaseByPartyId = useMemo(() => {
     const map = {};
-    leases.forEach(lease => {
-      const tid = lease.party_tenant_id;
-      if (tid && !map[tid]) map[tid] = lease;
-    });
+    const activeStatuses = ['active', 'approved', 'executed', 'registered', 'occupied'];
+    leases
+      .filter(lease => activeStatuses.includes((lease.status || '').toLowerCase().trim()))
+      .sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0)) // newest first
+      .forEach(lease => {
+        const tid = lease.party_tenant_id;
+        if (tid && !map[tid]) map[tid] = lease; // keep newest active lease per party
+      });
     return map;
   }, [leases]);
 

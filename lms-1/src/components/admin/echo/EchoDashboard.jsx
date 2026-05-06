@@ -305,20 +305,20 @@ const EchoDashboard = () => {
           });
 
 
-          // Shared helper — checks date + file both present for each level
+          // Shared helper — checks date presence for each milestone level (document upload optional)
           const qualifiesForMilestone = (lease) => {
-            const hasReg = !!(lease.registration_date && String(lease.registration_date).trim() && lease.registration_document_url && String(lease.registration_document_url).trim());
-            const hasExe = !!(lease.agreement_date && String(lease.agreement_date).trim() && lease.agreement_document_url && String(lease.agreement_document_url).trim());
-            const hasLoi = !!(lease.loi_date && String(lease.loi_date).trim() && lease.loi_document_url && String(lease.loi_document_url).trim());
+            const hasReg = !!(lease.registration_date && String(lease.registration_date).trim());
+            const hasExe = !!(lease.agreement_date && String(lease.agreement_date).trim());
+            const hasLoi = !!(lease.loi_date && String(lease.loi_date).trim());
             return hasReg || hasExe || hasLoi;
           };
 
           const getLeasingStatusCounts = (leaseList) => {
             const counts = { registered: 0, executed: 0, loi: 0 };
             leaseList.forEach(lease => {
-              const hasReg = !!(lease.registration_date && String(lease.registration_date).trim() && lease.registration_document_url && String(lease.registration_document_url).trim());
-              const hasExe = !!(lease.agreement_date && String(lease.agreement_date).trim() && lease.agreement_document_url && String(lease.agreement_document_url).trim());
-              const hasLoi = !!(lease.loi_date && String(lease.loi_date).trim() && lease.loi_document_url && String(lease.loi_document_url).trim());
+              const hasReg = !!(lease.registration_date && String(lease.registration_date).trim());
+              const hasExe = !!(lease.agreement_date && String(lease.agreement_date).trim());
+              const hasLoi = !!(lease.loi_date && String(lease.loi_date).trim());
               if (hasReg) counts.registered += 1;
               else if (hasExe) counts.executed += 1;
               else if (hasLoi) counts.loi += 1;
@@ -333,22 +333,36 @@ const EchoDashboard = () => {
 
           // Dynamic Bar chart: gather all qualified leases
           const qualifiedLeases = leases.filter(l => qualifiesForMilestone(l));
-          
+
+          // If no qualified leases for the chart but we have counts, build a single-bar summary
+          const buildFallbackChartData = (loi, executed, registered) => {
+            const now = new Date();
+            const monthKey = now.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+            return [{
+              month: monthKey,
+              units: loi + executed + registered,
+              area: 0,
+              loiUnits: loi, loiArea: 0,
+              executedUnits: executed, executedArea: 0,
+              registeredUnits: registered, registeredArea: 0
+            }];
+          };
+
           let minDate = new Date();
           minDate.setMonth(minDate.getMonth() - 5); // Default at least 6 months
           minDate.setDate(1);
-          minDate.setHours(0,0,0,0);
-          
+          minDate.setHours(0, 0, 0, 0);
+
           let maxDate = new Date();
           maxDate.setDate(1);
-          maxDate.setHours(0,0,0,0);
+          maxDate.setHours(0, 0, 0, 0);
 
           // Find actual date bounds
           qualifiedLeases.forEach(lease => {
             const hasReg = !!(lease.registration_date && String(lease.registration_date).trim() && lease.registration_document_url && String(lease.registration_document_url).trim());
             const hasExe = !!(lease.agreement_date && String(lease.agreement_date).trim() && lease.agreement_document_url && String(lease.agreement_document_url).trim());
             const hasLoi = !!(lease.loi_date && String(lease.loi_date).trim() && lease.loi_document_url && String(lease.loi_document_url).trim());
-            
+
             let dateToUse = lease.created_at || lease.lease_start;
             if (hasReg) dateToUse = lease.registration_date;
             else if (hasExe) dateToUse = lease.agreement_date;
@@ -357,7 +371,7 @@ const EchoDashboard = () => {
             const d = new Date(dateToUse);
             if (!isNaN(d.getTime())) {
               d.setDate(1);
-              d.setHours(0,0,0,0);
+              d.setHours(0, 0, 0, 0);
               if (d < minDate) minDate = new Date(d);
               if (d > maxDate) maxDate = new Date(d);
             }
@@ -367,8 +381,8 @@ const EchoDashboard = () => {
           let currentMonth = new Date(minDate);
           while (currentMonth <= maxDate) {
             const key = currentMonth.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
-            milestoneMonthData[key] = { 
-              month: key, 
+            milestoneMonthData[key] = {
+              month: key,
               units: 0, area: 0,
               loiUnits: 0, loiArea: 0,
               executedUnits: 0, executedArea: 0,
@@ -381,7 +395,7 @@ const EchoDashboard = () => {
             const hasReg = !!(lease.registration_date && String(lease.registration_date).trim() && lease.registration_document_url && String(lease.registration_document_url).trim());
             const hasExe = !!(lease.agreement_date && String(lease.agreement_date).trim() && lease.agreement_document_url && String(lease.agreement_document_url).trim());
             const hasLoi = !!(lease.loi_date && String(lease.loi_date).trim() && lease.loi_document_url && String(lease.loi_document_url).trim());
-            
+
             let dateToUse = lease.created_at || lease.lease_start;
             if (hasReg) dateToUse = lease.registration_date;
             else if (hasExe) dateToUse = lease.agreement_date;
@@ -392,10 +406,10 @@ const EchoDashboard = () => {
               const key = d.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
               if (milestoneMonthData[key]) {
                 const area = parseFloat(lease.chargeable_area || lease.units?.chargeable_area || lease.area_leased || lease.sub_lease_area_sqft || 0);
-                
+
                 milestoneMonthData[key].units += 1;
                 milestoneMonthData[key].area += area;
-                
+
                 if (hasReg) {
                   milestoneMonthData[key].registeredUnits += 1;
                   milestoneMonthData[key].registeredArea += area;
@@ -410,10 +424,21 @@ const EchoDashboard = () => {
             }
           });
 
+          // Build final chart data: use milestone data if available, else fallback from counts
+          const milestoneChartArray = Object.values(milestoneMonthData);
+          const chartHasVisibleBars = milestoneChartArray.some(d =>
+            d.loiUnits > 0 || d.executedUnits > 0 || d.registeredUnits > 0
+          );
+          const finalChartData = chartHasVisibleBars
+            ? milestoneChartArray
+            : (loiCount + executedCount + registeredCount > 0)
+              ? buildFallbackChartData(loiCount, executedCount, registeredCount)
+              : milestoneChartArray;
+
           setLeasingStats({
             newLeases: leases.length,
             areaLeased: leases.reduce((sum, l) => sum + parseFloat(l.chargeable_area || l.units?.chargeable_area || l.area_leased || l.sub_lease_area_sqft || 0), 0),
-            chartData: Object.values(milestoneMonthData),
+            chartData: finalChartData,
             loiCount,
             executedCount,
             registeredCount
@@ -474,13 +499,23 @@ const EchoDashboard = () => {
           });
           setRentComposition({ fixed: fixedTotal, mg: mgTotal, revenueShare: revShareTotal, fixedUnits, mgUnits, revShareUnits });
 
-          // Recalculate leasing counts
-          const cnt = { registered: 0, executed: active.length, loi: 0 };
-          active.forEach(l => {
-            if (l.registration_date && String(l.registration_date).trim()) cnt.registered += 1;
-            if (l.loi_date && !l.registration_date && !l.agreement_date) cnt.loi += 1;
+          // Recalculate leasing milestone counts from ALL leases
+          const focusCounts = { registered: 0, executed: 0, loi: 0 };
+          leases.forEach(l => {
+            const hasReg = !!(l.registration_date && String(l.registration_date).trim());
+            const hasExe = !!(l.agreement_date && String(l.agreement_date).trim());
+            const hasLoi = !!(l.loi_date && String(l.loi_date).trim());
+            if (hasReg) focusCounts.registered += 1;
+            else if (hasExe) focusCounts.executed += 1;
+            else if (hasLoi) focusCounts.loi += 1;
           });
-          setLeasingStats(prev => ({ ...prev, executedCount: cnt.executed, registeredCount: cnt.registered, loiCount: cnt.loi }));
+          setLeasingStats(prev => ({ ...prev,
+            newLeases: leases.length,
+            areaLeased: leases.reduce((sum, l) => sum + parseFloat(l.chargeable_area || l.units?.chargeable_area || l.area_leased || 0), 0),
+            executedCount: focusCounts.executed,
+            registeredCount: focusCounts.registered,
+            loiCount: focusCounts.loi
+          }));
 
           // Recalculate zoning
           const zoningMap = {};
@@ -494,6 +529,18 @@ const EchoDashboard = () => {
             }
           });
           setZoningData(Object.values(zoningMap).filter(z => z.plan > 0));
+
+          // Re-fetch parties so Brand Performance, Expiry, Lock-in, and Escalations update in real-time
+          try {
+            const partiesResF = await partyAPI.getAllParties({ type: 'Company' });
+            const partiesListF = Array.isArray(partiesResF.data) ? partiesResF.data : (partiesResF.data?.data || []);
+            setAllParties(partiesListF);
+            const allPartiesResF = await partyAPI.getAllParties();
+            const allPartiesListF = Array.isArray(allPartiesResF.data) ? allPartiesResF.data : (allPartiesResF.data?.data || []);
+            const pMapF = {};
+            allPartiesListF.forEach(p => { pMapF[p.id] = p; });
+            setAllPartiesMap(pMapF);
+          } catch (e) { console.error('Focus parties refresh error:', e); }
         } catch (err) { console.error('Focus refresh error:', err); }
       };
       fetchData();
@@ -884,9 +931,13 @@ const EchoDashboard = () => {
         </div>
 
         {/* Ownership (narrower, left) + Zoning Chart (wider, right) */}
-        <div style={{ display: 'grid', gridTemplateColumns: '0.85fr 2fr', gap: '24px', alignItems: 'start' }}>
-          <OwnershipSection units={allUnits} leases={allLeases} loading={loading} />
-          <ZoningExecution zoningData={zoningData} loading={loading} />
+        <div style={{ display: 'grid', gridTemplateColumns: '0.85fr 2fr', gap: '24px', alignItems: 'start', minWidth: 0, overflow: 'hidden' }}>
+          <div style={{ minWidth: 0, overflow: 'hidden' }}>
+            <OwnershipSection units={allUnits} leases={allLeases} loading={loading} />
+          </div>
+          <div style={{ minWidth: 0, overflow: 'hidden' }}>
+            <ZoningExecution zoningData={zoningData} loading={loading} />
+          </div>
         </div>
       </div>
     </div>

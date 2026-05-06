@@ -8,6 +8,8 @@ import usePermissions from '../../hooks/usePermissions';
 const OwnershipMapping = () => {
     const [projects, setProjects] = useState([]);
     const [units, setUnits] = useState([]);
+    const [availableUnits, setAvailableUnits] = useState([]);
+    const [soldAssignedUnits, setSoldAssignedUnits] = useState([]);
     const [selectedProject, setSelectedProject] = useState('');
     const [selectedUnit, setSelectedUnit] = useState('');
     const [unitOwners, setUnitOwners] = useState([]);
@@ -33,6 +35,8 @@ const OwnershipMapping = () => {
             fetchUnits(selectedProject);
         } else {
             setUnits([]);
+            setAvailableUnits([]);
+            setSoldAssignedUnits([]);
             setSelectedUnit('');
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -100,20 +104,29 @@ const OwnershipMapping = () => {
 
     const fetchUnits = async (projectId) => {
         try {
-            // Pass excludeAssigned=true to only get units without ownership
-            const res = await unitAPI.getUnitsByProject(projectId, true);
+            const res = await unitAPI.getUnitsByProject(projectId, false);
             const data = Array.isArray(res.data) ? res.data : (res.data?.data || []);
-            
-            // Backend now handles filtering, but we still filter sold units as backup
-            // AND keep the currently selected unit so editing still works
-            const filteredUnits = data.filter(u => {
-                if (selectedUnit && Number(u.id) === Number(selectedUnit)) return true;
+
+            const available = [];
+            const soldAssigned = [];
+
+            data.forEach(u => {
                 const isSold = u.status && String(u.status).toLowerCase() === 'sold';
-                // has_ownership is now returned by backend
-                const hasOwnership = u.has_ownership === true;
-                return !isSold && !hasOwnership;
+                const hasOwnershipFlag = u.has_ownership === true;
+                const isFullyAssigned = u.is_full === true || u.is_full === 1;
+                const hasOwnerName = u.owner_name && u.owner_name !== 'N/A';
+                const isAssigned = hasOwnershipFlag || isFullyAssigned || hasOwnerName;
+
+                if (isSold || isAssigned) {
+                    soldAssigned.push(u);
+                } else {
+                    available.push(u);
+                }
             });
-            setUnits(filteredUnits);
+
+            setUnits(data); // keep full list for lookups
+            setAvailableUnits(available);
+            setSoldAssignedUnits(soldAssigned);
         } catch (error) { console.error(error); }
     };
 
@@ -338,12 +351,28 @@ const OwnershipMapping = () => {
                             <label>Select Unit</label>
                             <select value={selectedUnit} onChange={(e) => setSelectedUnit(e.target.value)} disabled={!selectedProject}>
                                 <option value="">-- Choose Unit --</option>
-                                {units.map(u => (
+                                {availableUnits.map(u => (
                                     <option key={u.id} value={u.id}>
-                                        Unit {u.unit_number} (Available {100 - (u.total_share || 0)}%)
+                                        Unit {u.unit_number} — Available ({100 - (u.total_share || 0)}% free)
                                     </option>
                                 ))}
+                                {soldAssignedUnits.length > 0 && (
+                                    <optgroup label="── Sold / Assigned (Re-assign Ownership) ──">
+                                        {soldAssignedUnits.map(u => (
+                                            <option key={u.id} value={u.id}>
+                                                Unit {u.unit_number}
+                                                {String(u.status || '').toLowerCase() === 'sold' ? ' [SOLD]' : ' [ASSIGNED]'}
+                                                {u.owner_name && u.owner_name !== 'N/A' ? ` — ${u.owner_name}` : ''}
+                                            </option>
+                                        ))}
+                                    </optgroup>
+                                )}
                             </select>
+                            {selectedUnit && soldAssignedUnits.some(u => Number(u.id) === Number(selectedUnit)) && (
+                                <p style={{ fontSize: '12px', color: '#f59e0b', marginTop: '6px', fontWeight: 500 }}>
+                                    ⚠ This unit is already sold/assigned. Remove the current owner below to re-assign.
+                                </p>
+                            )}
                         </div>
                     </div>
 
@@ -351,7 +380,7 @@ const OwnershipMapping = () => {
                         {!selectedUnit ? (
                             <div className="no-unit-selected">
                                 <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg>
-                                <p>Select an Available Unit to configure ownership details</p>
+                                <p>Select an Available Unit to assign ownership, or choose a Sold/Assigned Unit from the bottom of the list to re-assign its owner</p>
                             </div>
                         ) : (
                             <>
@@ -546,9 +575,9 @@ const OwnershipMapping = () => {
                         unitId={selectedUnit}
                         onAssign={() => {
                             setIsAssignModalOpen(false);
+                            // Keep the unit selected so documents can be uploaded immediately
                             fetchOwnerships(selectedUnit);
                             fetchUnits(selectedProject); // refresh unit list
-                            // keeping selected unit so we can manage its documents immediately
                         }}
                     />
                 )}

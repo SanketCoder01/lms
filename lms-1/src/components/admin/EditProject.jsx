@@ -41,9 +41,14 @@ const EditProject = () => {
       try {
         const response = await filterAPI.getFilterOptions("project_type");
         const apiTypes = response.data.data.map(t => t.option_value);
-        setTypes(apiTypes);
+        // Merge API types with defaults — never leave the list empty
+        setTypes(prev => {
+          const merged = [...new Set([...prev, ...apiTypes])];
+          return merged.length > 0 ? merged : prev;
+        });
       } catch (error) {
         console.error("Error fetching types:", error);
+        // Keep default types on error — don't overwrite with empty
       }
     };
     fetchInitialData();
@@ -186,6 +191,10 @@ const EditProject = () => {
                     <label>Project Type</label>
                     <select name="project_type" value={formData.project_type} onChange={handleChange}>
                       <option value="">Select Type</option>
+                      {/* Always include the current value even if not in the API list */}
+                      {formData.project_type && !types.includes(formData.project_type) && (
+                        <option value={formData.project_type}>{formData.project_type}</option>
+                      )}
                       {types.map(t => (
                         <option key={t} value={t}>{t}</option>
                       ))}

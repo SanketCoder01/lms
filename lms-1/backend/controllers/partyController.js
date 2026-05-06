@@ -4,6 +4,9 @@ const { handleDbError } = require('../utils/errorHandler');
 // Get all parties
 exports.getAllParties = async (req, res) => {
     try {
+        // PRIVACY: Never serve data without a valid company session
+        if (req.isUnauthenticated) return res.json([]);
+
         let query = supabase.from('parties').select('*').order('created_at', { ascending: false });
 
         // Multi-tenant: company users only see their own parties

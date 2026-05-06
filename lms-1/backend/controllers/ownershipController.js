@@ -3,11 +3,19 @@ const supabase = require('../config/db');
 // Assign parties as owners to a unit (Joint Owners)
 exports.getAllOwnerships = async (req, res) => {
     try {
+        // PRIVACY: Never serve data without a valid company session
+        if (req.isUnauthenticated) return res.json([]);
+
         const { search } = req.query;
         let query = supabase.from('unit_ownerships')
             .select('*, units!inner(unit_number, company_id, project_id, projects(project_name)), parties(first_name, last_name, company_name)')
             .eq('ownership_status', 'Active')
             .order('created_at', { ascending: false });
+
+        // PRIVACY: Filter at DB level by company_id through the inner-joined units table
+        if (req.companyId) {
+            query = query.eq('units.company_id', req.companyId);
+        }
 
         // Project Segregation
         if (req.isRestrictedToProjects) {
@@ -22,11 +30,7 @@ exports.getAllOwnerships = async (req, res) => {
         const { data, error } = await query;
         if (error) throw error;
 
-        // Multi-tenant: filter by company_id through units table
         let filtered = data || [];
-        if (req.companyId) {
-            filtered = filtered.filter(row => row.units?.company_id === req.companyId);
-        }
         if (search) {
             const s = search.toLowerCase();
             filtered = filtered.filter(row =>
@@ -44,6 +48,7 @@ exports.getAllOwnerships = async (req, res) => {
         res.status(500).json({ message: 'Server Error', error: err.message });
     }
 };
+
 
 // Assign parties as owners to a unit (Joint Owners)
 exports.assignOwner = async (req, res) => {
@@ -94,6 +99,21 @@ exports.assignOwner = async (req, res) => {
         const { error: iErr } = await supabase.from('unit_ownerships').insert(inserts);
         if (iErr) throw iErr;
 
+        // Sync with units table to reflect globally
+        try {
+            const { data: partyData } = await supabase.from('parties').select('company_name, first_name, last_name').eq('id', owners[0].party_id).single();
+            let ownerName = partyData ? (partyData.company_name || `${partyData.first_name || ''} ${partyData.last_name || ''}`.trim()) : 'Unknown';
+            if (owners.length > 1) ownerName += ' & Others';
+
+            await supabase.from('units').update({
+                status: 'sold',
+                has_ownership: true,
+                owner_name: ownerName
+            }).eq('id', unit_id);
+        } catch (syncErr) {
+            console.error("Failed to sync unit status:", syncErr);
+        }
+
         res.status(201).json({ message: 'Owners assigned successfully' });
     } catch (err) {
         console.error("assignOwner Error:", err);
@@ -124,6 +144,31 @@ exports.removeOwner = async (req, res) => {
 
         if (error) throw error;
 
+        // Sync with units table to reflect globally
+        try {
+            const { data: remainingOwners } = await supabase.from('unit_ownerships')
+                .select('party_id')
+                .eq('unit_id', unit_id)
+                .eq('ownership_status', 'Active');
+
+            if (!remainingOwners || remainingOwners.length === 0) {
+                // No owners left, revert to available
+                await supabase.from('units').update({
+                    status: 'available',
+                    has_ownership: false,
+                    owner_name: null
+                }).eq('id', unit_id);
+            } else {
+                // Update owner_name with remaining owners
+                const { data: partyData } = await supabase.from('parties').select('company_name, first_name, last_name').eq('id', remainingOwners[0].party_id).single();
+                let ownerName = partyData ? (partyData.company_name || `${partyData.first_name || ''} ${partyData.last_name || ''}`.trim()) : 'Unknown';
+                if (remainingOwners.length > 1) ownerName += ' & Others';
+                await supabase.from('units').update({ owner_name: ownerName }).eq('id', unit_id);
+            }
+        } catch (syncErr) {
+            console.error("Failed to sync unit status on removal:", syncErr);
+        }
+
         res.json({ message: 'Owner removed/updated successfully' });
     } catch (err) {
         console.error("removeOwner Error:", err);
@@ -134,6 +179,15 @@ exports.removeOwner = async (req, res) => {
 // Get owners for a unit
 exports.getOwnersByUnit = async (req, res) => {
     try {
+        // Multi-tenant: silently hide units from other companies
+        if (req.companyId && req.params.unitId) {
+            const { data: unitCheck } = await supabase.from('units')
+                .select('company_id').eq('id', req.params.unitId).single();
+            if (!unitCheck || unitCheck.company_id !== req.companyId) {
+                return res.json([]); // Return empty array silently
+            }
+        }
+
         const { data, error } = await supabase.from('unit_ownerships')
             .select('*, parties(first_name, last_name, company_name, type)')
             .eq('unit_id', req.params.unitId)
@@ -160,6 +214,15 @@ exports.getOwnersByUnit = async (req, res) => {
 // Get units owned by a party
 exports.getUnitsByParty = async (req, res) => {
     try {
+        // Multi-tenant: silently hide parties from other companies
+        if (req.companyId && req.params.partyId) {
+            const { data: partyCheck } = await supabase.from('parties')
+                .select('company_id').eq('id', req.params.partyId).single();
+            if (!partyCheck || partyCheck.company_id !== req.companyId) {
+                return res.json([]); // Return empty array silently
+            }
+        }
+
         const { data, error } = await supabase.from('unit_ownerships')
             .select('*, units(unit_number, project_id, projects(project_name))')
             .eq('party_id', req.params.partyId);

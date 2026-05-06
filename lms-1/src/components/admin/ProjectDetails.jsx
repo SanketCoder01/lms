@@ -13,6 +13,7 @@ const ProjectDetails = () => {
     const [owners, setOwners] = useState([]);
     const [loading, setLoading] = useState(true);
     const [imageError, setImageError] = useState(false);
+    const [deleteUnitMsg, setDeleteUnitMsg] = useState('');
     const { can, isProjectUser, hasProjectAccess } = usePermissions();
 
     /* ================= FETCH DATA ================= */
@@ -43,6 +44,21 @@ const ProjectDetails = () => {
             fetchProjectDetails();
         }
     }, [id]);
+
+    // Handler to delete a unit from the project units tab
+    const handleDeleteUnit = async (unitId, unitNumber) => {
+        if (!window.confirm(`Are you sure you want to delete unit "${unitNumber}"? This action cannot be undone.`)) return;
+        try {
+            await unitAPI.deleteUnit(unitId);
+            setUnits(prev => prev.filter(u => u.id !== unitId));
+            setDeleteUnitMsg(`Unit "${unitNumber}" deleted successfully.`);
+            setTimeout(() => setDeleteUnitMsg(''), 3500);
+        } catch (err) {
+            const msg = err.response?.data?.message || 'Failed to delete unit.';
+            setDeleteUnitMsg(`Error: ${msg}`);
+            setTimeout(() => setDeleteUnitMsg(''), 4000);
+        }
+    };
 
     if (loading) {
         return (
@@ -137,6 +153,17 @@ const ProjectDetails = () => {
 
     const renderUnitsTab = () => (
         <div className="tab-content-table">
+            {deleteUnitMsg && (
+                <div style={{
+                    marginBottom: '12px', padding: '10px 14px', borderRadius: '6px',
+                    background: deleteUnitMsg.startsWith('Error') ? '#fef2f2' : '#f0fdf4',
+                    color: deleteUnitMsg.startsWith('Error') ? '#dc2626' : '#166534',
+                    border: `1px solid ${deleteUnitMsg.startsWith('Error') ? '#fca5a5' : '#86efac'}`,
+                    fontSize: '0.875rem', fontWeight: '500'
+                }}>
+                    {deleteUnitMsg}
+                </div>
+            )}
             <div className="table-actions-bar">
                 <div className="search-box">
                     <input type="text" placeholder="Search units..." />
@@ -167,8 +194,23 @@ const ProjectDetails = () => {
                                 <td>{unit.chargeable_area}</td>
                                 <td><span className={`status-badge ${unit.status}`}>{unit.status}</span></td>
                                 <td>
-                                    <Link to={`/admin/view-unit/${unit.id}`} className="action-link" style={{ marginRight: '10px' }}>View</Link>
-                                    <Link to={`/admin/edit-unit/${unit.id}`} className="action-link">Edit</Link>
+                                    <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+                                        <Link to={`/admin/view-unit/${unit.id}`} className="action-link" title="View Unit"
+                                            style={{ padding: '4px 10px', borderRadius: '4px', background: '#eff6ff', color: '#2e66ff', textDecoration: 'none', fontSize: '0.8rem', fontWeight: '600', border: '1px solid #bfdbfe' }}
+                                        >View</Link>
+                                        {can('edit', 'projects') && (
+                                            <Link to={`/admin/edit-unit/${unit.id}`} className="action-link" title="Edit Unit"
+                                                style={{ padding: '4px 10px', borderRadius: '4px', background: '#f0fdf4', color: '#16a34a', textDecoration: 'none', fontSize: '0.8rem', fontWeight: '600', border: '1px solid #86efac' }}
+                                            >Edit</Link>
+                                        )}
+                                        {can('edit', 'projects') && (
+                                            <button
+                                                onClick={() => handleDeleteUnit(unit.id, unit.unit_number)}
+                                                title="Delete Unit"
+                                                style={{ padding: '4px 10px', borderRadius: '4px', background: '#fef2f2', color: '#dc2626', fontSize: '0.8rem', fontWeight: '600', border: '1px solid #fca5a5', cursor: 'pointer' }}
+                                            >Delete</button>
+                                        )}
+                                    </div>
                                 </td>
                             </tr>
                         ))
@@ -185,19 +227,31 @@ const ProjectDetails = () => {
                     <tr>
                         <th>Company Name</th>
                         <th>Contact Person</th>
+                        <th>Phone</th>
                         <th>Email</th>
                         <th>Status</th>
                     </tr>
                 </thead>
                 <tbody>
                     {tenants.length === 0 ? (
-                        <tr><td colSpan="4">No tenants found for this project.</td></tr>
+                        <tr><td colSpan="5">No tenants found for this project.</td></tr>
                     ) : (
                         tenants.map(tenant => (
                             <tr key={tenant.id}>
-                                <td>{tenant.company_name}</td>
-                                <td>{tenant.contact_person_name || 'N/A'}</td>
-                                <td>{tenant.contact_person_email}</td>
+                                <td style={{ fontWeight: '600' }}>{tenant.company_name || '—'}</td>
+                                <td>{tenant.contact_person_name || (tenant.first_name ? `${tenant.first_name} ${tenant.last_name || ''}`.trim() : '—')}</td>
+                                <td>
+                                    {tenant.contact_person_phone
+                                        ? <a href={`tel:${tenant.contact_person_phone}`} style={{ color: '#2e66ff', textDecoration: 'none' }}>{tenant.contact_person_phone}</a>
+                                        : <span style={{ color: '#94a3b8' }}>—</span>
+                                    }
+                                </td>
+                                <td>
+                                    {tenant.contact_person_email
+                                        ? <a href={`mailto:${tenant.contact_person_email}`} style={{ color: '#2e66ff', textDecoration: 'none' }}>{tenant.contact_person_email}</a>
+                                        : <span style={{ color: '#94a3b8' }}>—</span>
+                                    }
+                                </td>
                                 <td><span className={`status-badge ${tenant.status}`}>{tenant.status}</span></td>
                             </tr>
                         ))
@@ -329,7 +383,7 @@ const ProjectDetails = () => {
                         Tenants ({tenants.length}) {activeTab === 'tenants' ? '▲' : '▼'}
                     </button>
                     <button className={`accordion-nav-btn ${activeTab === 'owner' ? 'active' : ''}`} onClick={() => setActiveTab(activeTab === 'owner' ? '' : 'owner')}>
-                        Owner {activeTab === 'owner' ? '▲' : '▼'}
+                        Owner ({owners.length}) {activeTab === 'owner' ? '▲' : '▼'}
                     </button>
                 </div>
 

@@ -33,6 +33,7 @@ const EditUnit = () => {
 
     const [project, setProject] = useState(null);
     const [rentPerSqft, setRentPerSqft] = useState('');
+    const [isRentManual, setIsRentManual] = useState(false);
     const [unitConditions, setUnitConditions] = useState([
         { value: 'fully_fitted', label: 'Fully Fitted' },
         { value: 'semi_fitted', label: 'Semi Fitted' },
@@ -132,7 +133,7 @@ const EditUnit = () => {
     }, [formData.project_id]);
 
     useEffect(() => {
-        if (!project || !rentPerSqft) return;
+        if (!project || !rentPerSqft || isRentManual) return;
 
         const calcType = project.calculation_type || 'Chargeable Area';
         let area = 0;
@@ -146,7 +147,7 @@ const EditUnit = () => {
         }
 
         const rate = parseFloat(rentPerSqft);
-        const total = area * rate;
+        const total = Math.round(area * rate);
 
         if (rate > 0) {
             setFormData(prev => ({
@@ -154,7 +155,8 @@ const EditUnit = () => {
                 projected_rent: total > 0 ? total.toString() : ''
             }));
         }
-    }, [formData.chargeable_area, formData.covered_area, formData.carpet_area, rentPerSqft, project]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [formData.chargeable_area, formData.covered_area, formData.carpet_area, rentPerSqft, project, isRentManual]);
 
     const handleChange = (e) => {
         setFormData({
@@ -258,7 +260,11 @@ const EditUnit = () => {
                                                 onChange={handleChange}
                                             >
                                                 <option value="vacant">Vacant</option>
-                                                <option value="occupied">Leased</option>
+                                                <option value="occupied">Occupied</option>
+                                                <option value="leased">Leased</option>
+                                                <option value="sold">Sold</option>
+                                                <option value="under_renovation">Under Renovation</option>
+                                                <option value="reserved">Reserved</option>
                                             </select>
                                         </div>
                                     </div>
@@ -320,13 +326,22 @@ const EditUnit = () => {
                             <section className="form-section">
                                 <h3>Rent & Details</h3>
                                 <div className="form-row">
-                                    <label>Projected Rent (₹)</label>
+                                    <label style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                        <span>Projected Rent (₹)</span>
+                                        {isRentManual && (
+                                            <button
+                                                type="button"
+                                                onClick={() => setIsRentManual(false)}
+                                                style={{ fontSize: '0.75rem', color: '#2e66ff', background: 'none', border: 'none', cursor: 'pointer', padding: 0, textDecoration: 'underline' }}
+                                            >↺ Auto-calculate</button>
+                                        )}
+                                    </label>
                                     <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                                         <div className="input-with-suffix" style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
                                             <input
                                                 type="number"
                                                 value={rentPerSqft}
-                                                onChange={(e) => setRentPerSqft(e.target.value)}
+                                                onChange={(e) => { setIsRentManual(false); setRentPerSqft(e.target.value); }}
                                                 placeholder="Proj. Rent/sqft"
                                                 style={{ width: '100px' }}
                                             />
@@ -335,13 +350,22 @@ const EditUnit = () => {
                                             </span>
                                         </div>
                                         <input
-                                            type="text"
+                                            type="number"
                                             name="projected_rent"
                                             value={formData.projected_rent}
-                                            readOnly
-                                            style={{ backgroundColor: '#f9fafb' }}
-                                            placeholder="Total Rent"
+                                            onChange={(e) => {
+                                                setIsRentManual(true);
+                                                setFormData(prev => ({ ...prev, projected_rent: e.target.value }));
+                                            }}
+                                            style={{ backgroundColor: isRentManual ? '#ffffff' : '#f9fafb' }}
+                                            placeholder="Total Rent (edit or auto-calculate above)"
+                                            title={isRentManual ? 'Manual override — click ↺ Auto-calculate to reset' : 'Auto-calculated from rate × area'}
                                         />
+                                        {!isRentManual && rentPerSqft && (
+                                            <small style={{ color: '#64748b', fontSize: '0.75rem' }}>
+                                                = Area × ₹{rentPerSqft}/sqft (rounded to nearest ₹)
+                                            </small>
+                                        )}
                                     </div>
                                 </div>
                                 <div className="form-group">

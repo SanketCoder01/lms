@@ -12,6 +12,8 @@ const FilterOptionsMaster = () => {
     const [loading, setLoading] = useState(true);
     const [editingId, setEditingId] = useState(null);
     const [editValue, setEditValue] = useState('');
+    const [isGlobalFallback, setIsGlobalFallback] = useState(false); // true = showing shared defaults
+    const [adoptingGlobal, setAdoptingGlobal] = useState(false);
     const { can } = usePermissions();
 
     const categories = [
@@ -36,30 +38,59 @@ const FilterOptionsMaster = () => {
     const fetchOptions = async () => {
         try {
             setLoading(true);
+            setIsGlobalFallback(false);
             const res = await filterAPI.getFilterOptions(selectedCategory);
             let existingOptions = res.data.data || [];
 
-            // Auto-seed the 3 required defaults for Owner Grouping if they don't exist
+            // Detect if all returned rows are global (company_id = null) — backend fallback
+            const allGlobal = existingOptions.length > 0 && existingOptions.every(o => !o.company_id);
+            setIsGlobalFallback(allGlobal);
+
+            // Auto-seed Owner Grouping defaults as company-owned records (so they never disappear)
             if (selectedCategory === 'Owner Grouping') {
                 const DEFAULTS = ['Developer Unit', 'Close Group', 'External Investors'];
-                const existingValues = existingOptions.map(o => o.option_value.toLowerCase());
+                const companyOwned = existingOptions.filter(o => o.company_id);
+                const ownedValues = companyOwned.map(o => o.option_value.toLowerCase());
+                let seeded = false;
                 for (const def of DEFAULTS) {
-                    if (!existingValues.includes(def.toLowerCase())) {
+                    if (!ownedValues.includes(def.toLowerCase())) {
                         try {
                             await filterAPI.addFilterOption({ category: 'Owner Grouping', option_value: def });
+                            seeded = true;
                         } catch (_) { /* already exists — ignore */ }
                     }
                 }
-                // Re-fetch after seeding
-                const refreshed = await filterAPI.getFilterOptions(selectedCategory);
-                existingOptions = refreshed.data.data || [];
+                if (seeded || allGlobal) {
+                    // Re-fetch so we show company-owned records
+                    const refreshed = await filterAPI.getFilterOptions(selectedCategory);
+                    existingOptions = refreshed.data.data || [];
+                    setIsGlobalFallback(false); // now has company-owned options
+                }
             }
 
             setOptions(existingOptions);
         } catch (error) {
-            console.error("Failed to fetch filter options", error);
+            console.error('Failed to fetch filter options', error);
         } finally {
             setLoading(false);
+        }
+    };
+
+    // One-click: copy all current global options as company-owned records
+    const handleAdoptGlobal = async () => {
+        if (!options.length) return;
+        setAdoptingGlobal(true);
+        try {
+            for (const opt of options) {
+                try {
+                    await filterAPI.addFilterOption({ category: selectedCategory, option_value: opt.option_value });
+                } catch (_) { /* duplicate — skip */ }
+            }
+            fetchOptions(); // re-fetch to show company-owned copies
+        } catch (e) {
+            alert('Failed to adopt options: ' + e.message);
+        } finally {
+            setAdoptingGlobal(false);
         }
     };
 
@@ -159,6 +190,36 @@ const FilterOptionsMaster = () => {
                             </p>
                         )}
                     </div>
+
+                    {/* Global-fallback warning banner */}
+                    {isGlobalFallback && options.length > 0 && (
+                        <div style={{
+                            display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap',
+                            gap: '10px', padding: '12px 16px', marginBottom: '16px',
+                            background: '#fffbeb', border: '1px solid #fcd34d', borderRadius: '8px'
+                        }}>
+                            <div>
+                                <strong style={{ color: '#92400e', fontSize: '13px' }}>⚠ Showing shared default options</strong>
+                                <p style={{ color: '#78350f', fontSize: '12px', margin: '2px 0 0' }}>
+                                    These are system-level defaults visible across accounts. Click "Make My Own Copy" to
+                                    save them privately so only your company sees and manages them.
+                                </p>
+                            </div>
+                            {can('edit') && (
+                                <button
+                                    onClick={handleAdoptGlobal}
+                                    disabled={adoptingGlobal}
+                                    style={{
+                                        padding: '8px 16px', borderRadius: '6px', border: 'none', whiteSpace: 'nowrap',
+                                        background: adoptingGlobal ? '#d1d5db' : '#2E66FF', color: '#fff',
+                                        fontWeight: '600', fontSize: '13px', cursor: adoptingGlobal ? 'wait' : 'pointer'
+                                    }}
+                                >
+                                    {adoptingGlobal ? 'Copying...' : '📋 Make My Own Copy'}
+                                </button>
+                            )}
+                        </div>
+                    )}
 
                     {/* Add New Option Form */}
                     <form onSubmit={handleAdd} style={{ marginBottom: '20px', display: 'flex', gap: '10px', alignItems: 'center' }}>

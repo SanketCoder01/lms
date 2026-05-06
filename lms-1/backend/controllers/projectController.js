@@ -95,6 +95,9 @@ const addProject = async (req, res) => {
 /* ================= GET ALL PROJECTS ================= */
 const getProjects = async (req, res) => {
   try {
+    // PRIVACY: Never serve data without a valid company session
+    if (req.isUnauthenticated) return res.json({ data: [] });
+
     const { search, location, type, status } = req.query;
 
     let query = supabase.from('projects').select('*');
@@ -127,21 +130,43 @@ const getProjects = async (req, res) => {
       );
     }
 
-    // Fetch units to add total_units properly
-    let unitsQ = supabase.from('units').select('project_id');
+    // Fetch units (with status) to compute total_units and occupied_units
+    let unitsQ = supabase.from('units').select('project_id, status');
     if (req.companyId) unitsQ = unitsQ.eq('company_id', req.companyId);
     const { data: units } = await unitsQ;
 
     const unitCounts = {};
+    const occupiedCounts = {};
     if (units) {
       units.forEach(u => {
         unitCounts[u.project_id] = (unitCounts[u.project_id] || 0) + 1;
+        // Count leased/occupied/sold as occupied — matches dashboard logic
+        const s = (u.status || '').toLowerCase();
+        if (s === 'leased' || s === 'occupied' || s === 'sold') {
+          occupiedCounts[u.project_id] = (occupiedCounts[u.project_id] || 0) + 1;
+        }
+      });
+    }
+
+    // Fetch actual floor count from project_floors table
+    const projectIds = filteredProjects.map(p => p.id);
+    const floorCounts = {};
+    if (projectIds.length > 0) {
+      const { data: floorRows } = await supabase
+        .from('project_floors')
+        .select('project_id')
+        .in('project_id', projectIds);
+      (floorRows || []).forEach(f => {
+        floorCounts[f.project_id] = (floorCounts[f.project_id] || 0) + 1;
       });
     }
 
     const projectsWithCounts = filteredProjects.map(p => ({
       ...p,
-      total_units: unitCounts[p.id] || 0
+      total_units: unitCounts[p.id] || 0,
+      occupied_units: occupiedCounts[p.id] || 0,
+      // actual_floor_count = real floors added via Unit Structure; fall back to manual total_floors
+      actual_floor_count: floorCounts[p.id] !== undefined ? floorCounts[p.id] : (p.total_floors || 0)
     })).sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
 
     res.json({ data: projectsWithCounts });
@@ -186,13 +211,23 @@ const getProjectById = async (req, res) => {
     const { data: units } = await supabase.from('units').select('id, status, chargeable_area').eq('project_id', id);
     const unitIds = (units || []).map(u => u.id);
 
-    // 3. Fetch active ownerships
-    const { data: ownerships } = await supabase.from('unit_ownerships').select('unit_id, party_id').in('unit_id', unitIds).eq('ownership_status', 'Active');
+    // 3. Fetch actual floors from project_floors table
+    const { data: projectFloors } = await supabase
+      .from('project_floors')
+      .select('id, floor_name')
+      .eq('project_id', id)
+      .order('sort_order', { ascending: true });
+    const actualFloorCount = projectFloors ? projectFloors.length : 0;
 
-    // 4. Fetch active leases
-    const { data: leases } = await supabase.from('leases').select('party_tenant_id').eq('project_id', id).eq('status', 'active');
+    // 4. Fetch active ownerships
+    const { data: ownerships } = unitIds.length > 0
+      ? await supabase.from('unit_ownerships').select('unit_id, party_id').in('unit_id', unitIds).eq('ownership_status', 'Active')
+      : { data: [] };
 
-    // Calculate aggregations (Solves Issue 11)
+    // 5. Fetch all leases for this project (any status) for tenant list
+    const { data: leases } = await supabase.from('leases').select('party_tenant_id, status').eq('project_id', id);
+
+    // Calculate aggregations — standardized to match dashboard (leased|occupied|sold)
     const activeOwnershipUnitIds = new Set((ownerships || []).map(o => o.unit_id));
 
     let occupiedCount = 0;
@@ -201,14 +236,19 @@ const getProjectById = async (req, res) => {
     let leasedArea = 0;
 
     (units || []).forEach(u => {
-      if (u.status === 'occupied') { occupiedCount++; leasedArea += parseFloat(u.chargeable_area || 0); }
-      if (u.status === 'vacant') { vacantCount++; }
+      const s = (u.status || '').toLowerCase();
+      const isLeased = s === 'leased' || s === 'occupied' || s === 'sold';
+      if (isLeased) { occupiedCount++; leasedArea += parseFloat(u.chargeable_area || 0); }
+      if (s === 'vacant' || s === 'available') { vacantCount++; }
       totalArea += parseFloat(u.chargeable_area || 0);
     });
 
     const enrichedProject = {
       ...project,
-      actual_total_floors: project.total_floors,
+      // Use actual floor count from project_floors table; fall back to manual entry
+      actual_total_floors: actualFloorCount > 0 ? actualFloorCount : (project.total_floors || 0),
+      total_floors: actualFloorCount > 0 ? actualFloorCount : (project.total_floors || 0),
+      floor_names: (projectFloors || []).map(f => f.floor_name),
       total_units_count: units ? units.length : 0,
       units_sold: activeOwnershipUnitIds.size,
       occupied_units: occupiedCount,
@@ -217,19 +257,61 @@ const getProjectById = async (req, res) => {
       leased_area: leasedArea
     };
 
-    // Tenants and Owners lists
-    const tenantIds = [...new Set((leases || []).map(l => l.party_tenant_id))];
-    const ownerIds = [...new Set((ownerships || []).map(o => o.party_id))];
+    // Tenants and Owners lists — use all leases (any status) so tenant names always show
+    const tenantIds = [...new Set((leases || []).map(l => l.party_tenant_id).filter(Boolean))];
+    const ownerIds = [...new Set((ownerships || []).map(o => o.party_id).filter(Boolean))];
 
     let tenantsRows = [];
     if (tenantIds.length > 0) {
-      const { data: tenants } = await supabase.from('parties').select('*').in('id', tenantIds);
-      tenantsRows = tenants || [];
+      const { data: tenants } = await supabase.from('parties').select('id, company_name, first_name, last_name, email, phone, brand_name, status').in('id', tenantIds);
+      tenantsRows = (tenants || []).map(t => ({
+        id: t.id,
+        company_name: t.company_name || `${t.first_name || ''} ${t.last_name || ''}`.trim(),
+        contact_person_name: t.company_name ? `${t.first_name || ''} ${t.last_name || ''}`.trim() : null,
+        contact_person_email: t.email || null,
+        contact_person_phone: t.phone || null,
+        brand_name: t.brand_name || null,
+        status: t.status || 'active'
+      }));
+    }
+
+    // Also fetch tenants from the tenants table assigned to this project's units
+    try {
+      const { data: tuRows } = await supabase
+        .from('tenant_units')
+        .select('tenant_id')
+        .in('unit_id', unitIds);
+
+      const tenantTableIds = [...new Set((tuRows || []).map(r => r.tenant_id))];
+      if (tenantTableIds.length > 0) {
+        const { data: tenantTableRows } = await supabase
+          .from('tenants')
+          .select('id, company_name, contact_person_name, contact_person_email, contact_person_phone, status')
+          .in('id', tenantTableIds);
+
+        (tenantTableRows || []).forEach(t => {
+          // Avoid duplicates by id
+          const alreadyExists = tenantsRows.some(r => r.id === t.id);
+          if (!alreadyExists) {
+            tenantsRows.push({
+              id: t.id,
+              company_name: t.company_name,
+              contact_person_name: t.contact_person_name || null,
+              contact_person_email: t.contact_person_email || null,
+              contact_person_phone: t.contact_person_phone || null,
+              status: t.status || 'active'
+            });
+          }
+        });
+      }
+    } catch (e) {
+      // tenant_units join is optional
+      console.warn('[getProjectById] tenant_units fetch failed:', e.message);
     }
 
     let ownersRows = [];
     if (ownerIds.length > 0) {
-      const { data: owners } = await supabase.from('parties').select('*').in('id', ownerIds);
+      const { data: owners } = await supabase.from('parties').select('id, first_name, last_name, company_name, email, phone, legal_entity_type, type').in('id', ownerIds);
       ownersRows = owners || [];
     }
 
@@ -368,29 +450,58 @@ const getUnitsByProject = async (req, res) => {
     const { id } = req.params;
     const excludeAssigned = req.query.excludeAssigned === 'true';
 
-    // Fetch units with ownership info
-    const { data, error } = await supabase
-      .from('units')
-      .select(`
-        *,
-        unit_ownerships (
-          id, ownership_status, share_percentage, party_id
-        )
-      `)
-      .eq('project_id', id)
-      .order('unit_number', { ascending: true });
+    // PRIVACY: Never serve data without a valid company session
+    if (req.isUnauthenticated) return res.json({ data: [] });
 
+    console.log(`[getUnitsByProject] project=${id}, excludeAssigned=${excludeAssigned}`);
+
+    // PRIVACY: Verify this project belongs to the requesting company before returning its units
+    if (req.companyId) {
+      const { data: projectCheck } = await supabase.from('projects')
+        .select('company_id').eq('id', id).single();
+      if (!projectCheck || projectCheck.company_id !== req.companyId) {
+        return res.json({ data: [] }); // silently return empty — don't reveal existence
+      }
+    }
+
+    // Step 1: Fetch units separately
+    let unitQuery = supabase.from('units').select('*').eq('project_id', id).order('unit_number', { ascending: true });
+    // Also scope units by company_id for defence-in-depth
+    if (req.companyId) unitQuery = unitQuery.eq('company_id', req.companyId);
+
+    const { data: units, error } = await unitQuery;
     if (error) throw error;
 
+    const unitIds = (units || []).map(u => u.id);
+
+    // Step 2: Fetch unit_ownerships separately for these units
+    const ownershipMap = {};
+    if (unitIds.length > 0) {
+      const { data: ownershipsData } = await supabase
+        .from('unit_ownerships')
+        .select('unit_id, ownership_status, share_percentage, party_id')
+        .in('unit_id', unitIds);
+
+      (ownershipsData || []).forEach(o => {
+        if (!ownershipMap[o.unit_id]) ownershipMap[o.unit_id] = [];
+        ownershipMap[o.unit_id].push(o);
+      });
+    }
+
+    console.log(`[getUnitsByProject] Fetched ${units?.length || 0} units`);
+
     // Process units to add ownership summary
-    let processedData = (data || []).map(unit => {
-      const activeOwnerships = (unit.unit_ownerships || []).filter(o => o.ownership_status === 'Active');
+    let processedData = (units || []).map(unit => {
+      const activeOwnerships = (ownershipMap[unit.id] || []).filter(o => o.ownership_status === 'Active');
       const totalShare = activeOwnerships.reduce((sum, o) => sum + Number(o.share_percentage || 0), 0);
       const hasActiveOwnership = activeOwnerships.length > 0;
 
+      if (hasActiveOwnership) {
+        console.log(`[getUnitsByProject] Unit ${unit.unit_number} has_ownership=true, totalShare=${totalShare}`);
+      }
+
       return {
         ...unit,
-        unit_ownerships: undefined, // Remove nested array from response
         has_ownership: hasActiveOwnership,
         total_share: totalShare,
         is_full: totalShare >= 100 || unit.status === 'Sold'
@@ -399,7 +510,9 @@ const getUnitsByProject = async (req, res) => {
 
     // If excludeAssigned is true, filter out units with active ownership
     if (excludeAssigned) {
-      processedData = processedData.filter(u => !u.has_ownership);
+      const beforeCount = processedData.length;
+      processedData = processedData.filter(u => !u.has_ownership && !u.is_full);
+      console.log(`[getUnitsByProject] Filtered: ${beforeCount} → ${processedData.length} units`);
     }
 
     res.json({ data: processedData });

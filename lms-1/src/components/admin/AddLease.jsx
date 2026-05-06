@@ -65,9 +65,9 @@ const AddLease = () => {
         opening_date: '',
         rent_free_start_date: '',
         rent_free_end_date: '',
-        loi_date: '',
-        agreement_date: '',
-        registration_date: '',
+        loi_date: null,
+        agreement_date: null,
+        registration_date: null,
         status: 'draft',
     });
 

@@ -358,28 +358,34 @@ const createLease = async (req, res) => {
         }
 
         // Prevent duplicate main leases with overlapping date ranges for same unit
-        if (payload.lease_type !== 'Subtenant lease') {
+        // PRIVACY: scope to current company only — never let another company's lease block this company
+        // NOTE: If no companyId (super admin token), skip this check — don't let unscoped queries block creation
+        if (payload.lease_type !== 'Subtenant lease' && req.companyId) {
             const { data: ex } = await supabase.from('leases')
                 .select('id, lease_start, lease_end, status')
                 .eq('unit_id', payload.unit_id)
+                .eq('company_id', req.companyId)
                 .neq('lease_type', 'Subtenant lease');
 
             if (ex && ex.length > 0) {
-                // Only check leases that are in an active/live state
-                const activeStatuses = ['active', 'approved', 'executed', 'registered', 'occupied', 'draft'];
-                const activeLeases = ex.filter(l =>
-                    activeStatuses.includes((l.status || '').toLowerCase().trim())
-                );
-
+                // Only block leases that are truly live/active — do NOT include draft or rejected
+                const blockingStatuses = ['active', 'approved', 'executed', 'registered'];
                 const newStart = new Date(payload.lease_start);
                 const newEnd = new Date(payload.lease_end);
-                const hasOverlap = activeLeases.some(existing => {
-                    const existStart = new Date(existing.lease_start);
-                    const existEnd = new Date(existing.lease_end);
-                    // True overlap: new lease starts before existing ends AND ends after existing starts
+
+                const conflicting = ex.find(l => {
+                    if (!blockingStatuses.includes((l.status || '').toLowerCase().trim())) return false;
+                    const existStart = new Date(l.lease_start);
+                    const existEnd = new Date(l.lease_end);
+                    // True overlap: new lease starts before existing ends AND new ends after existing starts
                     return newStart <= existEnd && newEnd >= existStart;
                 });
-                if (hasOverlap) return res.status(400).json({ message: "An active main lease with overlapping dates already exists for this unit. Please check the existing lease dates or use a different unit." });
+
+                if (conflicting) {
+                    return res.status(400).json({
+                        message: `A lease (ID: ${conflicting.id}) with overlapping dates (${conflicting.lease_start} to ${conflicting.lease_end}) already exists for this unit. Please adjust the dates or choose a different unit.`
+                    });
+                }
             }
         }
 
@@ -485,6 +491,9 @@ const createLease = async (req, res) => {
 
 const getAllLeases = async (req, res) => {
     try {
+        // PRIVACY: Never serve data without a valid company session
+        if (req.isUnauthenticated) return res.json([]);
+
         const { status, project_id, location, search, expires_in, upcoming_escalations, lease_type } = req.query;
 
         let query = applyScopes(supabase.from('leases').select(`
@@ -723,6 +732,11 @@ const getLeaseById = async (req, res) => {
 
         if (leaseError || !lease) {
             console.error("Lease not found:", leaseError);
+            return res.status(404).json({ message: 'Lease not found' });
+        }
+
+        // Multi-tenant: silently hide leases from other companies
+        if (req.companyId && lease.company_id && lease.company_id !== req.companyId) {
             return res.status(404).json({ message: 'Lease not found' });
         }
 

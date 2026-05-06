@@ -85,10 +85,9 @@ const EditParty = () => {
                 });
                 setFormData(safeData);
 
-                // Load cities for existing state using static data
+                // Load cities using API (with INDIA_STATES fallback) — avoids race condition
                 if (safeData.state) {
-                    const stateObj = INDIA_STATES.find(s => s.name === safeData.state);
-                    if (stateObj) setCitiesList(getStaticCities(stateObj.id));
+                    fetchCitiesForState(safeData.state);
                 }
             }
         } catch (error) {
@@ -102,12 +101,13 @@ const EditParty = () => {
 
     const fetchCitiesForState = async (stateName) => {
         try {
-            const stateObj = statesList.find(s => s.name === stateName);
+            // Use INDIA_STATES directly (not statesList state) to avoid race condition
+            const stateObj = INDIA_STATES.find(s => s.name === stateName);
             if (!stateObj) { setCitiesList([]); return; }
             const citiesRes = await axios.get(`/api/locations/cities/${stateObj.id}`);
             setCitiesList(citiesRes.data?.length > 0 ? citiesRes.data : getStaticCities(stateObj.id));
         } catch (e) {
-            const stateObj = statesList.find(s => s.name === stateName);
+            const stateObj = INDIA_STATES.find(s => s.name === stateName);
             if (stateObj) setCitiesList(getStaticCities(stateObj.id));
             else setCitiesList([]);
         }
@@ -263,6 +263,10 @@ const EditParty = () => {
                                             onChange={handleChange}
                                         >
                                             <option value="">Select Category</option>
+                                            {/* Always show current value even if not in fetched list */}
+                                            {formData.brand_category && !brandCategories.some(c => c.option_value === formData.brand_category) && (
+                                                <option value={formData.brand_category}>{formData.brand_category}</option>
+                                            )}
                                             {brandCategories.map((c) => (
                                                 <option key={c.id} value={c.option_value}>{c.option_value}</option>
                                             ))}
@@ -404,6 +408,10 @@ const EditParty = () => {
                                         onChange={handleChange}
                                     >
                                         <option value="">Select Grouping (Optional)</option>
+                                        {/* Always show current value even if not in fetched list */}
+                                        {formData.owner_group && !ownerGroupings.some(og => og.option_value === formData.owner_group) && (
+                                            <option value={formData.owner_group}>{formData.owner_group}</option>
+                                        )}
                                         {ownerGroupings.map((og) => (
                                             <option key={og.id} value={og.option_value}>{og.option_value}</option>
                                         ))}

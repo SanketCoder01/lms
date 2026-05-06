@@ -1,38 +1,41 @@
 /**
  * filterOptionsController.js
  * Full CRUD for filter_options table via Supabase service_role client.
- * Multi-tenant: company users only see/modify their own filter options.
+ * Multi-tenant: strict per-company isolation — company users ONLY see their own options.
+ *
+ * ROOT CAUSE FIXES:
+ *  1. Cross-company leak: When req.companyId was missing, the OR condition was skipped
+ *     entirely and ALL companies' options were returned. Fixed with strict auth guard.
+ *  2. Options "disappearing": OR with company_id.is.null included global rows that could
+ *     vanish (super-admin cleanup) causing perceived data loss. Fixed with strict isolation
+ *     + graceful per-category fallback only when company has zero own options.
  */
 
 const supabase = require('../config/db');
 const { handleDbError } = require('../utils/errorHandler');
 
-// GET /api/filters?category=xxx
+// ─── GET /api/filters?category=xxx ────────────────────────────────────────────
 exports.getFilterOptions = async (req, res) => {
   try {
     const { category } = req.query;
 
-    // Build base query
+    // PRIVACY: Never serve data without a valid company session
+    if (req.isUnauthenticated || !req.companyId) {
+      return res.json({ success: true, data: [] });
+    }
+
+    // ── Step 1: Fetch ONLY this company's own options (strict isolation) ───────
     let query = supabase
       .from('filter_options')
       .select('*')
-      .eq('status', 'active');
+      .eq('status', 'active')
+      .eq('company_id', req.companyId);
 
-    // Multi-tenant: company users see their own filter options PLUS global options (company_id = null)
-    // Use .or() properly with parentheses for correct grouping
-    if (req.companyId) {
-      query = query.or(`company_id.eq.${req.companyId},company_id.is.null`);
-    }
+    if (category) query = query.eq('category', category);
 
-    if (category) {
-      query = query.eq('category', category);
-    }
-
-    // Apply ordering after filters
     query = query.order('option_value', { ascending: true });
 
     const { data, error } = await query;
-
     if (error) {
       console.error('[FilterOptions GET]', error);
       return res.status(500).json(handleDbError(error));
@@ -40,33 +43,20 @@ exports.getFilterOptions = async (req, res) => {
 
     let result = data || [];
 
-    // Auto-seed the 3 default Owner Grouping options if any are missing
-    if (category === 'Owner Grouping') {
-      console.log(`[FilterOptions] Owner Grouping requested, companyId=${req.companyId}, existing=${result.length}`);
-      const defaults = ['Developer Unit', 'Close Group', 'External Investors'];
-      const existingValues = result.map(r => r.option_value);
-      const missingDefaults = defaults.filter(d => !existingValues.includes(d));
-
-      if (missingDefaults.length > 0) {
-        console.log(`[FilterOptions] Seeding missing defaults: ${missingDefaults.join(', ')}`);
-        const inserts = missingDefaults.map(v => ({
-          category: 'Owner Grouping',
-          option_value: v,
-          status: 'active',
-          company_id: req.companyId || null
-        }));
-        const { data: seeded, error: seedErr } = await supabase
-          .from('filter_options')
-          .insert(inserts)
-          .select();
-        
-        if (seedErr) {
-          console.error('[FilterOptions] Seed error:', seedErr);
-        } else if (seeded) {
-          console.log(`[FilterOptions] Seeded ${seeded.length} options`);
-          result = [...result, ...seeded];
-        }
-      }
+    // ── Step 2: Backwards-compatibility fallback ───────────────────────────────
+    // If this company has ZERO options for the requested category, fall back to
+    // global options (company_id IS NULL) so existing deployments don't break.
+    // Once the company creates at least one option for the category, the fallback
+    // stops and they only see their own — preventing cross-company bleed.
+    if (result.length === 0 && category) {
+      const { data: globalData } = await supabase
+        .from('filter_options')
+        .select('*')
+        .eq('status', 'active')
+        .is('company_id', null)
+        .eq('category', category)
+        .order('option_value', { ascending: true });
+      result = globalData || [];
     }
 
     res.json({ success: true, data: result });
@@ -76,27 +66,31 @@ exports.getFilterOptions = async (req, res) => {
   }
 };
 
-// POST /api/filters
+// ─── POST /api/filters ─────────────────────────────────────────────────────────
 exports.addFilterOption = async (req, res) => {
   try {
-    const { category, option_value } = req.body;
+    // PRIVACY: Require valid company session to create options
+    if (req.isUnauthenticated || !req.companyId) {
+      return res.status(401).json({ success: false, error: 'Unauthorized: company session required' });
+    }
 
+    const { category, option_value } = req.body;
     if (!category || !option_value) {
       return res.status(400).json({ success: false, error: 'Category and option_value are required' });
     }
 
     const trimmedCategory = category.trim();
-    const trimmedValue = option_value.trim();
+    const trimmedValue    = option_value.trim();
 
     // Pre-check: does this option already exist for this category + company?
-    let checkQuery = supabase
+    const { data: existing } = await supabase
       .from('filter_options')
       .select('id')
       .eq('category', trimmedCategory)
-      .ilike('option_value', trimmedValue);
-    if (req.companyId) checkQuery = checkQuery.eq('company_id', req.companyId);
+      .ilike('option_value', trimmedValue)
+      .eq('company_id', req.companyId)
+      .limit(1);
 
-    const { data: existing } = await checkQuery.limit(1);
     if (existing && existing.length > 0) {
       return res.status(400).json({
         success: false,
@@ -104,23 +98,24 @@ exports.addFilterOption = async (req, res) => {
       });
     }
 
-    const insertPayload = {
-      category: trimmedCategory,
-      option_value: trimmedValue,
-      status: 'active'
-    };
-    // Multi-tenant: stamp company_id on new options
-    if (req.companyId) insertPayload.company_id = req.companyId;
-
+    // Always stamp company_id — never allow null company_id from this endpoint
     const { data, error } = await supabase
       .from('filter_options')
-      .insert(insertPayload)
+      .insert({
+        category:     trimmedCategory,
+        option_value: trimmedValue,
+        status:       'active',
+        company_id:   req.companyId   // enforced — no null leak
+      })
       .select();
 
     if (error) {
       console.error('[FilterOptions POST]', error);
       if (error.code === '23505') {
-        return res.status(400).json({ success: false, error: `"${trimmedValue}" already exists in the "${trimmedCategory}" category.` });
+        return res.status(400).json({
+          success: false,
+          error: `"${trimmedValue}" already exists in the "${trimmedCategory}" category.`
+        });
       }
       return res.status(500).json(handleDbError(error));
     }
@@ -132,25 +127,25 @@ exports.addFilterOption = async (req, res) => {
   }
 };
 
-// PUT /api/filters/:id
+// ─── PUT /api/filters/:id ──────────────────────────────────────────────────────
 exports.updateFilterOption = async (req, res) => {
   try {
+    if (req.isUnauthenticated || !req.companyId) {
+      return res.status(401).json({ success: false, error: 'Unauthorized' });
+    }
+
     const { id } = req.params;
     const { option_value } = req.body;
-
     if (!option_value) {
       return res.status(400).json({ success: false, error: 'option_value is required' });
     }
 
-    let query = supabase
+    // Safety: WHERE id = :id AND company_id = :companyId — can't touch other companies' rows
+    const { error } = await supabase
       .from('filter_options')
       .update({ option_value: option_value.trim() })
-      .eq('id', id);
-
-    // Safety: only update own company's options
-    if (req.companyId) query = query.eq('company_id', req.companyId);
-
-    const { error } = await query;
+      .eq('id', id)
+      .eq('company_id', req.companyId);
 
     if (error) {
       console.error('[FilterOptions PUT]', error);
@@ -167,16 +162,21 @@ exports.updateFilterOption = async (req, res) => {
   }
 };
 
-// DELETE /api/filters/:id
+// ─── DELETE /api/filters/:id ───────────────────────────────────────────────────
 exports.deleteFilterOption = async (req, res) => {
   try {
+    if (req.isUnauthenticated || !req.companyId) {
+      return res.status(401).json({ success: false, error: 'Unauthorized' });
+    }
+
     const { id } = req.params;
 
-    let query = supabase.from('filter_options').delete().eq('id', id);
-    // Safety: only delete own company's options
-    if (req.companyId) query = query.eq('company_id', req.companyId);
-
-    const { error } = await query;
+    // Safety: WHERE id = :id AND company_id = :companyId — can't delete other companies' rows
+    const { error } = await supabase
+      .from('filter_options')
+      .delete()
+      .eq('id', id)
+      .eq('company_id', req.companyId);
 
     if (error) {
       console.error('[FilterOptions DELETE]', error);

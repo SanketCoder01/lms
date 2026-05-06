@@ -5,6 +5,7 @@ const Step5DocsExecute = ({ formData, setFormData, handleFileChange, files }) =>
     const fmtDate = (dateStr) => {
         if (!dateStr) return '';
         const d = new Date(dateStr);
+        if (isNaN(d)) return '';
         return d.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
     };
 
@@ -22,9 +23,19 @@ const Step5DocsExecute = ({ formData, setFormData, handleFileChange, files }) =>
         </div>
     ) : null;
 
+    // Only build hints from what the user has already filled in THIS form session
+    // Never auto-fill any date — hints are strictly read-only references
+    const hasLeaseStart = !!(formData.lease_start && formData.lease_start.trim());
+    const hasLeaseEnd = !!(formData.lease_end && formData.lease_end.trim());
+    const hasAgreement = !!(formData.agreement_date && formData.agreement_date.trim());
+
     return (
         <div className="form-section">
             <h3>Step 5: Docs Execution &amp; Details</h3>
+            <p style={{ fontSize: 12, color: '#64748b', marginBottom: 20 }}>
+                All date fields below are optional. Enter only if the document has been executed.
+                None of these are auto-filled.
+            </p>
 
             {/* ── Letter of Intent (LOI) ── */}
             <h4 style={{ margin: '20px 0 10px', borderBottom: '1px solid #eee', paddingBottom: 5 }}>
@@ -39,7 +50,9 @@ const Step5DocsExecute = ({ formData, setFormData, handleFileChange, files }) =>
                         onChange={(e) => setFormData({ ...formData, loi_date: e.target.value })}
                         className="form-control"
                         style={{ fontSize: 13 }}
+                        autoComplete="off"
                     />
+                    {/* Show formatted date only after user picks it */}
                     {formData.loi_date && (
                         <small style={{ color: '#059669', fontSize: 11, marginTop: 4, display: 'block' }}>
                             {fmtDate(formData.loi_date)}
@@ -59,9 +72,16 @@ const Step5DocsExecute = ({ formData, setFormData, handleFileChange, files }) =>
             </div>
 
             {/* ── Lease Agreement → counts as Leasing Executed ── */}
-            <h4 style={{ margin: '20px 0 10px', borderBottom: '1px solid #eee', paddingBottom: 5 }}>
+            <h4 style={{ margin: '20px 0 6px', borderBottom: '1px solid #eee', paddingBottom: 5 }}>
                 Lease Agreement
             </h4>
+            {/* Hint: only show if user already entered lease_start in Step 2 */}
+            {hasLeaseStart && (
+                <p style={{ fontSize: 11, color: '#94a3b8', marginBottom: 10, marginTop: 0 }}>
+                    Lease start you entered: <strong style={{ color: '#64748b' }}>{fmtDate(formData.lease_start)}</strong>
+                    {hasLeaseEnd && <span> – {fmtDate(formData.lease_end)}</span>}
+                </p>
+            )}
             <div className="form-row" style={{ gap: 12 }}>
                 <div className="form-group" style={{ flex: '0 0 200px' }}>
                     <label>Agreement Date</label>
@@ -71,6 +91,7 @@ const Step5DocsExecute = ({ formData, setFormData, handleFileChange, files }) =>
                         onChange={(e) => setFormData({ ...formData, agreement_date: e.target.value })}
                         className="form-control"
                         style={{ fontSize: 13 }}
+                        autoComplete="off"
                     />
                     {formData.agreement_date && (
                         <small style={{ color: '#059669', fontSize: 11, marginTop: 4, display: 'block' }}>
@@ -91,9 +112,15 @@ const Step5DocsExecute = ({ formData, setFormData, handleFileChange, files }) =>
             </div>
 
             {/* ── Lease Registration → counts as Leased Registered ── */}
-            <h4 style={{ margin: '20px 0 10px', borderBottom: '1px solid #eee', paddingBottom: 5 }}>
+            <h4 style={{ margin: '20px 0 6px', borderBottom: '1px solid #eee', paddingBottom: 5 }}>
                 Lease Registration
             </h4>
+            {/* Hint: only show if user already entered agreement_date above */}
+            {hasAgreement && (
+                <p style={{ fontSize: 11, color: '#94a3b8', marginBottom: 10, marginTop: 0 }}>
+                    Agreement date you entered: <strong style={{ color: '#64748b' }}>{fmtDate(formData.agreement_date)}</strong>
+                </p>
+            )}
             <div className="form-row" style={{ gap: 12 }}>
                 <div className="form-group" style={{ flex: '0 0 200px' }}>
                     <label>Registration Date</label>
@@ -103,6 +130,7 @@ const Step5DocsExecute = ({ formData, setFormData, handleFileChange, files }) =>
                         onChange={(e) => setFormData({ ...formData, registration_date: e.target.value })}
                         className="form-control"
                         style={{ fontSize: 13 }}
+                        autoComplete="off"
                     />
                     {formData.registration_date && (
                         <small style={{ color: '#059669', fontSize: 11, marginTop: 4, display: 'block' }}>

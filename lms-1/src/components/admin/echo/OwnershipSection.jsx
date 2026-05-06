@@ -6,19 +6,22 @@ const OwnershipSection = ({ units = [], leases = [], loading }) => {
   const navigate = useNavigate();
 
   const ownershipData = useMemo(() => {
-    // The 4 ownership categories — "Unsold" is the catch-all for any unit not in the 3 groups
+    // 5 ownership categories — 'Other Assigned' catches units with active owners
+    // whose party's owner_group doesn't match any of the 3 main keywords
     const allCategories = [
-      { key: 'Developer Units',    label: 'Developer Units',    color: '#e8a830' },
-      { key: 'Close Group',        label: 'Close Group',        color: '#2d8a4e' },
+      { key: 'Developer Units', label: 'Developer Units', color: '#e8a830' },
+      { key: 'Close Group', label: 'Close Group', color: '#2d8a4e' },
       { key: 'External Investors', label: 'External Investors', color: '#1e3a5f' },
-      { key: 'Unsold',             label: 'Unsold',             color: '#94a3b8' },
+      { key: 'Other Assigned', label: 'Other Assigned', color: '#7c3aed' },
+      { key: 'Unsold', label: 'Unsold', color: '#94a3b8' },
     ];
 
     const grouped = {
-      'Developer Units':    { units: 0, totalArea: 0, totalRent: 0, parties: new Set() },
-      'Close Group':        { units: 0, totalArea: 0, totalRent: 0, parties: new Set() },
+      'Developer Units': { units: 0, totalArea: 0, totalRent: 0, parties: new Set() },
+      'Close Group': { units: 0, totalArea: 0, totalRent: 0, parties: new Set() },
       'External Investors': { units: 0, totalArea: 0, totalRent: 0, parties: new Set() },
-      'Unsold':             { units: 0, totalArea: 0, totalRent: 0, parties: new Set() },
+      'Other Assigned': { units: 0, totalArea: 0, totalRent: 0, parties: new Set() },
+      'Unsold': { units: 0, totalArea: 0, totalRent: 0, parties: new Set() },
     };
 
     console.log('[OwnershipSection] units:', units?.length, 'leases:', leases?.length);
@@ -34,7 +37,7 @@ const OwnershipSection = ({ units = [], leases = [], loading }) => {
     const leaseRentMap = {};
     (leases || []).forEach(lease => {
       const s = (lease.status || '').toLowerCase().trim();
-      const isActive = ['active','approved','executed','registered','occupied'].includes(s);
+      const isActive = ['active', 'approved', 'executed', 'registered', 'occupied'].includes(s);
       if (isActive) {
         const unitId = lease.unit_id || lease.unitId || lease.unit?.id;
         const rent = parseFloat(lease.monthly_rent) || 0;
@@ -43,37 +46,38 @@ const OwnershipSection = ({ units = [], leases = [], loading }) => {
     });
 
     // Distribute each unit into its ownership bucket
-    // SOLD units (already assigned to owner) should NOT appear in ownership breakdown
     units.forEach(unit => {
-      // Skip sold units - they are already sold and should not appear in ownership tracking
-      if (unit.status === 'Sold') {
+      // Skip units whose status is explicitly 'sold' (case-insensitive)
+      // NOTE: In this app 'sold' means the ownership has already been fully finalized.
+      if ((unit.status || '').toLowerCase() === 'sold') {
         console.log(`[OwnershipSection] SKIP sold unit ${unit.id} (${unit.unit_number})`);
         return;
       }
-      
-      // Backend returns ownership_grouping: 'Developer Units' | 'Close Group' | 'External Investors' | 'Unsold'
+
+      // Backend returns ownership_grouping:
+      // 'Developer Units' | 'Close Group' | 'External Investors' | 'Other Assigned' | 'Unsold'
       const grouping = unit.ownership_grouping || 'Unsold';
-      // Normalize: if backend returns something unknown, bucket as Unsold
-      const bucket = grouped[grouping] ?? grouped['Unsold'];
+      // Any grouping not in the map falls back to 'Other Assigned' (never lost to Unsold)
+      const bucket = grouped[grouping] ?? grouped['Other Assigned'];
 
       console.log(`[OwnershipSection] unit ${unit.id} (${unit.unit_number}): owner="${unit.owner_name}" grouping="${grouping}"`);
 
-      bucket.units      += 1;
-      bucket.totalArea  += parseFloat(unit.chargeable_area || 0);
-      bucket.totalRent  += leaseRentMap[unit.id] || 0;
+      bucket.units += 1;
+      bucket.totalArea += parseFloat(unit.chargeable_area || 0);
+      bucket.totalRent += leaseRentMap[unit.id] || 0;
       if (unit.owner_name && unit.owner_name !== 'N/A') {
         bucket.parties.add(unit.owner_name);
       }
     });
 
     return allCategories.map(cat => ({
-      key:       cat.key,
-      label:     cat.label,
-      color:     cat.color,
-      units:     grouped[cat.key].units,
+      key: cat.key,
+      label: cat.label,
+      color: cat.color,
+      units: grouped[cat.key].units,
       totalArea: grouped[cat.key].totalArea,
       totalRent: grouped[cat.key].totalRent,
-      parties:   grouped[cat.key].parties.size,
+      parties: grouped[cat.key].parties.size,
     }));
   }, [units, leases]);
 
@@ -86,8 +90,11 @@ const OwnershipSection = ({ units = [], leases = [], loading }) => {
   const displayData = ownershipData.map(o => ({
     ...o,
     percentage: totalUnits > 0 ? parseFloat(((o.units / totalUnits) * 100).toFixed(1)) : 0,
-    avgRent:    o.totalArea > 0 ? parseFloat((o.totalRent / o.totalArea).toFixed(2)) : 0,
+    avgRent: o.totalArea > 0 ? parseFloat((o.totalRent / o.totalArea).toFixed(2)) : 0,
   }));
+
+  // Hide 'Other Assigned' row when it has 0 units — no clutter when everyone has proper owner_group set
+  const visibleData = displayData.filter(o => o.key !== 'Other Assigned' || o.units > 0);
 
   const formatArea = (area) => {
     if (area >= 100000) return `${(area / 100000).toFixed(1)}L sqft`;
@@ -114,16 +121,16 @@ const OwnershipSection = ({ units = [], leases = [], loading }) => {
             .ownership-scroll-container::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
           `}</style>
 
-          {/* Stacked bar */}
+          {/* Stacked bar — uses all 5 categories including Other Assigned */}
           <div style={{ display: 'flex', height: '16px', borderRadius: '4px', overflow: 'hidden', marginBottom: '8px' }}>
             {displayData.map((o, i) => (
               <div key={i} style={{ backgroundColor: o.color, width: `${o.percentage || (i === displayData.length - 1 ? 100 : 0)}%`, minWidth: o.units > 0 ? '4px' : 0 }} />
             ))}
           </div>
 
-          {/* Legend */}
+          {/* Legend — only show categories that have units or are one of the 3 main groups */}
           <div style={{ display: 'flex', gap: '12px', fontSize: '10px', color: '#64748b', marginBottom: '20px', flexWrap: 'wrap' }}>
-            {displayData.map((o, i) => (
+            {visibleData.map((o, i) => (
               <span key={i} style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
                 <span style={{ width: '8px', height: '8px', borderRadius: '2px', display: 'inline-block', backgroundColor: o.color }} />
                 {o.label} ({o.percentage}%)
@@ -131,12 +138,12 @@ const OwnershipSection = ({ units = [], leases = [], loading }) => {
             ))}
           </div>
 
-          {/* Breakdown rows — always show all 4 */}
+          {/* Breakdown rows — always show main 3 + Unsold; Other Assigned only when non-zero */}
           <div
             className="ownership-scroll-container"
-            style={{ display: 'flex', flexDirection: 'column', gap: '16px', maxHeight: '240px', overflowY: 'auto', paddingRight: '8px' }}
+            style={{ display: 'flex', flexDirection: 'column', gap: '16px', maxHeight: '260px', overflowY: 'auto', paddingRight: '8px' }}
           >
-            {displayData.map((o, i) => (
+            {visibleData.map((o, i) => (
               <div
                 key={i}
                 onClick={() => handleCategoryClick(o.key)}
@@ -151,7 +158,9 @@ const OwnershipSection = ({ units = [], leases = [], loading }) => {
                 onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
               >
                 <div style={{ flex: 1 }}>
-                  <p style={{ fontSize: '13px', fontWeight: 600, color: '#0f172a', margin: 0 }}>{o.label}</p>
+                  <p style={{ fontSize: '13px', fontWeight: 600, color: '#0f172a', margin: 0 }}>
+                    {o.label}
+                  </p>
                   <p style={{ fontSize: '11px', color: '#64748b', margin: '2px 0 0 0' }}>
                     <strong style={{ color: '#0f172a' }}>{o.units}</strong> unit{o.units !== 1 ? 's' : ''}
                     {o.totalArea > 0 ? ` · ${formatArea(o.totalArea)}` : ''}
