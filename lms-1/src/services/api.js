@@ -114,6 +114,7 @@ export const ownerAPI = {
 // ---------------- UNITS ----------------
 export const unitAPI = {
   getUnits: (params) => API.get("/units", { params }),
+  getUnitsCount: (params) => API.get("/units/count", { params }),
   getUnitById: (id) => API.get(`/units/${id}`),
   createUnit: (data) => API.post("/units", data),
   updateUnit: (id, data) => API.put(`/units/${id}`, data),

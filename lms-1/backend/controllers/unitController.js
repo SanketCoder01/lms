@@ -24,29 +24,58 @@ const getUnits = async (req, res) => {
     // PRIVACY: Never serve data without a valid company session
     if (req.isUnauthenticated) return res.json({ data: [] });
 
-    const { projectId, search, status, excludeSold, ownership } = req.query;
+    const { projectId, search, status, excludeSold, ownership, limit: limitParam } = req.query;
+    const fetchLimit = Math.min(parseInt(limitParam || '5000', 10), 5000);
 
-    // Step 1: Fetch units with LEFT join on projects (was !inner which silently dropped units
-    // whose project records were inaccessible due to RLS/company scoping — causing 102→41 bug)
-    let query = applyScopes(supabase
+    // ── Privacy: scope to company's projects, not company_id on units ───────────
+    // Units may not always have company_id stamped. Instead we:
+    //   1. Get all project IDs belonging to req.companyId (secure)
+    //   2. Fetch units whose project_id is IN that list
+    // This matches getProjectById behaviour and returns the correct count (102, not 41).
+    let allowedProjectIds = null; // null = unrestricted (no company scope)
+
+    if (req.companyId) {
+      let projQ = supabase.from('projects').select('id').eq('company_id', req.companyId);
+
+      // Further restrict for module/project users
+      if (req.isRestrictedToProjects) {
+        const restrictedIds = (req.projectsAccess || []).map(p => p.project_id);
+        if (restrictedIds.length > 0) projQ = projQ.in('id', restrictedIds);
+        else return res.json({ data: [] }); // no access
+      }
+
+      // If a specific project is requested, intersect with company's projects
+      if (projectId && projectId !== 'All') {
+        projQ = projQ.eq('id', parseInt(projectId));
+      }
+
+      const { data: compProjRows, error: projErr } = await projQ;
+      if (projErr) throw projErr;
+      allowedProjectIds = (compProjRows || []).map(p => p.id);
+      if (allowedProjectIds.length === 0) return res.json({ data: [] });
+    }
+
+    // Build the units query
+    let query = supabase
       .from('units')
       .select(`
         id, unit_number, block_tower, floor_number, chargeable_area, status, project_id,
         projected_rent, unit_category, unit_zoning_type,
         projects ( project_name )
-      `), req)
+      `)
       .order('id', { ascending: false })
-      .limit(2000);
+      .limit(fetchLimit);
 
-    if (projectId && projectId !== 'All') {
+    if (allowedProjectIds !== null) {
+      // Scoped to company's projects
+      query = query.in('project_id', allowedProjectIds);
+    } else if (projectId && projectId !== 'All') {
+      // No company scope but specific project requested
       query = query.eq('project_id', parseInt(projectId));
     }
-    if (status && status !== 'All') {
-      query = query.eq('status', status);
-    }
-    if (search) {
-      query = query.or(`unit_number.ilike.%${search}%`);
-    }
+
+    if (status && status !== 'All') query = query.eq('status', status);
+    if (search) query = query.or(`unit_number.ilike.%${search}%`);
 
     const { data, error } = await query;
     if (error) throw error;
@@ -198,6 +227,58 @@ const getUnits = async (req, res) => {
   } catch (err) {
     console.error('Fetch units error:', err);
     res.status(500).json({ message: 'Failed to fetch units', error: err.message });
+  }
+};
+
+/* ═══════════════════════════════════════════════════════════
+ * GET UNITS COUNT — lightweight, no row data (exact count)
+ * ══════════════════════════════════════════════════════════ */
+const getUnitsCount = async (req, res) => {
+  try {
+    if (req.isUnauthenticated) return res.json({ count: 0 });
+
+    const { projectId } = req.query;
+
+    if (req.companyId) {
+      // Get all project IDs that belong to this company
+      let projectsQuery = supabase.from('projects').select('id').eq('company_id', req.companyId);
+      if (projectId && projectId !== 'All') {
+        projectsQuery = projectsQuery.eq('id', parseInt(projectId));
+      }
+      // Further restrict to allowed projects for module/project users
+      if (req.isRestrictedToProjects) {
+        const restrictedIds = (req.projectsAccess || []).map(p => p.project_id);
+        if (restrictedIds.length > 0) projectsQuery = projectsQuery.in('id', restrictedIds);
+        else return res.json({ count: 0 });
+      }
+
+      const { data: companyProjects, error: projErr } = await projectsQuery;
+      if (projErr) throw projErr;
+
+      const projectIds = (companyProjects || []).map(p => p.id);
+      if (projectIds.length === 0) return res.json({ count: 0 });
+
+      // Count units by project_id only (same as getProjectById — catches all units
+      // regardless of whether company_id was stamped on the unit row)
+      const { count, error: countErr } = await supabase
+        .from('units')
+        .select('id', { count: 'exact', head: true })
+        .in('project_id', projectIds);
+
+      if (countErr) throw countErr;
+      return res.json({ count: count || 0 });
+    }
+
+    // No company scope — fall back to applyScopes
+    const { count, error } = await applyScopes(
+      supabase.from('units').select('id', { count: 'exact', head: true }), req
+    );
+    if (error) throw error;
+    res.json({ count: count || 0 });
+
+  } catch (err) {
+    console.error('Count units error:', err);
+    res.status(500).json({ count: 0, error: err.message });
   }
 };
 
@@ -695,7 +776,7 @@ const deleteProjectFloor = async (req, res) => {
 };
 
 module.exports = {
-  getUnits, getUnitById, createUnit, updateUnit, deleteUnit,
+  getUnits, getUnitsCount, getUnitById, createUnit, updateUnit, deleteUnit,
   getProjectBlocks, addProjectBlock, updateProjectBlock, deleteProjectBlock,
   getProjectFloors, addProjectFloor, updateProjectFloor, deleteProjectFloor,
 };

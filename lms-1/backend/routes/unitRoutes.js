@@ -15,6 +15,7 @@ router.put("/structure/floors/:id",    unitController.updateProjectFloor);
 router.delete("/structure/floors/:id", unitController.deleteProjectFloor);
 
 /* ═══ UNIT CRUD ════════════════════════════════════════════════════ */
+router.get("/count",  unitController.getUnitsCount);
 router.get("/",       unitController.getUnits);
 router.post("/",      upload.array('images', 5), unitController.createUnit);
 router.get("/:id",    unitController.getUnitById);

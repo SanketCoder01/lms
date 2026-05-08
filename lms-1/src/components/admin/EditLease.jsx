@@ -135,6 +135,8 @@ const EditLease = () => {
                     notice_period_months: data.notice_period_months || '',
                     lessee_lockin_period_months: data.lessee_lockin_period_months || '',
                     lessor_lockin_period_months: data.lessor_lockin_period_months || '',
+                    lessee_lockin_period_days: data.lessee_lockin_period_days || '',
+                    lessor_lockin_period_days: data.lessor_lockin_period_days || '',
                     lessee_notice_period_months: data.lessee_notice_period_months || '',
                     lessor_notice_period_months: data.lessor_notice_period_months || '',
                     lessee_notice_period_days: data.lessee_notice_period_days || '',
@@ -352,6 +354,8 @@ const EditLease = () => {
                 notice_period_months: parseInt(formData.notice_period_months) || 0,
                 lessee_lockin_period_months: parseInt(formData.lessee_lockin_period_months) || 0,
                 lessor_lockin_period_months: parseInt(formData.lessor_lockin_period_months) || 0,
+                lessee_lockin_period_days: parseInt(formData.lessee_lockin_period_days) || 0,
+                lessor_lockin_period_days: parseInt(formData.lessor_lockin_period_days) || 0,
                 lessee_notice_period_months: parseInt(formData.lessee_notice_period_months) || 0,
                 lessor_notice_period_months: parseInt(formData.lessor_notice_period_months) || 0,
                 lessee_notice_period_days: parseInt(formData.lessee_notice_period_days) || 0,
@@ -389,8 +393,11 @@ const EditLease = () => {
             setTimeout(() => navigate('/admin/leases'), 2000);
 
         } catch (error) {
-            console.error(error);
-            alert("Failed to update lease: " + (error.response?.data?.message || error.message));
+            const d = error.response?.data;
+            const detail = d?.details || d?.hint || d?.code || '';
+            const msg = d?.error || d?.message || error.message;
+            console.error('Update lease error:', d || error);
+            alert("Failed to update lease: " + msg + (detail ? `\n[${detail}]` : ''));
         } finally {
             setIsSubmitting(false);
         }

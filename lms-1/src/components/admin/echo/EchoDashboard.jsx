@@ -11,18 +11,20 @@ import LeaseExpirySection from './LeaseExpirySection';
 import LockInExpirySection from './LockInExpirySection';
 import OwnershipSection from './OwnershipSection';
 import UpcomingEscalations from './UpcomingEscalations';
-import RentalProjectionTable from './RentalProjectionTable';
+
 import FinancialValueMonthly from './FinancialValueMonthly';
 import BrandPerformanceSection from './BrandPerformanceSection';
 import FloorOccupancySection from './FloorOccupancySection';
 import CriticalNotificationTicker from './CriticalNotificationTicker';
 import { getProjects, leaseAPI, unitAPI, partyAPI } from '../../../services/api';
+import { supabase } from '../../../lib/supabase';
 import usePermissions from '../../../hooks/usePermissions';
 import './echo.css';
 
 const EchoDashboard = () => {
   const navigate = useNavigate();
   const { hasModuleAccess, getModulePermissions } = usePermissions();
+  const [refreshKey, setRefreshKey] = useState(0); // incremented to force a re-fetch
   const [projects, setProjects] = useState([]);
   const [selectedProject, setSelectedProject] = useState('All');
   const [unitBreakdown, setUnitBreakdown] = useState([]);
@@ -31,6 +33,7 @@ const EchoDashboard = () => {
   const [projectedRent, setProjectedRent] = useState(0);
   const [rentComposition, setRentComposition] = useState({ fixed: 0, mg: 0, revenueShare: 0, fixedUnits: 0, mgUnits: 0, revShareUnits: 0 });
   const [leasingStats, setLeasingStats] = useState({ newLeases: 0, areaLeased: 0, chartData: [], loiCount: 0, executedCount: 0, registeredCount: 0 });
+  const [trueUnitCount, setTrueUnitCount] = useState(0);
   const [zoningData, setZoningData] = useState([]);
   const [allLeases, setAllLeases] = useState([]);
   const [allUnits, setAllUnits] = useState([]);
@@ -113,13 +116,22 @@ const EchoDashboard = () => {
     const fetchData = async () => {
       setLoading(true);
       try {
-        const unitParams = selectedProject !== 'All' ? { projectId: selectedProject } : {};
-        const unitsRes = await unitAPI.getUnits(unitParams);
+        const unitParams = selectedProject !== 'All' ? { projectId: selectedProject, limit: 5000 } : { limit: 5000 };
+        const countParams = selectedProject !== 'All' ? { projectId: selectedProject } : {};
+
+        // Fetch full unit data + a separate exact count (bypasses row limits)
+        const [unitsRes, countRes] = await Promise.all([
+          unitAPI.getUnits(unitParams),
+          unitAPI.getUnitsCount(countParams).catch(() => ({ data: { count: 0 } })),
+        ]);
 
         // Calculate unit breakdown by actual unit names (unit_number)
         const units = unitsRes.data?.data || unitsRes.data || [];
-        console.log('Fetched units:', units.length, units);
-        setAllUnits(units); // Store all units for other components
+        const exactTotalUnits = countRes.data?.count ?? units.length;
+        console.log('Fetched units (data):', units.length, '| Exact count:', exactTotalUnits);
+        setAllUnits(units);
+        // Store the true total for KPI display
+        setTrueUnitCount(exactTotalUnits);
 
         // Calculate total projected rent from ALL units (sum of projected_rent field)
         let totalProjRent = 0;
@@ -273,38 +285,7 @@ const EchoDashboard = () => {
             revShareUnits
           });
 
-          // Calculate leasing activity stats - leases created in last 6 months
-          const now = new Date();
-          const sixMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 5, 1);
-          console.log('Leases for activity calculation:', leases.length, leases);
-          const recentLeases = leases.filter(l => {
-            const leaseDate = new Date(l.created_at || l.lease_start);
-            const isActive = l.status === 'active' || l.status === 'Active' || l.status === 'approved';
-            console.log(`Lease ${l.id}: created=${l.created_at}, lease_start=${l.lease_start}, status=${l.status}, inRange=${leaseDate >= sixMonthsAgo}`);
-            return leaseDate >= sixMonthsAgo && isActive;
-          });
-          console.log('Recent leases in 6 months:', recentLeases.length);
-
-          // Group by month
-          const monthData = {};
-          for (let i = 5; i >= 0; i--) {
-            const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-            const key = d.toLocaleDateString('en-US', { month: 'short' });
-            monthData[key] = { month: key, units: 0, area: 0 };
-          }
-
-          recentLeases.forEach(lease => {
-            const leaseDate = new Date(lease.lease_start || lease.created_at);
-            const key = leaseDate.toLocaleDateString('en-US', { month: 'short' });
-            if (monthData[key]) {
-              monthData[key].units += 1;
-              // Use chargeable_area from units join, or area_leased, or sub_lease_area_sqft
-              const area = parseFloat(lease.chargeable_area || lease.units?.chargeable_area || lease.area_leased || lease.sub_lease_area_sqft || 0);
-              monthData[key].area += area;
-            }
-          });
-
-
+          // (monthly activity is now handled by the milestoneMonthData path below)
           // Shared helper — checks date presence for each milestone level (document upload optional)
           const qualifiesForMilestone = (lease) => {
             const hasReg = !!(lease.registration_date && String(lease.registration_date).trim());
@@ -334,10 +315,13 @@ const EchoDashboard = () => {
           // Dynamic Bar chart: gather all qualified leases
           const qualifiedLeases = leases.filter(l => qualifiesForMilestone(l));
 
-          // If no qualified leases for the chart but we have counts, build a single-bar summary
+          // Locale-independent month key: "Jan '25", "Feb '26" etc.
+          const MO = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+          const fmtMon = (d) => `${MO[d.getMonth()]} ${String(d.getFullYear()).slice(2)}`;
+
+          // If no milestone chart bars exist, build a single-bar summary for current month
           const buildFallbackChartData = (loi, executed, registered) => {
-            const now = new Date();
-            const monthKey = now.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+            const monthKey = fmtMon(new Date());
             return [{
               month: monthKey,
               units: loi + executed + registered,
@@ -348,20 +332,14 @@ const EchoDashboard = () => {
             }];
           };
 
-          let minDate = new Date();
-          minDate.setMonth(minDate.getMonth() - 5); // Default at least 6 months
-          minDate.setDate(1);
-          minDate.setHours(0, 0, 0, 0);
+          // Find actual date bounds from qualified leases only — no artificial default window
+          let minDate = null;
+          let maxDate = null;
 
-          let maxDate = new Date();
-          maxDate.setDate(1);
-          maxDate.setHours(0, 0, 0, 0);
-
-          // Find actual date bounds
           qualifiedLeases.forEach(lease => {
-            const hasReg = !!(lease.registration_date && String(lease.registration_date).trim() && lease.registration_document_url && String(lease.registration_document_url).trim());
-            const hasExe = !!(lease.agreement_date && String(lease.agreement_date).trim() && lease.agreement_document_url && String(lease.agreement_document_url).trim());
-            const hasLoi = !!(lease.loi_date && String(lease.loi_date).trim() && lease.loi_document_url && String(lease.loi_document_url).trim());
+            const hasReg = !!(lease.registration_date && String(lease.registration_date).trim());
+            const hasExe = !!(lease.agreement_date && String(lease.agreement_date).trim());
+            const hasLoi = !!(lease.loi_date && String(lease.loi_date).trim());
 
             let dateToUse = lease.created_at || lease.lease_start;
             if (hasReg) dateToUse = lease.registration_date;
@@ -370,32 +348,36 @@ const EchoDashboard = () => {
 
             const d = new Date(dateToUse);
             if (!isNaN(d.getTime())) {
-              d.setDate(1);
-              d.setHours(0, 0, 0, 0);
-              if (d < minDate) minDate = new Date(d);
-              if (d > maxDate) maxDate = new Date(d);
+              d.setDate(1); d.setHours(0, 0, 0, 0);
+              if (!minDate || d < minDate) minDate = new Date(d);
+              if (!maxDate || d > maxDate) maxDate = new Date(d);
             }
           });
 
+          // Build monthly buckets only for the actual range found
           const milestoneMonthData = {};
-          let currentMonth = new Date(minDate);
-          while (currentMonth <= maxDate) {
-            const key = currentMonth.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
-            milestoneMonthData[key] = {
-              month: key,
-              units: 0, area: 0,
-              loiUnits: 0, loiArea: 0,
-              executedUnits: 0, executedArea: 0,
-              registeredUnits: 0, registeredArea: 0
-            };
-            currentMonth.setMonth(currentMonth.getMonth() + 1);
+          if (minDate && maxDate) {
+            let currentMonth = new Date(minDate);
+            while (currentMonth <= maxDate) {
+              const key = fmtMon(currentMonth);
+              milestoneMonthData[key] = {
+                month: key,
+                units: 0, area: 0,
+                loiUnits: 0, loiArea: 0,
+                executedUnits: 0, executedArea: 0,
+                registeredUnits: 0, registeredArea: 0
+              };
+              currentMonth.setMonth(currentMonth.getMonth() + 1);
+            }
           }
 
           qualifiedLeases.forEach(lease => {
-            const hasReg = !!(lease.registration_date && String(lease.registration_date).trim() && lease.registration_document_url && String(lease.registration_document_url).trim());
-            const hasExe = !!(lease.agreement_date && String(lease.agreement_date).trim() && lease.agreement_document_url && String(lease.agreement_document_url).trim());
-            const hasLoi = !!(lease.loi_date && String(lease.loi_date).trim() && lease.loi_document_url && String(lease.loi_document_url).trim());
+            // Use date presence only — document upload is NOT required for chart plotting
+            const hasReg = !!(lease.registration_date && String(lease.registration_date).trim());
+            const hasExe = !!(lease.agreement_date && String(lease.agreement_date).trim());
+            const hasLoi = !!(lease.loi_date && String(lease.loi_date).trim());
 
+            // Pick the most advanced milestone date
             let dateToUse = lease.created_at || lease.lease_start;
             if (hasReg) dateToUse = lease.registration_date;
             else if (hasExe) dateToUse = lease.agreement_date;
@@ -403,7 +385,7 @@ const EchoDashboard = () => {
 
             const d = new Date(dateToUse);
             if (!isNaN(d.getTime())) {
-              const key = d.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+              const key = fmtMon(d);
               if (milestoneMonthData[key]) {
                 const area = parseFloat(lease.chargeable_area || lease.units?.chargeable_area || lease.area_leased || lease.sub_lease_area_sqft || 0);
 
@@ -454,7 +436,24 @@ const EchoDashboard = () => {
       }
     };
     fetchData();
-  }, [selectedProject]);
+  }, [selectedProject, refreshKey]);
+
+  // ── Supabase Realtime: re-fetch whenever a lease is inserted or updated ──
+  useEffect(() => {
+    const channel = supabase
+      .channel('dashboard-leases-realtime')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'leases' },
+        (payload) => {
+          console.log('[Realtime] lease change detected:', payload.eventType);
+          setRefreshKey(k => k + 1);
+        }
+      )
+      .subscribe();
+
+    return () => { supabase.removeChannel(channel); };
+  }, []);
 
   // Refresh data when window gains focus (real-time after creating leases)
   useEffect(() => {
@@ -509,7 +508,8 @@ const EchoDashboard = () => {
             else if (hasExe) focusCounts.executed += 1;
             else if (hasLoi) focusCounts.loi += 1;
           });
-          setLeasingStats(prev => ({ ...prev,
+          setLeasingStats(prev => ({
+            ...prev,
             newLeases: leases.length,
             areaLeased: leases.reduce((sum, l) => sum + parseFloat(l.chargeable_area || l.units?.chargeable_area || l.area_leased || 0), 0),
             executedCount: focusCounts.executed,
@@ -717,8 +717,15 @@ const EchoDashboard = () => {
   };
 
   // Calculate ALL metrics locally from filtered units and leases
-  // This ensures correct project-specific filtering
-  const totalUnits = allUnits.length || 0;
+  // totalUnits: use projects.total_units (computed by project_id, matches Property Stats)
+  //   - "All Projects" → sum of all project total_units
+  //   - Specific project → that project's total_units
+  const totalUnitsFromProjects = selectedProject === 'All'
+    ? projects.reduce((sum, p) => sum + (p.total_units || 0), 0)
+    : (projects.find(p => String(p.id) === String(selectedProject))?.total_units || 0);
+  const totalUnits = totalUnitsFromProjects > 0
+    ? totalUnitsFromProjects
+    : (trueUnitCount > 0 ? trueUnitCount : (allUnits.length || 0));
   const totalArea = allUnits.reduce((sum, u) => sum + (parseFloat(u.chargeable_area) || parseFloat(u.area) || 0), 0);
 
   const leasedUnitsArr = allUnits.filter(u => {
@@ -906,11 +913,8 @@ const EchoDashboard = () => {
           <h2 className="echo-section-heading">Comprehensive Rental Projection Matrix</h2>
         </div>
 
-        {/* Rental Projection Table & Financial Value - 2 Column Grid */}
-        <div className="echo-charts-row">
-          <RentalProjectionTable leases={allLeases} loading={loading} />
-          <FinancialValueMonthly leases={allLeases} loading={loading} />
-        </div>
+        {/* Financial Value Monthly - Full Width with internal scroll */}
+        <FinancialValueMonthly leases={allLeases} loading={loading} />
 
         {/* Section Title - Brand Performance */}
         <div className="echo-section-title">
@@ -920,7 +924,7 @@ const EchoDashboard = () => {
 
         {/* Brand Performance & Floor Occupancy - 2 Column Grid */}
         <div className="echo-charts-row">
-          <BrandPerformanceSection leases={allLeases} parties={allParties} loading={loading} />
+          <BrandPerformanceSection leases={allLeases} parties={allParties} partiesMap={allPartiesMap} loading={loading} />
           <FloorOccupancySection units={allUnits} leases={allLeases} loading={loading} />
         </div>
 

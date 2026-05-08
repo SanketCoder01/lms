@@ -417,8 +417,12 @@ const createLease = async (req, res) => {
             notice_period_months: payload.notice_period_months || 0,
             lessee_lockin_period_months: payload.lessee_lockin_period_months || 0,
             lessor_lockin_period_months: payload.lessor_lockin_period_months || 0,
+            lessee_lockin_period_days: payload.lessee_lockin_period_days || 0,
+            lessor_lockin_period_days: payload.lessor_lockin_period_days || 0,
             lessee_notice_period_months: payload.lessee_notice_period_months || 0,
             lessor_notice_period_months: payload.lessor_notice_period_months || 0,
+            lessee_notice_period_days: payload.lessee_notice_period_days || 0,
+            lessor_notice_period_days: payload.lessor_notice_period_days || 0,
             unit_handover_date: payload.unit_handover_date || null,
             monthly_rent: payload.monthly_rent || 0,
             monthly_net_sales: payload.monthly_net_sales || 0,
@@ -497,20 +501,7 @@ const getAllLeases = async (req, res) => {
         const { status, project_id, location, search, expires_in, upcoming_escalations, lease_type } = req.query;
 
         let query = applyScopes(supabase.from('leases').select(`
-            id, lease_type, rent_model, lease_start, lease_end, monthly_rent, security_deposit, status,
-            mg_amount, mg_amount_sqft, revenue_share_percentage, rent_amount_option,
-            monthly_net_sales, sub_lease_area_sqft, lockin_period_months, created_at,
-            project_id, unit_id, party_tenant_id, party_owner_id,
-            loi_date, agreement_date, registration_date,
-            loi_document_url, agreement_document_url, registration_document_url,
-            tenure_months, unit_handover_date, fitout_period_start, fitout_period_end,
-            opening_date, rent_commencement_date,
-            has_rent_free_period, rent_free_start_date, rent_free_end_date,
-            lessee_lockin_period_months, lessor_lockin_period_months,
-            lessee_notice_period_days, lessor_notice_period_days,
-            lessee_lockin_period_days, lessor_lockin_period_days,
-            escalation_type, escalation_rate, first_escalation_date,
-            remarks,
+            *,
             projects(project_name, location, address),
             units(unit_number, chargeable_area),
             tenant:parties!leases_party_tenant_id_fkey(id, company_name, first_name, last_name, brand_name),
@@ -522,7 +513,10 @@ const getAllLeases = async (req, res) => {
         if (project_id) query = query.eq('project_id', project_id);
 
         let { data, error } = await query;
-        if (error) throw error;
+        if (error) {
+            console.error('getAllLeases SELECT error:', JSON.stringify(error, null, 2));
+            throw error;
+        }
 
         // Fetch all escalations for these leases in one query
         const leaseIds = (data || []).map(l => l.id);
@@ -605,6 +599,8 @@ const getAllLeases = async (req, res) => {
                 id: l.id,
                 unit_id: l.unit_id,
                 project_id: l.project_id,
+                party_tenant_id: l.party_tenant_id,   // critical for BrandPerformanceSection filter
+                party_owner_id: l.party_owner_id,
                 lease_type: l.lease_type,
                 rent_model: l.rent_model,
                 lease_start: l.lease_start,
@@ -833,10 +829,11 @@ const updateLease = async (req, res) => {
         const leaseId = req.params.id;
 
         // Multi-tenant: silently hide leases from other companies
+        // Use String() to avoid type mismatch between DB integer and JWT string
         if (req.companyId) {
             const { data: leaseCheck } = await supabase.from('leases')
                 .select('company_id').eq('id', leaseId).single();
-            if (!leaseCheck || leaseCheck.company_id !== req.companyId) {
+            if (!leaseCheck || String(leaseCheck.company_id) !== String(req.companyId)) {
                 return res.status(404).json({ message: 'Lease not found' });
             }
         }
@@ -844,8 +841,12 @@ const updateLease = async (req, res) => {
         const allowedFields = [
             'project_id', 'unit_id', 'party_owner_id', 'party_tenant_id', 'sub_tenant_id', 'lease_type', 'rent_model',
             'sub_lease_area_sqft', 'lease_start', 'lease_end', 'rent_commencement_date', 'fitout_period_end', 'tenure_months',
-            'lockin_period_months', 'notice_period_months', 'lessee_lockin_period_months', 'lessor_lockin_period_months',
-            'lessee_notice_period_months', 'lessor_notice_period_months', 'unit_handover_date', 'monthly_rent', 'monthly_net_sales',
+            'lockin_period_months', 'notice_period_months',
+            'lessee_lockin_period_months', 'lessor_lockin_period_months',
+            'lessee_lockin_period_days', 'lessor_lockin_period_days',
+            'lessee_notice_period_months', 'lessor_notice_period_months',
+            'lessee_notice_period_days', 'lessor_notice_period_days',
+            'unit_handover_date', 'monthly_rent', 'monthly_net_sales',
             'rent_amount_option', 'mg_amount_sqft', 'mg_amount', 'cam_charges', 'billing_frequency', 'payment_due_day', 'currency_code',
             'security_deposit', 'utility_deposit', 'revenue_share_percentage', 'revenue_share_applicable_on', 'status',
             'fitout_period_start', 'notice_vacation_date', 'opening_date', 'rent_free_start_date', 'rent_free_end_date', 'loi_date',
@@ -875,6 +876,10 @@ const updateLease = async (req, res) => {
         }
 
         if (Object.keys(updateData).length > 0) {
+            // Sanitize: Supabase rejects '' for numeric/date columns — convert to null
+            for (const key of Object.keys(updateData)) {
+                if (updateData[key] === '') updateData[key] = null;
+            }
             const { error } = await supabase.from('leases').update(updateData).eq('id', leaseId);
             if (error) throw error;
         }
@@ -893,8 +898,15 @@ const updateLease = async (req, res) => {
 
         res.json({ message: 'Lease updated successfully' });
     } catch (err) {
-        console.error('UPDATE LEASE ERROR:', err);
-        res.status(500).json({ message: 'Failed to update lease', error: err.message });
+        console.error('UPDATE LEASE ERROR — full error object:', JSON.stringify(err, null, 2));
+        console.error('UPDATE LEASE ERROR — message:', err.message);
+        res.status(500).json({
+            message: 'Failed to update lease',
+            error: err.message || 'Unknown error',
+            details: err.details || null,
+            hint: err.hint || null,
+            code: err.code || null
+        });
     }
 };
 

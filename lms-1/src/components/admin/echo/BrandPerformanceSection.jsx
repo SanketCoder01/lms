@@ -2,75 +2,105 @@ import React, { useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { formatRent, safeFloat } from '../../../utils/formatters';
 
-const BrandPerformanceSection = ({ leases = [], parties = [], loading }) => {
+const BrandPerformanceSection = ({ leases = [], parties = [], partiesMap = {}, loading }) => {
   const navigate = useNavigate();
 
-  // Build a map from party_id → most recent active lease
-  const leaseByPartyId = useMemo(() => {
-    const map = {};
-    const activeStatuses = ['active', 'approved', 'executed', 'registered', 'occupied'];
-    leases
-      .filter(lease => activeStatuses.includes((lease.status || '').toLowerCase().trim()))
-      .sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0)) // newest first
-      .forEach(lease => {
-        const tid = lease.party_tenant_id;
-        if (tid && !map[tid]) map[tid] = lease; // keep newest active lease per party
-      });
-    return map;
-  }, [leases]);
-
-  // Build brand rows from MASTERS (parties) — auto-shows every company brand without needing a lease
   const brandData = useMemo(() => {
-    if (!parties || parties.length === 0) return [];
+    const activeStatuses = ['active', 'approved', 'executed', 'registered', 'occupied'];
 
-    return parties
-      .filter(p => {
-        const isCompany = (p.type || '').toLowerCase() === 'company';
-        const hasBrand = !!p.brand_name?.trim();
-        return isCompany && hasBrand;
-      })
-      .map(p => {
-        // Brand name: ONLY brand_name field - never show company_name
-        const brandName = p.brand_name?.trim() || '-';
-
-        // Try to match a lease for this party to get sales/rent figures
-        const lease = leaseByPartyId[p.id];
-        const targetSales = parseFloat(lease?.mg_amount) || parseFloat(lease?.monthly_rent) || 0;
-        const actualSales = parseFloat(lease?.monthly_net_sales) || 0;
-        const pct = targetSales > 0 ? parseFloat(((actualSales / targetSales) * 100).toFixed(1)) : 0;
-
-        const barWidth = Math.min(pct, 100) + '%';
-        let barColor = '#c0392b';
-        if (pct >= 100) barColor = '#1a5c2a';
-        else if (pct >= 80) barColor = '#1e3a5f';
-
-        const formatValue = (val) => {
-          if (!val) return '₹0';
-          return formatRent(safeFloat(val));
-        };
-
-        const now = new Date();
-        const leaseStartDate = lease?.lease_start ? new Date(lease.lease_start) : null;
-        const isNew = leaseStartDate && (now - leaseStartDate) < 90 * 24 * 60 * 60 * 1000;
-
-        return {
-          name: brandName,
-          category: p.brand_category || '',
-          target: formatValue(targetSales) + ' PM',
-          actual: formatValue(actualSales),
-          pct,
-          barColor,
-          barWidth,
-          isNew,
-          hasLease: !!lease
-        };
-      })
-      .sort((a, b) => {
-        if (a.hasLease && !b.hasLease) return -1;
-        if (!a.hasLease && b.hasLease) return 1;
-        return b.pct - a.pct;
+    // ── Step 1: Build from ACTIVE LEASES (source of truth for real-time data) ──
+    // Group by party_tenant_id — keep newest active lease per party
+    const partyLeaseMap = {};
+    leases
+      .filter(l => activeStatuses.includes((l.status || '').toLowerCase().trim()) && l.party_tenant_id)
+      .sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0))
+      .forEach(lease => {
+        const tid = String(lease.party_tenant_id);
+        if (!partyLeaseMap[tid]) partyLeaseMap[tid] = lease;
       });
-  }, [parties, leaseByPartyId]);
+
+    // ── Step 2: Resolve party info — try partiesMap first (all parties), fall back to parties list ──
+    const resolveParty = (partyId) => {
+      const id = String(partyId);
+      // partiesMap has ALL parties regardless of type
+      return partiesMap[id] || partiesMap[parseInt(id)] || parties.find(p => String(p.id) === id) || null;
+    };
+
+    // ── Step 3: Build rows for brands WITH leases ──
+    const leaseRows = Object.entries(partyLeaseMap).map(([partyId, lease]) => {
+      const party = resolveParty(partyId);
+      // Brand name: prefer brand_name → company_name → fallback
+      const brandName = party?.brand_name?.trim() || party?.company_name?.trim() || `Party #${partyId}`;
+      const category = party?.brand_category || '';
+
+      const model = (lease.rent_model || 'Fixed').trim();
+      const isFixed = model === 'Fixed' || model === '';
+
+      // Target = MG amount for RS/Hybrid, monthly_rent for Fixed
+      const targetSales = isFixed
+        ? (parseFloat(lease.monthly_rent) || 0)
+        : (parseFloat(lease.mg_amount) || parseFloat(lease.monthly_rent) || 0);
+
+      // Actual = monthly_rent for Fixed (guaranteed), monthly_net_sales for RS/Hybrid
+      const actualSales = isFixed
+        ? targetSales
+        : (parseFloat(lease.monthly_net_sales) || 0);
+
+      const pct = targetSales > 0 ? parseFloat(((actualSales / targetSales) * 100).toFixed(1)) : 0;
+
+      const barWidth = Math.min(pct, 100) + '%';
+      let barColor = '#c0392b';
+      if (pct >= 100) barColor = '#1a5c2a';
+      else if (pct >= 80) barColor = '#1e3a5f';
+
+      const now = new Date();
+      const leaseStartDate = lease.lease_start ? new Date(lease.lease_start) : null;
+      const isNew = leaseStartDate && (now - leaseStartDate) < 90 * 24 * 60 * 60 * 1000;
+
+      return {
+        id: partyId,
+        name: brandName,
+        category,
+        model,
+        target: targetSales > 0 ? (formatRent(safeFloat(targetSales)) + ' PM') : '—',
+        actual: isFixed
+          ? (actualSales > 0 ? formatRent(safeFloat(actualSales)) + ' (Fixed)' : '₹0')
+          : (actualSales > 0 ? formatRent(safeFloat(actualSales)) : '₹0'),
+        pct,
+        barColor,
+        barWidth,
+        isNew,
+        hasLease: true,
+      };
+    });
+
+    // ── Step 4: Also show Masters brands WITHOUT leases (for visibility) ──
+    const leasedPartyIds = new Set(Object.keys(partyLeaseMap));
+    const noLeaseRows = parties
+      .filter(p => {
+        const hasBrand = !!(p.brand_name?.trim());
+        const alreadyShown = leasedPartyIds.has(String(p.id));
+        return hasBrand && !alreadyShown;
+      })
+      .map(p => ({
+        id: String(p.id),
+        name: p.brand_name.trim(),
+        category: p.brand_category || '',
+        target: '—',
+        actual: '—',
+        pct: 0,
+        barColor: '#e2e8f0',
+        barWidth: '0%',
+        isNew: false,
+        hasLease: false,
+      }));
+
+    // ── Step 5: Sort — with-lease first (by pct desc), then no-lease ──
+    return [
+      ...leaseRows.sort((a, b) => b.pct - a.pct),
+      ...noLeaseRows,
+    ];
+  }, [leases, parties, partiesMap]);
 
   const handleBrandClick = (brandName) => {
     navigate(`/admin/leases?brand=${encodeURIComponent(brandName)}`);
@@ -81,13 +111,13 @@ const BrandPerformanceSection = ({ leases = [], parties = [], loading }) => {
   return (
     <div className="echo-card" style={{ border: 'none' }}>
       <h3 style={{ fontSize: '14px', fontWeight: 600, color: '#0f172a', marginBottom: '2px' }}>Brand Sales Performance</h3>
-      <p style={{ fontSize: '12px', color: '#64748b', marginBottom: '20px' }}>All brands from Masters · Sales vs lease target</p>
+      <p style={{ fontSize: '12px', color: '#64748b', marginBottom: '20px' }}>Active leases · Actual sales vs MG/target</p>
 
       {loading ? (
         <div style={{ textAlign: 'center', padding: '20px', color: '#64748b' }}>Loading...</div>
       ) : brandData.length === 0 ? (
         <div style={{ textAlign: 'center', padding: '20px', color: '#64748b' }}>
-          No company brands found in Masters. Add a company party to see brands here.
+          No active leases found. Create a lease to see brand performance here.
         </div>
       ) : (
         <>
@@ -107,7 +137,7 @@ const BrandPerformanceSection = ({ leases = [], parties = [], loading }) => {
           }}>
             <span>Brand</span>
             <span>Actual vs Target</span>
-            <span style={{ textAlign: 'right' }}>Actual</span>
+            <span style={{ textAlign: 'right' }}>Actual Sales</span>
             <span style={{ textAlign: 'right' }}>%</span>
           </div>
 
@@ -121,7 +151,7 @@ const BrandPerformanceSection = ({ leases = [], parties = [], loading }) => {
           <div className="brand-scroll-container" style={{ display: 'flex', flexDirection: 'column', gap: '16px', maxHeight: '300px', overflowY: 'auto', paddingRight: '8px' }}>
             {brandData.map((b, i) => (
               <div
-                key={i}
+                key={b.id || i}
                 onClick={() => handleBrandClick(b.name)}
                 style={{ display: 'grid', gridTemplateColumns: '110px 1fr 80px 50px', gap: '8px', alignItems: 'center', cursor: 'pointer', padding: '4px', borderRadius: '4px', transition: 'background-color 0.2s' }}
                 onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f8fafc'}
@@ -136,9 +166,13 @@ const BrandPerformanceSection = ({ leases = [], parties = [], loading }) => {
                   <div style={{ position: 'relative', height: '10px', backgroundColor: '#f3f4f6', borderRadius: '9999px', overflow: 'hidden' }}>
                     <div style={{ position: 'absolute', top: 0, left: 0, height: '100%', borderRadius: '9999px', backgroundColor: b.barColor, width: b.barWidth }} />
                   </div>
-                  <p style={{ fontSize: '10px', color: '#64748b', margin: '2px 0 0' }}>{b.hasLease ? `Target: ${b.target}` : 'No lease data yet'}</p>
+                  <p style={{ fontSize: '10px', color: '#64748b', margin: '2px 0 0' }}>
+                    {b.hasLease ? `Target: ${b.target}` : 'No lease data yet'}
+                  </p>
                 </div>
-                <span style={{ fontSize: '13px', fontWeight: 600, color: '#0f172a', textAlign: 'right' }}>{b.hasLease ? b.actual : '—'}</span>
+                <span style={{ fontSize: '13px', fontWeight: 600, color: '#0f172a', textAlign: 'right' }}>
+                  {b.hasLease ? b.actual : '—'}
+                </span>
                 <span style={{ fontSize: '13px', fontWeight: 600, textAlign: 'right', color: b.pct >= 100 ? '#1a5c2a' : b.pct >= 80 ? '#0f172a' : b.hasLease ? '#c0392b' : '#94a3b8' }}>
                   {b.hasLease ? `${b.pct}%` : '—'}
                 </span>

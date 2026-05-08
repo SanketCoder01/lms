@@ -130,28 +130,32 @@ const getProjects = async (req, res) => {
       );
     }
 
-    // Fetch units (with status) to compute total_units and occupied_units
-    let unitsQ = supabase.from('units').select('project_id, status');
-    if (req.companyId) unitsQ = unitsQ.eq('company_id', req.companyId);
-    const { data: units } = await unitsQ;
-
+    // ── Unit counts: scoped by project_id of COMPANY'S projects ─────────────────
+    // Privacy: `projectIds` only contains IDs of THIS company's projects (filtered
+    // above by company_id on the projects table). Counting units by project_id
+    // gives the same result as getProjectById (which shows 102 correctly) because
+    // it doesn't rely on company_id being stamped on every unit row.
+    const projectIds = filteredProjects.map(p => p.id);
     const unitCounts = {};
     const occupiedCounts = {};
-    if (units) {
-      units.forEach(u => {
+    const floorCounts = {};
+
+    if (projectIds.length > 0) {
+      // Units — count by project_id only (privacy guaranteed by project ownership above)
+      const { data: units } = await supabase
+        .from('units')
+        .select('project_id, status')
+        .in('project_id', projectIds);
+
+      (units || []).forEach(u => {
         unitCounts[u.project_id] = (unitCounts[u.project_id] || 0) + 1;
-        // Count leased/occupied/sold as occupied — matches dashboard logic
         const s = (u.status || '').toLowerCase();
         if (s === 'leased' || s === 'occupied' || s === 'sold') {
           occupiedCounts[u.project_id] = (occupiedCounts[u.project_id] || 0) + 1;
         }
       });
-    }
 
-    // Fetch actual floor count from project_floors table
-    const projectIds = filteredProjects.map(p => p.id);
-    const floorCounts = {};
-    if (projectIds.length > 0) {
+      // Floor counts from project_floors
       const { data: floorRows } = await supabase
         .from('project_floors')
         .select('project_id')
@@ -165,7 +169,6 @@ const getProjects = async (req, res) => {
       ...p,
       total_units: unitCounts[p.id] || 0,
       occupied_units: occupiedCounts[p.id] || 0,
-      // actual_floor_count = real floors added via Unit Structure; fall back to manual total_floors
       actual_floor_count: floorCounts[p.id] !== undefined ? floorCounts[p.id] : (p.total_floors || 0)
     })).sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
 
@@ -464,10 +467,11 @@ const getUnitsByProject = async (req, res) => {
       }
     }
 
-    // Step 1: Fetch units separately
-    let unitQuery = supabase.from('units').select('*').eq('project_id', id).order('unit_number', { ascending: true });
-    // Also scope units by company_id for defence-in-depth
-    if (req.companyId) unitQuery = unitQuery.eq('company_id', req.companyId);
+    // Step 1: Fetch units by project_id only.
+    // Privacy: the project ownership check above (lines 462-468) already ensures
+    // this project belongs to req.companyId. No need to also filter by company_id
+    // on the units table — that would incorrectly exclude units missing the stamp.
+    const unitQuery = supabase.from('units').select('*').eq('project_id', id).order('unit_number', { ascending: true });
 
     const { data: units, error } = await unitQuery;
     if (error) throw error;
