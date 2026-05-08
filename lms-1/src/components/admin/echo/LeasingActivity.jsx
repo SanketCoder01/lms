@@ -12,23 +12,9 @@ const C = {
 };
 
 /* ─── Locale-independent month key ───────────────────────────── */
-const MO = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-const fmtMon = (d) => `${MO[d.getMonth()]} ${String(d.getFullYear()).slice(2)}`;
 
-/* ─── Custom 2-line X-axis tick: month on line 1, year on line 2 ─── */
-const TwoLineTick = ({ x, y, payload }) => {
-  const parts = (payload?.value || '').split(' '); // ['Oct', '25']
-  return (
-    <g transform={`translate(${x},${y})`}>
-      <text x={0} y={0} dy={12} textAnchor="middle" fill="#475569" fontSize={10} fontWeight={500}>
-        {parts[0]}
-      </text>
-      <text x={0} y={0} dy={24} textAnchor="middle" fill="#94a3b8" fontSize={9}>
-        {parts[1] || ''}
-      </text>
-    </g>
-  );
-};
+
+
 const CustomTooltip = ({ active, payload, label }) => {
   if (!active || !payload?.length) return null;
   const rows = payload.filter(p => p.value > 0);
@@ -87,38 +73,29 @@ const LeasingActivity = ({
 
   /* Build one entry per month: { month, registered, executed, loi } */
   const buildDisplayData = () => {
-    const hasBarData =
-      Array.isArray(chartData) &&
-      chartData.some(d => d.loiUnits > 0 || d.executedUnits > 0 || d.registeredUnits > 0);
-
-    if (hasBarData) {
-      return chartData
-        .filter(d => d.loiUnits > 0 || d.executedUnits > 0 || d.registeredUnits > 0)
-        .map(d => ({
-          month: d.month,
-          registered: d.registeredUnits || 0,
-          executed: d.executedUnits || 0,
-          loi: d.loiUnits || 0,
-        }));
+    if (!Array.isArray(chartData) || chartData.length === 0) {
+      // No chart data at all — show all 12 months of current year as empty
+      const MO_ALL = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+      const yr = String(new Date().getFullYear()).slice(2);
+      return MO_ALL.map(m => ({ month: `${m} ${yr}`, registered: 0, executed: 0, loi: 0 }));
     }
 
-    if (loiCount + executedCount + registeredCount > 0) {
-      return [{
-        month: fmtMon(new Date()),
-        registered: registeredCount,
-        executed: executedCount,
-        loi: loiCount,
-      }];
-    }
-
-    return [];
+    // Show ALL months (including zero-activity months) so the timeline is continuous
+    return chartData.map(d => ({
+      month: d.month,
+      registered: d.registeredUnits || 0,
+      executed: d.executedUnits || 0,
+      loi: d.loiUnits || 0,
+    }));
   };
 
   const displayData = buildDisplayData();
 
+  // Show full year label: "Jan 26 – Dec 26"
   const dateRangeLabel = displayData.length > 1
     ? `${displayData[0].month} – ${displayData[displayData.length - 1].month}`
     : displayData.length === 1 ? displayData[0].month : '';
+
 
   /*
     Each month group needs ~90px:
@@ -193,11 +170,12 @@ const LeasingActivity = ({
 
                   <XAxis
                     dataKey="month"
-                    tick={<TwoLineTick />}
+                    tickFormatter={(value) => String(value || '')}
+                    tick={{ fontSize: 11, fill: '#475569', fontWeight: 500 }}
                     axisLine={false}
                     tickLine={false}
                     interval={0}
-                    height={36}
+                    height={28}
                   />
 
                   <YAxis

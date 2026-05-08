@@ -357,37 +357,9 @@ const createLease = async (req, res) => {
             return res.status(400).json({ message: 'party_owner_id is required for Direct lease' });
         }
 
-        // Prevent duplicate main leases with overlapping date ranges for same unit
-        // PRIVACY: scope to current company only — never let another company's lease block this company
-        // NOTE: If no companyId (super admin token), skip this check — don't let unscoped queries block creation
-        if (payload.lease_type !== 'Subtenant lease' && req.companyId) {
-            const { data: ex } = await supabase.from('leases')
-                .select('id, lease_start, lease_end, status')
-                .eq('unit_id', payload.unit_id)
-                .eq('company_id', req.companyId)
-                .neq('lease_type', 'Subtenant lease');
-
-            if (ex && ex.length > 0) {
-                // Only block leases that are truly live/active — do NOT include draft or rejected
-                const blockingStatuses = ['active', 'approved', 'executed', 'registered'];
-                const newStart = new Date(payload.lease_start);
-                const newEnd = new Date(payload.lease_end);
-
-                const conflicting = ex.find(l => {
-                    if (!blockingStatuses.includes((l.status || '').toLowerCase().trim())) return false;
-                    const existStart = new Date(l.lease_start);
-                    const existEnd = new Date(l.lease_end);
-                    // True overlap: new lease starts before existing ends AND new ends after existing starts
-                    return newStart <= existEnd && newEnd >= existStart;
-                });
-
-                if (conflicting) {
-                    return res.status(400).json({
-                        message: `A lease (ID: ${conflicting.id}) with overlapping dates (${conflicting.lease_start} to ${conflicting.lease_end}) already exists for this unit. Please adjust the dates or choose a different unit.`
-                    });
-                }
-            }
-        }
+        // Overlap check removed — users may create leases for any unit/project
+        // with whatever start and end dates they choose (multiple sequential or
+        // concurrent leases on the same unit are a valid business scenario).
 
         // Issue 68: Correct inclusive tenure calculation
         // Example: Start July 20 2024, 9 years = 108 months, End = July 19 2033

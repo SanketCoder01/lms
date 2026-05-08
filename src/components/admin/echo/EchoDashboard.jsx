@@ -244,61 +244,63 @@ const EchoDashboard = () => {
             revShareUnits
           });
 
-          // Calculate leasing activity stats - leases created in last 6 months
-          const now = new Date();
-          const sixMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 5, 1);
-          console.log('Leases for activity calculation:', leases.length, leases);
-          const recentLeases = leases.filter(l => {
-            const leaseDate = new Date(l.created_at || l.lease_start);
-            const isActive = l.status === 'active' || l.status === 'Active' || l.status === 'approved';
-            console.log(`Lease ${l.id}: created=${l.created_at}, lease_start=${l.lease_start}, status=${l.status}, inRange=${leaseDate >= sixMonthsAgo}`);
-            return leaseDate >= sixMonthsAgo && isActive;
-          });
-          console.log('Recent leases in 6 months:', recentLeases.length);
+          // ── Leasing Activity: group by month+year from created_at/lease_start ─
+          // Build a map of all unique months across ALL leases (no status filter for chart)
+          const monthActivityMap = {}; // key: "YYYY-MM"
 
-          // Group by month
-          const monthData = {};
-          for (let i = 5; i >= 0; i--) {
-            const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-            const key = d.toLocaleDateString('en-US', { month: 'short' });
-            monthData[key] = { month: key, units: 0, area: 0 };
-          }
+          leases.forEach(lease => {
+            // Use created_at or lease_start as the reference date
+            const refDateRaw = lease.created_at || lease.lease_start;
+            if (!refDateRaw) return;
+            const refDate = new Date(refDateRaw);
+            if (isNaN(refDate.getTime())) return;
 
-          recentLeases.forEach(lease => {
-            const leaseDate = new Date(lease.lease_start || lease.created_at);
-            const key = leaseDate.toLocaleDateString('en-US', { month: 'short' });
-            if (monthData[key]) {
-              monthData[key].units += 1;
-              monthData[key].area += parseFloat(lease.area_leased) || 0;
+            const yr = refDate.getFullYear();
+            const mo = refDate.getMonth(); // 0-indexed
+            const key = `${yr}-${String(mo + 1).padStart(2, '0')}`;
+
+            if (!monthActivityMap[key]) {
+              // Label like "Apr 25" or "Jan 26"
+              const label = refDate.toLocaleDateString('en-US', { month: 'short' }) +
+                ' ' + String(yr).slice(2);
+              monthActivityMap[key] = { sortKey: key, month: label, loi: 0, executed: 0, registered: 0 };
             }
+
+            // Classify the lease for this month
+            const hasReg = !!(lease.registration_date && String(lease.registration_date).trim());
+            const hasAgr = !!(lease.agreement_date && String(lease.agreement_date).trim());
+            const hasLoi = !!(lease.loi_date && String(lease.loi_date).trim());
+            const status = (lease.status || '').toLowerCase();
+            const isActive = status === 'active' || status === 'approved' || status === 'leased' ||
+                             status === 'executed' || status === 'registered';
+
+            if (hasReg) monthActivityMap[key].registered += 1;
+            else if (hasAgr || isActive) monthActivityMap[key].executed += 1;
+            else if (hasLoi) monthActivityMap[key].loi += 1;
           });
 
-          const chartDataArr = Object.values(monthData).map(d => ({
-            ...d,
-            area: d.area // Keep actual area in sqft, no rounding
-          }));
+          // Sort chronologically by YYYY-MM key and build chart array
+          const chartDataArr = Object.values(monthActivityMap)
+            .sort((a, b) => a.sortKey.localeCompare(b.sortKey))
+            .map(({ sortKey: _sk, ...rest }) => rest); // remove sortKey from chart data
 
-          // ── Leasing Activity Counts ─────────────────────────────────
-          // Executed  = total leases created (all active/approved leases)
-          // Registered = registration_date filled by admin
-          // LOI        = only loi_date filled (no agreement_date or registration_date)
+          console.log('Leasing activity chart data (grouped by month+year):', chartDataArr);
+
+          // ── Summary counts (totals across ALL time) ─────────────────
           const getLeasingStatusCounts = (leaseList) => {
             const counts = { registered: 0, executed: 0, loi: 0 };
 
-            // Count all active/approved leases as executed
-            const activeLeasesList = leaseList.filter(l => {
-              const status = (l.status || '').toLowerCase();
-              return status === 'active' || status === 'approved' || status === 'leased' || status === 'executed' || status === 'registered';
-            });
-            counts.executed = activeLeasesList.length;
-
-            activeLeasesList.forEach(lease => {
+            leaseList.forEach(lease => {
               const hasReg = !!(lease.registration_date && String(lease.registration_date).trim());
               const hasAgr = !!(lease.agreement_date && String(lease.agreement_date).trim());
               const hasLoi = !!(lease.loi_date && String(lease.loi_date).trim());
+              const status = (lease.status || '').toLowerCase();
+              const isActive = status === 'active' || status === 'approved' || status === 'leased' ||
+                               status === 'executed' || status === 'registered';
 
               if (hasReg) counts.registered += 1;
-              if (hasLoi && !hasReg && !hasAgr) counts.loi += 1;
+              else if (hasAgr || isActive) counts.executed += 1;
+              else if (hasLoi) counts.loi += 1;
             });
 
             return counts;
@@ -309,9 +311,10 @@ const EchoDashboard = () => {
           const executedCount = statusCounts.executed;
           const registeredCount = statusCounts.registered;
 
+          const allLeasesWithDate = leases.filter(l => l.created_at || l.lease_start);
           setLeasingStats({
-            newLeases: recentLeases.length,
-            areaLeased: recentLeases.reduce((sum, l) => sum + (parseFloat(l.area_leased) || 0), 0),
+            newLeases: allLeasesWithDate.length,
+            areaLeased: allLeasesWithDate.reduce((sum, l) => sum + (parseFloat(l.area_leased) || 0), 0),
             chartData: chartDataArr,
             loiCount,
             executedCount,
@@ -349,24 +352,48 @@ const EchoDashboard = () => {
           let leases = Array.isArray(leasesRes.data) ? leasesRes.data : (leasesRes.data?.data || []);
           setAllLeases(leases);
 
-          // Recalculate leasing counts on focus (real-time update)
-          const focusCounts = { registered: 0, executed: 0, loi: 0 };
-          const activeLeasesList = leases.filter(l => {
-            const status = (l.status || '').toLowerCase();
-            return status === 'active' || status === 'approved' || status === 'leased' || status === 'executed' || status === 'registered';
-          });
-          focusCounts.executed = activeLeasesList.length;
-
-          activeLeasesList.forEach(lease => {
+          // Recalculate leasing counts + chart data on focus (real-time update)
+          const focusMonthMap = {};
+          leases.forEach(lease => {
+            const refDateRaw = lease.created_at || lease.lease_start;
+            if (!refDateRaw) return;
+            const refDate = new Date(refDateRaw);
+            if (isNaN(refDate.getTime())) return;
+            const yr = refDate.getFullYear();
+            const mo = refDate.getMonth();
+            const key = `${yr}-${String(mo + 1).padStart(2, '0')}`;
+            if (!focusMonthMap[key]) {
+              const label = refDate.toLocaleDateString('en-US', { month: 'short' }) + ' ' + String(yr).slice(2);
+              focusMonthMap[key] = { sortKey: key, month: label, loi: 0, executed: 0, registered: 0 };
+            }
             const hasReg = !!(lease.registration_date && String(lease.registration_date).trim());
             const hasAgr = !!(lease.agreement_date && String(lease.agreement_date).trim());
             const hasLoi = !!(lease.loi_date && String(lease.loi_date).trim());
+            const s = (lease.status || '').toLowerCase();
+            const isActive = s === 'active' || s === 'approved' || s === 'leased' || s === 'executed' || s === 'registered';
+            if (hasReg) focusMonthMap[key].registered += 1;
+            else if (hasAgr || isActive) focusMonthMap[key].executed += 1;
+            else if (hasLoi) focusMonthMap[key].loi += 1;
+          });
+          const focusChartData = Object.values(focusMonthMap)
+            .sort((a, b) => a.sortKey.localeCompare(b.sortKey))
+            .map(({ sortKey: _sk, ...rest }) => rest);
 
+          // Summary counts
+          const focusCounts = { registered: 0, executed: 0, loi: 0 };
+          leases.forEach(lease => {
+            const hasReg = !!(lease.registration_date && String(lease.registration_date).trim());
+            const hasAgr = !!(lease.agreement_date && String(lease.agreement_date).trim());
+            const hasLoi = !!(lease.loi_date && String(lease.loi_date).trim());
+            const s = (lease.status || '').toLowerCase();
+            const isActive = s === 'active' || s === 'approved' || s === 'leased' || s === 'executed' || s === 'registered';
             if (hasReg) focusCounts.registered += 1;
-            if (hasLoi && !hasReg && !hasAgr) focusCounts.loi += 1;
+            else if (hasAgr || isActive) focusCounts.executed += 1;
+            else if (hasLoi) focusCounts.loi += 1;
           });
           setLeasingStats(prev => ({
             ...prev,
+            chartData: focusChartData,
             executedCount: focusCounts.executed,
             registeredCount: focusCounts.registered,
             loiCount: focusCounts.loi,

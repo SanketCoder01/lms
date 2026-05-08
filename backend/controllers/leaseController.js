@@ -345,26 +345,9 @@ const createLease = async (req, res) => {
             return res.status(400).json({ message: 'party_owner_id is required for Direct lease' });
         }
 
-        // Issue 37: Proper date-range overlap check to prevent duplicate main leases
-        if (payload.lease_type !== 'Subtenant lease') {
-            const { data: ex } = await supabase.from('leases')
-                .select('id, lease_start, lease_end')
-                .eq('unit_id', payload.unit_id)
-                .eq('status', 'active')
-                .not('lease_type', 'eq', 'Subtenant lease');
-
-            if (ex && ex.length > 0) {
-                // Check for date overlap
-                const newStart = new Date(payload.lease_start);
-                const newEnd = new Date(payload.lease_end);
-                const hasOverlap = ex.some(existing => {
-                    const existStart = new Date(existing.lease_start);
-                    const existEnd = new Date(existing.lease_end);
-                    return newStart <= existEnd && newEnd >= existStart;
-                });
-                if (hasOverlap) return res.status(400).json({ message: "An active main lease with overlapping dates already exists for this unit." });
-            }
-        }
+        // Overlap check removed — users may create leases for any unit/project
+        // with whatever start and end dates they choose (multiple sequential or
+        // concurrent leases on the same unit are a valid business scenario).
 
         // Issue 68: Correct inclusive tenure calculation
         // Example: Start July 20 2024, 9 years = 108 months, End = July 19 2033

@@ -304,6 +304,7 @@ const EchoDashboard = () => {
               else if (hasExe) counts.executed += 1;
               else if (hasLoi) counts.loi += 1;
             });
+            console.log(`[LeasingActivity] Status counts: LOI=${counts.loi}, Executed=${counts.executed}, Registered=${counts.registered}`);
             return counts;
           };
 
@@ -315,15 +316,50 @@ const EchoDashboard = () => {
           // Dynamic Bar chart: gather all qualified leases
           const qualifiedLeases = leases.filter(l => qualifiesForMilestone(l));
 
-          // Locale-independent month key: "Jan '25", "Feb '26" etc.
-          const MO = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+          // Locale-independent month key: "Jan 25", "Feb 26" etc.
+          const MO = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
           const fmtMon = (d) => `${MO[d.getMonth()]} ${String(d.getFullYear()).slice(2)}`;
+          
+          // Robust date parser - handles various formats including malformed years
+          const parseDate = (dateStr) => {
+            if (!dateStr || !String(dateStr).trim() || dateStr === 'null') return null;
+            let d = new Date(dateStr);
+            if (isNaN(d.getTime())) {
+              // Try ISO format parsing
+              d = new Date(dateStr + 'T00:00:00');
+            }
+            if (isNaN(d.getTime())) {
+              // Try DD-MM-YYYY or DD/MM/YYYY
+              const parts = dateStr.split(/[-/]/);
+              if (parts.length === 3) {
+                const [day, month, year] = parts.length === 3 && parts[2].length === 4 
+                  ? [parts[0], parts[1], parts[2]]
+                  : [parts[2], parts[1], parts[0]];
+                d = new Date(`${year}-${month}-${day}`);
+              }
+            }
+            if (isNaN(d.getTime())) return null;
+            
+            // FIX: Handle malformed years like 0001, 0002 that should be 2025, 2026
+            // Pattern: 0001 = 2025, 0002 = 2026 (offset from 2024)
+            const year = d.getFullYear();
+            if (year < 100) {
+              // Map 0001 → 2025, 0002 → 2026, etc.
+              const correctedYear = 2024 + year;
+              d.setFullYear(correctedYear);
+              console.log(`[parseDate] Fixed malformed year ${year} → ${correctedYear} for date ${dateStr}`);
+            }
+            
+            return d;
+          };
 
           // If no milestone chart bars exist, build a single-bar summary for current month
           const buildFallbackChartData = (loi, executed, registered) => {
-            const monthKey = fmtMon(new Date());
+            const now = new Date();
+            const monthKey = fmtMon(now);
             return [{
               month: monthKey,
+              sortKey: now.getFullYear() * 100 + now.getMonth(),
               units: loi + executed + registered,
               area: 0,
               loiUnits: loi, loiArea: 0,
@@ -332,82 +368,106 @@ const EchoDashboard = () => {
             }];
           };
 
-          // Find actual date bounds from qualified leases only — no artificial default window
-          let minDate = null;
-          let maxDate = null;
+          // ── Rolling 12-month window anchored to Jan 2026 minimum ──────────────
+          // Logic:
+          //   windowStart = max(Jan 2026, currentMonth - 11 months)
+          //   windowEnd   = windowStart + 11 months
+          //
+          // In May 2026:  rollingBack = Jun 2025 → clamped to Jan 2026 → window = Jan 26 – Dec 26
+          // In Jan 2027:  rollingBack = Feb 2026 → no clamp needed  → window = Feb 26 – Jan 27
+          // In Feb 2027:  rollingBack = Mar 2026                     → window = Mar 26 – Feb 27
+          // Always exactly 12 months, always rolling forward, never before Jan 2026.
 
-          qualifiedLeases.forEach(lease => {
-            const hasReg = !!(lease.registration_date && String(lease.registration_date).trim());
-            const hasExe = !!(lease.agreement_date && String(lease.agreement_date).trim());
-            const hasLoi = !!(lease.loi_date && String(lease.loi_date).trim());
+          const now = new Date();
+          const ANCHOR_START = new Date(2026, 0, 1); // Jan 1 2026 — hard minimum
 
-            let dateToUse = lease.created_at || lease.lease_start;
-            if (hasReg) dateToUse = lease.registration_date;
-            else if (hasExe) dateToUse = lease.agreement_date;
-            else if (hasLoi) dateToUse = lease.loi_date;
+          // 12 months back from today (inclusive of current month)
+          const rollingBack = new Date(now.getFullYear(), now.getMonth() - 11, 1);
+          const windowStart = rollingBack < ANCHOR_START ? new Date(ANCHOR_START) : rollingBack;
+          // windowEnd = windowStart + 11 months
+          const windowEnd = new Date(windowStart.getFullYear(), windowStart.getMonth() + 11, 1);
 
-            const d = new Date(dateToUse);
-            if (!isNaN(d.getTime())) {
-              d.setDate(1); d.setHours(0, 0, 0, 0);
-              if (!minDate || d < minDate) minDate = new Date(d);
-              if (!maxDate || d > maxDate) maxDate = new Date(d);
-            }
-          });
+          const isWithinWindow = (d) => {
+            if (!d) return false;
+            const m = new Date(d.getFullYear(), d.getMonth(), 1);
+            const ws = new Date(windowStart.getFullYear(), windowStart.getMonth(), 1);
+            const we = new Date(windowEnd.getFullYear(), windowEnd.getMonth(), 1);
+            return m >= ws && m <= we;
+          };
 
-          // Build monthly buckets only for the actual range found
+          // Pre-populate ALL months in the window so the X-axis is always continuous
           const milestoneMonthData = {};
-          if (minDate && maxDate) {
-            let currentMonth = new Date(minDate);
-            while (currentMonth <= maxDate) {
-              const key = fmtMon(currentMonth);
+          {
+            let cur = new Date(windowStart.getFullYear(), windowStart.getMonth(), 1);
+            const weRef = new Date(windowEnd.getFullYear(), windowEnd.getMonth(), 1);
+            while (cur <= weRef) {
+              const key = fmtMon(cur);
               milestoneMonthData[key] = {
                 month: key,
+                sortKey: cur.getFullYear() * 100 + cur.getMonth(),
                 units: 0, area: 0,
                 loiUnits: 0, loiArea: 0,
                 executedUnits: 0, executedArea: 0,
                 registeredUnits: 0, registeredArea: 0
               };
-              currentMonth.setMonth(currentMonth.getMonth() + 1);
+              cur.setMonth(cur.getMonth() + 1);
             }
           }
 
+          // ── Count EACH milestone independently in its OWN month ──────────
+          // If LOI was in April and Registration in June → LOI bar in Apr, Registered bar in Jun
+          // If all 3 happened in same month → all 3 bars show in that month
           qualifiedLeases.forEach(lease => {
-            // Use date presence only — document upload is NOT required for chart plotting
-            const hasReg = !!(lease.registration_date && String(lease.registration_date).trim());
-            const hasExe = !!(lease.agreement_date && String(lease.agreement_date).trim());
-            const hasLoi = !!(lease.loi_date && String(lease.loi_date).trim());
+            const area = parseFloat(lease.chargeable_area || lease.units?.chargeable_area || lease.area_leased || lease.sub_lease_area_sqft || 0);
 
-            // Pick the most advanced milestone date
-            let dateToUse = lease.created_at || lease.lease_start;
-            if (hasReg) dateToUse = lease.registration_date;
-            else if (hasExe) dateToUse = lease.agreement_date;
-            else if (hasLoi) dateToUse = lease.loi_date;
+            // LOI milestone → placed in loi_date month
+            const loiDate = parseDate(lease.loi_date);
+            if (loiDate && isWithinWindow(loiDate)) {
+              const key = fmtMon(loiDate);
+              milestoneMonthData[key].loiUnits += 1;
+              milestoneMonthData[key].loiArea += area;
+              milestoneMonthData[key].units += 1;
+              milestoneMonthData[key].area += area;
+            }
 
-            const d = new Date(dateToUse);
-            if (!isNaN(d.getTime())) {
-              const key = fmtMon(d);
-              if (milestoneMonthData[key]) {
-                const area = parseFloat(lease.chargeable_area || lease.units?.chargeable_area || lease.area_leased || lease.sub_lease_area_sqft || 0);
+            // Executed (Agreement) milestone → placed in agreement_date month
+            const agreementDate = parseDate(lease.agreement_date);
+            if (agreementDate && isWithinWindow(agreementDate)) {
+              const key = fmtMon(agreementDate);
+              milestoneMonthData[key].executedUnits += 1;
+              milestoneMonthData[key].executedArea += area;
+              milestoneMonthData[key].units += 1;
+              milestoneMonthData[key].area += area;
+            }
 
-                milestoneMonthData[key].units += 1;
-                milestoneMonthData[key].area += area;
-
-                if (hasReg) {
-                  milestoneMonthData[key].registeredUnits += 1;
-                  milestoneMonthData[key].registeredArea += area;
-                } else if (hasExe) {
-                  milestoneMonthData[key].executedUnits += 1;
-                  milestoneMonthData[key].executedArea += area;
-                } else if (hasLoi) {
-                  milestoneMonthData[key].loiUnits += 1;
-                  milestoneMonthData[key].loiArea += area;
-                }
+            // Registered milestone → placed in registration_date month
+            const registrationDate = parseDate(lease.registration_date);
+            if (registrationDate && isWithinWindow(registrationDate)) {
+              const key = fmtMon(registrationDate);
+              if (!milestoneMonthData[key]) {
+                milestoneMonthData[key] = {
+                  month: key,
+                  sortKey: registrationDate.getFullYear() * 100 + registrationDate.getMonth(),
+                  units: 0, area: 0,
+                  loiUnits: 0, loiArea: 0,
+                  executedUnits: 0, executedArea: 0,
+                  registeredUnits: 0, registeredArea: 0
+                };
               }
+              milestoneMonthData[key].registeredUnits += 1;
+              milestoneMonthData[key].registeredArea += area;
+              milestoneMonthData[key].units += 1;
+              milestoneMonthData[key].area += area;
             }
           });
 
           // Build final chart data: use milestone data if available, else fallback from counts
           const milestoneChartArray = Object.values(milestoneMonthData);
+          
+          // CRITICAL: Sort by sortKey (year*100 + month) for proper timeline flow
+          milestoneChartArray.sort((a, b) => (a.sortKey || 0) - (b.sortKey || 0));
+          
+          // Window already limits to current month → next 11 months; no further filtering needed.
           const chartHasVisibleBars = milestoneChartArray.some(d =>
             d.loiUnits > 0 || d.executedUnits > 0 || d.registeredUnits > 0
           );
@@ -416,6 +476,13 @@ const EchoDashboard = () => {
             : (loiCount + executedCount + registeredCount > 0)
               ? buildFallbackChartData(loiCount, executedCount, registeredCount)
               : milestoneChartArray;
+
+          // DEBUG: Show months with combined activities
+          console.log('[LeasingActivity] === MONTHLY BREAKDOWN (Current & Future) ===');
+          finalChartData.filter(d => d.loiUnits > 0 || d.executedUnits > 0 || d.registeredUnits > 0).forEach(d => {
+            console.log(`  ${d.month}: LOI=${d.loiUnits}, Executed=${d.executedUnits}, Registered=${d.registeredUnits}`);
+          });
+          console.log('[LeasingActivity] Total months with data:', finalChartData.filter(d => d.loiUnits > 0 || d.executedUnits > 0 || d.registeredUnits > 0).length);
 
           setLeasingStats({
             newLeases: leases.length,
@@ -720,12 +787,8 @@ const EchoDashboard = () => {
   // totalUnits: use projects.total_units (computed by project_id, matches Property Stats)
   //   - "All Projects" → sum of all project total_units
   //   - Specific project → that project's total_units
-  const totalUnitsFromProjects = selectedProject === 'All'
-    ? projects.reduce((sum, p) => sum + (p.total_units || 0), 0)
-    : (projects.find(p => String(p.id) === String(selectedProject))?.total_units || 0);
-  const totalUnits = totalUnitsFromProjects > 0
-    ? totalUnitsFromProjects
-    : (trueUnitCount > 0 ? trueUnitCount : (allUnits.length || 0));
+  // Always use the exact count from DB (avoids stale project.total_units mismatch)
+  const totalUnits = trueUnitCount > 0 ? trueUnitCount : (allUnits.length || 0);
   const totalArea = allUnits.reduce((sum, u) => sum + (parseFloat(u.chargeable_area) || parseFloat(u.area) || 0), 0);
 
   const leasedUnitsArr = allUnits.filter(u => {
