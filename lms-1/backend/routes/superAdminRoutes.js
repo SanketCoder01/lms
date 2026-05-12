@@ -10,7 +10,7 @@ const {
   createCompanyProject, getCompanyProjectLimit, updateCompanyQuota, deleteCompanyProject,
   getCompanyUserLimit, updateCompanyUserLimit,
 } = require('../controllers/superAdminController');
-const { getModuleUsers, createModuleUser, updateModuleUser, deleteModuleUser, getModuleFeatures } =
+const { getModuleUsers, createModuleUser, updateModuleUser, deleteModuleUser, getModuleFeatures, syncModuleUserAuth } =
   require('../controllers/moduleUserController');
 const { getCompanyProjects } = require('../controllers/projectUserController');
 
@@ -58,10 +58,12 @@ router.put('/announcements/:id',       superAdminAuth, toggleAnnouncement);
 router.delete('/announcements/:id',    superAdminAuth, deleteAnnouncement);
 
 // Module User Assignment
-router.get('/module-features',              superAdminAuth, getModuleFeatures);
-router.get('/module-users/:company_id',     superAdminAuth, getModuleUsers);
-router.post('/module-users',               superAdminAuth, createModuleUser);
-router.put('/module-users/:id',            superAdminAuth, updateModuleUser);
-router.delete('/module-users/:id',         superAdminAuth, deleteModuleUser);
+router.get('/module-features',                  superAdminAuth, getModuleFeatures);
+router.get('/module-users/:company_id',         superAdminAuth, getModuleUsers);
+router.post('/module-users',                    superAdminAuth, createModuleUser);
+router.put('/module-users/:id',                 superAdminAuth, updateModuleUser);
+router.delete('/module-users/:id',              superAdminAuth, deleteModuleUser);
+// One-time backfill: creates Supabase Auth accounts for users missing one
+router.post('/module-users/sync-auth',          superAdminAuth, syncModuleUserAuth);
 
 module.exports = router;

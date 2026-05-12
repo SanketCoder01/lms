@@ -182,7 +182,112 @@ class SupabaseREST {
     this.url = url;
     this.key = key;
 
-    // Minimal storage wrapper using raw REST calls
+    // ── auth.admin — calls Supabase Admin Auth REST API ───────────────────────
+    this.auth = {
+      admin: {
+        /**
+         * Create a Supabase Auth user (equivalent to supabase.auth.admin.createUser)
+         * POST /auth/v1/admin/users
+         */
+        createUser: async ({ email, password, email_confirm = true, user_metadata = {} } = {}) => {
+          try {
+            const res = await fetch(`${url}/auth/v1/admin/users`, {
+              method: 'POST',
+              headers: {
+                'apikey': key,
+                'Authorization': `Bearer ${key}`,
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({ email, password, email_confirm, user_metadata }),
+            });
+            const body = await res.json();
+            if (!res.ok) {
+              // User already exists → not a fatal error for the caller
+              const msg = body?.msg || body?.message || res.statusText;
+              return { data: null, error: { message: msg, status: res.status } };
+            }
+            return { data: { user: body }, error: null };
+          } catch (err) {
+            return { data: null, error: { message: err.message } };
+          }
+        },
+
+        /**
+         * List all Supabase Auth users
+         * GET /auth/v1/admin/users
+         */
+        listUsers: async () => {
+          try {
+            const res = await fetch(`${url}/auth/v1/admin/users?per_page=1000`, {
+              method: 'GET',
+              headers: {
+                'apikey': key,
+                'Authorization': `Bearer ${key}`,
+              },
+            });
+            const body = await res.json();
+            if (!res.ok) {
+              return { data: { users: [] }, error: { message: body?.msg || res.statusText } };
+            }
+            // Supabase returns { users: [...] } or an array directly
+            const users = Array.isArray(body) ? body : (body.users ?? []);
+            return { data: { users }, error: null };
+          } catch (err) {
+            return { data: { users: [] }, error: { message: err.message } };
+          }
+        },
+
+        /**
+         * Update a Supabase Auth user by their UUID
+         * PUT /auth/v1/admin/users/:id
+         */
+        updateUserById: async (id, updates = {}) => {
+          try {
+            const res = await fetch(`${url}/auth/v1/admin/users/${id}`, {
+              method: 'PUT',
+              headers: {
+                'apikey': key,
+                'Authorization': `Bearer ${key}`,
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify(updates),
+            });
+            const body = await res.json();
+            if (!res.ok) {
+              return { data: null, error: { message: body?.msg || res.statusText } };
+            }
+            return { data: { user: body }, error: null };
+          } catch (err) {
+            return { data: null, error: { message: err.message } };
+          }
+        },
+
+        /**
+         * Delete a Supabase Auth user by UUID
+         * DELETE /auth/v1/admin/users/:id
+         */
+        deleteUser: async (id) => {
+          try {
+            const res = await fetch(`${url}/auth/v1/admin/users/${id}`, {
+              method: 'DELETE',
+              headers: {
+                'apikey': key,
+                'Authorization': `Bearer ${key}`,
+              },
+            });
+            if (!res.ok) {
+              const body = await res.json().catch(() => ({}));
+              return { data: null, error: { message: body?.msg || res.statusText } };
+            }
+            return { data: {}, error: null };
+          } catch (err) {
+            return { data: null, error: { message: err.message } };
+          }
+        },
+      }
+    };
+
+    // ── storage ────────────────────────────────────────────────────────────────
     this.storage = {
       from: (bucket) => ({
         upload: async (path, fileBuffer, options = {}) => {
@@ -211,6 +316,7 @@ class SupabaseREST {
       })
     };
   }
+
   from(table) {
     return new SupabaseQueryBuilder(this.url, this.key, table);
   }

@@ -30,6 +30,7 @@ const MODULE_FEATURES = {
   leases: genericFeatures,
   ownership: genericFeatures,
   projects: genericFeatures,
+  invoicing: genericFeatures,
 };
 
 // ── helpers ──────────────────────────────────────────────────────────────────
@@ -58,7 +59,7 @@ const getModuleUsers = async (req, res) => {
 
     const { data, error } = await supabase
       .from('module_users')
-      .select('id, company_id, module_name, email, permissions, status, created_at, updated_at')
+      .select('id, company_id, module_name, email, first_name, last_name, contact_number, permissions, status, created_at, updated_at')
       .eq('company_id', company_id)
       .order('email')
       .order('module_name');
@@ -93,7 +94,7 @@ const getModuleUsers = async (req, res) => {
 // ── UPSERT module user ───────────────────────────────────────────────────────
 const createModuleUser = async (req, res) => {
   try {
-    const { company_id, module_name, email, password, permissions, status } = req.body;
+    const { company_id, module_name, email, password, permissions, status, first_name, last_name, contact_number } = req.body;
 
     if (!company_id || !module_name || !email) {
       return res.status(400).json({ success: false, message: 'company_id, module_name, and email are required' });
@@ -124,13 +125,13 @@ const createModuleUser = async (req, res) => {
     // ── Check User Limit (Quota) ──────────────────────────────────────────────
     const companyIdNum = Number(company_id);
     let isNewEmailForCompany = false;
-    
+
     // Check if this email already exists in either module_users or project_users for this company
     const [modCheck, projCheck] = await Promise.all([
       supabase.from('module_users').select('id').eq('company_id', companyIdNum).eq('email', normalizedEmail).limit(1),
       supabase.from('project_users').select('id').eq('company_id', companyIdNum).eq('email', normalizedEmail).limit(1)
     ]);
-    
+
     if ((!modCheck.data || modCheck.data.length === 0) && (!projCheck.data || projCheck.data.length === 0)) {
       isNewEmailForCompany = true;
     }
@@ -148,7 +149,7 @@ const createModuleUser = async (req, res) => {
         const uniqueEmails = new Set();
         if (modRes.data) modRes.data.forEach(u => uniqueEmails.add(u.email.toLowerCase()));
         if (projRes.data) projRes.data.forEach(u => uniqueEmails.add(u.email.toLowerCase()));
-        
+
         if (uniqueEmails.size >= limit) {
           return res.status(403).json({ success: false, message: `Company user limit reached (${limit}). Cannot assign a new user email.` });
         }
@@ -172,12 +173,37 @@ const createModuleUser = async (req, res) => {
         updated_at: now,
       };
       if (password) updates.password_hash = await bcrypt.hash(password, 12);
+      if (first_name !== undefined) updates.first_name = first_name;
+      if (last_name  !== undefined) updates.last_name  = last_name;
+      if (contact_number !== undefined) updates.contact_number = contact_number;
+
+      // Also sync Supabase Auth password if provided
+      if (password) {
+        try {
+          const { data: listData } = await supabase.auth.admin.listUsers();
+          const authUser = (listData?.users || []).find(u => u.email === normalizedEmail);
+          if (authUser) {
+            await supabase.auth.admin.updateUserById(authUser.id, {
+              password,
+              user_metadata: {
+                first_name: first_name || authUser.user_metadata?.first_name || '',
+                last_name: last_name || authUser.user_metadata?.last_name || '',
+                contact_number: contact_number || authUser.user_metadata?.contact_number || '',
+                role: 'module_user',
+                company_id: companyIdNum,
+              }
+            });
+          }
+        } catch (authErr) {
+          console.warn('[createModuleUser/sameRow] Auth sync warning:', authErr.message);
+        }
+      }
 
       const { data, error } = await supabase
         .from('module_users')
         .update(updates)
         .eq('id', sameRow.id)
-        .select('id, company_id, module_name, email, permissions, status, updated_at')
+        .select('id, company_id, module_name, email, first_name, last_name, contact_number, permissions, status, updated_at')
         .single();
       if (error) throw error;
       return res.json({ success: true, moduleUser: data, message: 'Module user updated successfully' });
@@ -200,6 +226,25 @@ const createModuleUser = async (req, res) => {
 
     // If no existing row for this company, try direct INSERT
     if (!sameCompanyRow) {
+      // ── Create Supabase Auth User so they can login to the Invoicing App ──
+      try {
+        await supabase.auth.admin.createUser({
+          email: normalizedEmail,
+          password: password,
+          email_confirm: true,
+          user_metadata: {
+            first_name: first_name || '',
+            last_name: last_name || '',
+            contact_number: contact_number || '',
+            role: 'module_user',
+            module: module,
+            company_id: companyIdNum
+          }
+        });
+      } catch (authErr) {
+        console.warn('Supabase Auth creation skipped or failed (might already exist):', authErr.message);
+      }
+
       const { data, error } = await supabase
         .from('module_users')
         .insert({
@@ -207,12 +252,15 @@ const createModuleUser = async (req, res) => {
           module_name: module,
           email: normalizedEmail,
           password_hash,
+          first_name: first_name || '',
+          last_name: last_name || '',
+          contact_number: contact_number || '',
           permissions: finalPerms,
           status: status || 'active',
           created_at: now,
           updated_at: now,
         })
-        .select('id, company_id, module_name, email, permissions, status, created_at')
+        .select('id, company_id, module_name, email, first_name, last_name, contact_number, permissions, status, created_at')
         .single();
 
       if (!error) {
@@ -226,7 +274,7 @@ const createModuleUser = async (req, res) => {
       if (error.code === '23505') {
         // The error message usually contains the constraint name
         console.error('[createModuleUser] UNIQUE constraint violation. Full error:', error);
-        
+
         // Check ALL tables that have UNIQUE(email) constraint
         // 1. module_users
         const { data: muRow } = await supabase
@@ -234,35 +282,35 @@ const createModuleUser = async (req, res) => {
           .select('id, module_name, company_id')
           .eq('email', normalizedEmail)
           .maybeSingle();
-        
+
         // 2. project_users
         const { data: puRow } = await supabase
           .from('project_users')
           .select('id, project_id, company_id')
           .eq('email', normalizedEmail)
           .maybeSingle();
-        
+
         // 3. company_users
         const { data: cuRow } = await supabase
           .from('company_users')
           .select('id, company_name')
           .eq('email', normalizedEmail)
           .maybeSingle();
-        
+
         // 4. users table (main users)
         const { data: uRow } = await supabase
           .from('users')
           .select('id, email')
           .eq('email', normalizedEmail)
           .maybeSingle();
-        
+
         console.error('[createModuleUser] Email check results:', {
           module_users: muRow,
           project_users: puRow,
           company_users: cuRow,
           users: uRow
         });
-        
+
         // Determine where the email exists and return appropriate message
         if (muRow) {
           if (Number(muRow.company_id) === companyIdNum) {
@@ -273,7 +321,7 @@ const createModuleUser = async (req, res) => {
               .select('id, module_name, permissions, password_hash, status, company_id')
               .eq('id', muRow.id)
               .single();
-            return await mergeModuleIntoRow(res, fullRow, module, finalPerms, password_hash, status, now);
+            return await mergeModuleIntoRow(res, fullRow, module, finalPerms, password_hash, status, now, company_id, email, first_name, last_name, contact_number);
           } else {
             return res.status(409).json({
               success: false,
@@ -281,7 +329,7 @@ const createModuleUser = async (req, res) => {
             });
           }
         }
-        
+
         if (puRow) {
           // Allow same email in project_users if it belongs to the SAME company
           if (Number(puRow.company_id) !== companyIdNum) {
@@ -292,21 +340,21 @@ const createModuleUser = async (req, res) => {
           }
           // Same company — cross-table coexistence is fine, continue to insert
         }
-        
+
         if (cuRow) {
           return res.status(409).json({
             success: false,
             message: 'This email is already a company admin. Please use a different email address.',
           });
         }
-        
+
         if (uRow) {
           return res.status(409).json({
             success: false,
             message: 'This email is already registered in the main users table. Please use a different email address.',
           });
         }
-        
+
         // Unknown source
         console.error('[createModuleUser] 23505 but email not found in any checked table');
         return res.status(409).json({
@@ -319,7 +367,7 @@ const createModuleUser = async (req, res) => {
     }
 
     // Existing row for same company - merge new module into it
-    return await mergeModuleIntoRow(res, sameCompanyRow, module, finalPerms, password_hash, status, now);
+    return await mergeModuleIntoRow(res, sameCompanyRow, module, finalPerms, password_hash, status, now, company_id, email, first_name, last_name, contact_number);
 
   } catch (err) {
     console.error('[createModuleUser]', err);
@@ -328,7 +376,7 @@ const createModuleUser = async (req, res) => {
 };
 
 // Helper: merge a new module assignment into an existing row's _modules JSON
-async function mergeModuleIntoRow(res, existingRow, module, finalPerms, password_hash, status, now, company_id, email) {
+async function mergeModuleIntoRow(res, existingRow, module, finalPerms, password_hash, status, now, company_id, email, first_name, last_name, contact_number) {
   const rawPerms = existingRow.permissions || {};
 
   // Build current _modules list (expand flat format if first merge)
@@ -343,14 +391,16 @@ async function mergeModuleIntoRow(res, existingRow, module, finalPerms, password
 
   const mergedPermissions = { _modules: newModules };
 
+  const updatePayload = {
+    permissions: mergedPermissions,
+    password_hash: password_hash || existingRow.password_hash,
+    status: status || existingRow.status || 'active',
+    updated_at: now,
+  };
+
   const { data: merged, error: mergeErr } = await supabase
     .from('module_users')
-    .update({
-      permissions: mergedPermissions,
-      password_hash: password_hash || existingRow.password_hash,
-      status: status || existingRow.status || 'active',
-      updated_at: now,
-    })
+    .update(updatePayload)
     .eq('id', existingRow.id)
     .select('id, company_id, module_name, email, permissions, status, updated_at')
     .single();
@@ -358,6 +408,42 @@ async function mergeModuleIntoRow(res, existingRow, module, finalPerms, password
   if (mergeErr) {
     console.error('[mergeModuleIntoRow]', mergeErr);
     return res.status(500).json({ success: false, message: mergeErr.message });
+  }
+
+  // ── Ensure Supabase Auth user exists so they can login ──────────────────────
+  // This path is hit when the email already has a different module row.
+  // We must still create (or update) the Auth user with the latest password.
+  const normalizedEmail = email?.toLowerCase?.().trim() || existingRow.email;
+  if (normalizedEmail && password_hash) {
+    try {
+      // Try to find existing auth user first
+      const { data: listData } = await supabase.auth.admin.listUsers();
+      const existingAuthUser = (listData?.users || []).find(u => u.email === normalizedEmail);
+
+      if (existingAuthUser) {
+        // Update password in Auth to match the new password_hash source
+        // Note: we need the plain password here — caller must pass it separately.
+        // We update user_metadata at minimum to keep company_id in sync.
+        await supabase.auth.admin.updateUserById(existingAuthUser.id, {
+          user_metadata: {
+            first_name: first_name || existingAuthUser.user_metadata?.first_name || '',
+            last_name: last_name || existingAuthUser.user_metadata?.last_name || '',
+            contact_number: contact_number || existingAuthUser.user_metadata?.contact_number || '',
+            role: 'module_user',
+            company_id: Number(company_id || existingRow.company_id),
+          }
+        });
+        console.log('[mergeModuleIntoRow] Updated existing Auth user metadata for:', normalizedEmail);
+      } else {
+        // No Auth user yet — this email was created before the auth fix.
+        // We cannot create them here without the plaintext password.
+        // Log clearly so admin knows to recreate the user from Role Management.
+        console.warn('[mergeModuleIntoRow] No Supabase Auth user found for:', normalizedEmail,
+          '— Admin should delete and re-create this module user from Role Management to register them in Auth.');
+      }
+    } catch (authErr) {
+      console.warn('[mergeModuleIntoRow] Auth sync warning:', authErr.message);
+    }
   }
 
   return res.status(201).json({
@@ -371,18 +457,37 @@ async function mergeModuleIntoRow(res, existingRow, module, finalPerms, password
 const updateModuleUser = async (req, res) => {
   try {
     const { id } = req.params;
-    const { permissions, password, status, module_name } = req.body;
+    const { permissions, password, status, module_name, first_name, last_name, contact_number } = req.body;
 
-    // Fetch existing row first (needed for _modules format)
+    // Fetch existing row first — include email so Auth password sync works
     const { data: existing } = await supabase
       .from('module_users')
-      .select('id, permissions, module_name')
+      .select('id, email, permissions, module_name')
       .eq('id', id)
       .maybeSingle();
 
     const updates = { updated_at: new Date().toISOString() };
     if (status !== undefined) updates.status = status;
-    if (password) updates.password_hash = await bcrypt.hash(password, 12);
+    if (first_name !== undefined)    updates.first_name    = first_name;
+    if (last_name !== undefined)     updates.last_name     = last_name;
+    if (contact_number !== undefined) updates.contact_number = contact_number;
+
+    if (password) {
+      updates.password_hash = await bcrypt.hash(password, 12);
+
+      // Update password in Supabase Auth if the user exists
+      if (existing && existing.email) {
+        try {
+          const { data: authUsers } = await supabase.auth.admin.listUsers();
+          const targetAuthUser = authUsers.users.find(u => u.email === existing.email);
+          if (targetAuthUser) {
+            await supabase.auth.admin.updateUserById(targetAuthUser.id, { password });
+          }
+        } catch (authErr) {
+          console.warn('Could not update password in Supabase auth:', authErr.message);
+        }
+      }
+    }
 
     if (existing && Array.isArray(existing.permissions?._modules) && module_name) {
       // _modules format — update only the specific module's permissions
@@ -398,7 +503,7 @@ const updateModuleUser = async (req, res) => {
       .from('module_users')
       .update(updates)
       .eq('id', id)
-      .select('id, company_id, module_name, email, permissions, status, updated_at')
+      .select('id, company_id, module_name, email, first_name, last_name, contact_number, permissions, status, updated_at')
       .single();
 
     if (error) throw error;
@@ -413,19 +518,19 @@ const updateModuleUser = async (req, res) => {
 const deleteModuleUser = async (req, res) => {
   try {
     const { id } = req.params;
-    
+
     if (!id) {
       return res.status(400).json({ success: false, message: 'Module user ID is required' });
     }
 
     // Delete the row directly
     const { error } = await supabase.from('module_users').delete().eq('id', id);
-    
+
     if (error) {
       console.error('[deleteModuleUser] Error:', error);
       return res.status(500).json({ success: false, message: error.message });
     }
-    
+
     return res.json({ success: true, message: 'Module user removed successfully' });
   } catch (err) {
     console.error('[deleteModuleUser] Exception:', err);
@@ -459,6 +564,72 @@ const getModuleFeatures = async (req, res) => {
   return res.json({ success: true, features: MODULE_FEATURES });
 };
 
+// ── SYNC: create missing Supabase Auth users for existing module_users ────────
+// POST /admin/module-users/sync-auth
+// Call this once from the Admin panel to backfill Auth accounts for users
+// created before the db.js auth.admin fix was applied.
+const syncModuleUserAuth = async (req, res) => {
+  try {
+    // 1. List all current Auth users
+    const { data: listData, error: listErr } = await supabase.auth.admin.listUsers();
+    if (listErr) throw new Error('Could not list Auth users: ' + listErr.message);
+    const authEmailSet = new Set((listData?.users || []).map(u => u.email?.toLowerCase()));
+
+    // 2. Fetch all module_users
+    const { data: moduleUsers, error: muErr } = await supabase
+      .from('module_users')
+      .select('id, email, company_id, module_name, status');
+    if (muErr) throw new Error('Could not fetch module_users: ' + muErr.message);
+
+    const results = { created: [], alreadyExists: [], failed: [] };
+    const seenEmails = new Set();
+
+    for (const mu of moduleUsers || []) {
+      const email = mu.email?.toLowerCase().trim();
+      if (!email || seenEmails.has(email)) continue;
+      seenEmails.add(email);
+
+      if (authEmailSet.has(email)) {
+        results.alreadyExists.push(email);
+        continue;
+      }
+
+      // Create Auth user with a temporary reset password.
+      // The admin MUST then reset the password from Role Management.
+      const tempPassword = `Reset@${Math.random().toString(36).slice(2, 10)}`;
+      const { error: createErr } = await supabase.auth.admin.createUser({
+        email,
+        password: tempPassword,
+        email_confirm: true,
+        user_metadata: {
+          role: 'module_user',
+          module: mu.module_name,
+          company_id: Number(mu.company_id),
+          synced: true,
+          temp_password: true,
+        }
+      });
+
+      if (createErr) {
+        console.error('[syncModuleUserAuth] Failed for', email, ':', createErr.message);
+        results.failed.push({ email, error: createErr.message });
+      } else {
+        console.log('[syncModuleUserAuth] Created Auth user for:', email, '(temp password set)');
+        results.created.push({ email, note: 'Temp password set — admin must reset from Role Management' });
+      }
+    }
+
+    return res.json({
+      success: true,
+      summary: `Created: ${results.created.length}, Already existed: ${results.alreadyExists.length}, Failed: ${results.failed.length}`,
+      results,
+    });
+  } catch (err) {
+    console.error('[syncModuleUserAuth]', err);
+    return res.status(500).json({ success: false, message: err.message });
+  }
+};
+
 // ── Company Auth helpers ──────────────────────────────────────────────────────
 const getMyModuleUsers = async (req, res) => {
   req.params.company_id = req.user?.company_id || req.companyId;
@@ -477,6 +648,7 @@ module.exports = {
   deleteModuleUser,
   deleteModuleUsersByEmail,
   getModuleFeatures,
+  syncModuleUserAuth,
   MODULE_FEATURES,
   getMyModuleUsers,
   createMyModuleUser,

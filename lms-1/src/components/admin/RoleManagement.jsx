@@ -11,6 +11,7 @@ const MODULE_DEFS = {
   masters: { label: 'Masters', icon: 'Masters', color: '#f59e0b', features: ['view', 'edit', 'delete'] },
   ownership: { label: 'Ownership', icon: 'Ownership', color: '#ec4899', features: ['view', 'edit', 'delete'] },
   leases: { label: 'Leases', icon: 'Leases', color: '#10b981', features: ['view', 'edit', 'delete'] },
+  invoicing: { label: 'Invoicing', icon: 'Invoicing', color: '#3b82f6', features: ['view', 'edit', 'delete'] },
 };
 
 const RoleManagement = () => {
@@ -27,6 +28,7 @@ const RoleManagement = () => {
   const [formData, setFormData] = useState({
     first_name: "",
     last_name: "",
+    contact_number: "",
     email: "",
     password: "",
     role_name: "User",
@@ -98,6 +100,7 @@ const RoleManagement = () => {
           name: `${user.first_name} ${user.last_name}`,
           firstName: user.first_name,
           lastName: user.last_name,
+          contactNumber: user.contact_number,
           email: user.email,
           role: user.role_name || "User",
           roleClass: (user.role_name || "User").toLowerCase().replace(/\s+/g, "-"),
@@ -122,6 +125,7 @@ const RoleManagement = () => {
               name: `${u.module_name?.charAt(0).toUpperCase() + u.module_name?.slice(1) || 'Module'} User`,
               firstName: u.first_name || '',
               lastName: u.last_name || '',
+              contactNumber: u.contact_number || '',
               email: email,
               role: '',
               roleClass: 'module-user',
@@ -162,8 +166,9 @@ const RoleManagement = () => {
           id: `p_${u.id}`,
           rawId: u.id,
           name: u.project_name ? `${u.project_name} User` : 'Project User',
-          firstName: '',
-          lastName: '',
+          firstName: u.first_name || '',
+          lastName: u.last_name || '',
+          contactNumber: u.contact_number || '',
           email: u.email,
           role: u.project_name ? `${u.project_name}` : 'Project',
           roleClass: 'project-user',
@@ -213,6 +218,7 @@ const RoleManagement = () => {
     setFormData({
       first_name: "",
       last_name: "",
+      contact_number: "",
       email: "",
       password: "",
       role_name: roles.length > 0 ? roles[0].role_name : "Admin",
@@ -257,6 +263,7 @@ const RoleManagement = () => {
     setFormData({
       first_name: user.firstName || '',
       last_name: user.lastName || '',
+      contact_number: user.contactNumber || '',
       email: user.email,
       password: '', // Leave blank to keep existing password
       role_name: user.is_module_user || user.is_project_user ? 'User' : (user.role || 'User'),
@@ -319,7 +326,8 @@ const RoleManagement = () => {
           password: formData.password,
           permissions: formData.module_permissions,
           first_name: formData.first_name,
-          last_name: formData.last_name
+          last_name: formData.last_name,
+          contact_number: formData.contact_number
         };
         if (!payload.password && !isEditing) {
           showToast("Password is required for new project users", "error");
@@ -347,6 +355,9 @@ const RoleManagement = () => {
                 password: formData.password,
                 permissions: mod.permissions,
                 status: 'active',
+                first_name: formData.first_name,
+                last_name: formData.last_name,
+                contact_number: formData.contact_number
               };
               await userAPI.createModuleUser(modPayload);
             } catch (modErr) {
@@ -410,6 +421,9 @@ const RoleManagement = () => {
               const updatePayload = {
                 permissions: mod.permissions,
                 status: formData.status || 'active',
+                first_name: formData.first_name,
+                last_name: formData.last_name,
+                contact_number: formData.contact_number
               };
               if (formData.password) updatePayload.password = formData.password;
               await userAPI.updateModuleUser(existingRawId, updatePayload);
@@ -427,6 +441,9 @@ const RoleManagement = () => {
                 password: formData.password,
                 permissions: mod.permissions,
                 status: formData.status || 'active',
+                first_name: formData.first_name,
+                last_name: formData.last_name,
+                contact_number: formData.contact_number
               };
               await userAPI.createModuleUser(createPayload);
             }
@@ -448,6 +465,9 @@ const RoleManagement = () => {
               password: formData.password,
               permissions: mod.permissions,
               status: 'active',
+              first_name: formData.first_name,
+              last_name: formData.last_name,
+              contact_number: formData.contact_number
             };
             await userAPI.createModuleUser(payload);
           }
@@ -557,28 +577,39 @@ const RoleManagement = () => {
                 </div>
 
                 {!formData.is_module_user && !formData.is_project_user && (
-                  <div className="form-row">
+                  <>
+                    <div className="form-row">
+                      <div className="form-group">
+                        <label>First Name</label>
+                        <input
+                          type="text"
+                          className="premium-input"
+                          value={formData.first_name}
+                          onChange={e => setFormData({ ...formData, first_name: e.target.value })}
+                          required={!formData.is_module_user && !formData.is_project_user}
+                        />
+                      </div>
+                      <div className="form-group">
+                        <label>Last Name</label>
+                        <input
+                          type="text"
+                          className="premium-input"
+                          value={formData.last_name}
+                          onChange={e => setFormData({ ...formData, last_name: e.target.value })}
+                          required={!formData.is_module_user && !formData.is_project_user}
+                        />
+                      </div>
+                    </div>
                     <div className="form-group">
-                      <label>First Name</label>
+                      <label>Contact Number</label>
                       <input
                         type="text"
                         className="premium-input"
-                        value={formData.first_name}
-                        onChange={e => setFormData({ ...formData, first_name: e.target.value })}
-                        required={!formData.is_module_user && !formData.is_project_user}
+                        value={formData.contact_number}
+                        onChange={e => setFormData({ ...formData, contact_number: e.target.value })}
                       />
                     </div>
-                    <div className="form-group">
-                      <label>Last Name</label>
-                      <input
-                        type="text"
-                        className="premium-input"
-                        value={formData.last_name}
-                        onChange={e => setFormData({ ...formData, last_name: e.target.value })}
-                        required={!formData.is_module_user && !formData.is_project_user}
-                      />
-                    </div>
-                  </div>
+                  </>
                 )}
 
                 {formData.is_module_user && !formData.is_project_user && (
@@ -603,6 +634,15 @@ const RoleManagement = () => {
                           onChange={e => setFormData({ ...formData, last_name: e.target.value })}
                         />
                       </div>
+                    </div>
+                    <div className="form-group">
+                      <label>Contact Number</label>
+                      <input
+                        type="text"
+                        className="premium-input"
+                        value={formData.contact_number}
+                        onChange={e => setFormData({ ...formData, contact_number: e.target.value })}
+                      />
                     </div>
 
                     <div className="form-group">
@@ -708,6 +748,15 @@ const RoleManagement = () => {
                           onChange={e => setFormData({ ...formData, last_name: e.target.value })}
                         />
                       </div>
+                    </div>
+                    <div className="form-group">
+                      <label>Contact Number</label>
+                      <input
+                        type="text"
+                        className="premium-input"
+                        value={formData.contact_number}
+                        onChange={e => setFormData({ ...formData, contact_number: e.target.value })}
+                      />
                     </div>
 
                     <div className="form-group">
